@@ -8,6 +8,10 @@ crosswalk <- read.csv("RawData/Survey4.csv")
 library(tidyverse)
 head(LiCOR_4)
 head(crosswalk)
+# Fix data entry error: 15V1a has 63, 63, 65
+crosswalk[241:243,]
+crosswalk[242,3] <- 64
+crosswalk <- crosswalk[,1:15]
 
 typeof(crosswalk$Date)
 
@@ -25,5 +29,7 @@ length(unique(crosswalk$LiCOR_ID))
 sum(crosswalk$LiCOR_ID %in% LiCOR_4$LiCOR_ID) # all match! 187 unique measurements
 
 # get plant ID names, treatment codes, into LiCOR measurement df
+df <- left_join(LiCOR_4, crosswalk, by = join_by(LiCOR_ID))
+# now has each LiCOR measurement associated with plant ID. sets of 3 and 4. CO2 setting goes 400-600-800(-400)
 
-
+test_df <- df[1:23,c(3, 6:8, 41, 86:93)]
