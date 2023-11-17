@@ -93,16 +93,12 @@ df %>%
 # linear interpolation:
 # approx(x,y,xout=5.019802)
 df_small <- df %>%   
-  select(HHMMSS, Photo.x, Cond, Ci.x, CO2R, SWC, Date, Log, X., Time, ID, Plot, Treatment, Spp)
-
-df_small %>% 
+  select(HHMMSS, Photo.x, Cond, Ci.x, CO2R, SWC, Date, Log, X., Time, ID, Plot, Treatment, Spp) %>% 
   group_by(ID) %>% 
-  summarize(interpol = approx(Ci.x,Photo.x, xout=333.21)$y) %>% 
-  View()
+  mutate(interpol = approx(Ci.x,Photo.x, xout=333.21)$y)
 
-df_small %>% 
-  group_by(ID) %>% 
-  mutate(interpol = approx(Ci.x,Photo.x, xout=333.21)$y) %>% 
-  group_by(Treatment, Spp) %>% 
-  
-  View()
+ggplot(df_small, aes(x= Treatment, y= interpol)) +
+  geom_boxplot(aes(colour=Spp))
+
+ggplot(df_small, aes(x= Treatment, y= interpol)) +
+  geom_jitter(aes(colour=Spp))
