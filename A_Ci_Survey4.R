@@ -97,8 +97,11 @@ df_small <- df %>%
   group_by(ID) %>% 
   mutate(interpol = approx(Ci.x,Photo.x, xout=333.21)$y)
 
-ggplot(df_small, aes(x= Treatment, y= interpol)) +
-  geom_boxplot(aes(colour=Spp))
+ggplot(df_small, aes(x= factor(Treatment, levels= c("AD","ED","AW","EW")), y= interpol)) +
+  geom_boxplot(aes(colour=Spp)) +
+  ggtitle("Live and Valley Oak Response to eCO2 x Water Stress") +
+  scale_x_discrete(labels=c("Ambient \nDry", "Elevated \nDry", "Ambient \nWet", "Elevated \nWet")) +
+  xlab("Treatment") + ylab("A(net) at 333 ppm [CO2]")
 
 ggplot(df_small, aes(x= Treatment, y= interpol)) +
   geom_jitter(aes(colour=Spp))
