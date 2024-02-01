@@ -69,8 +69,7 @@ df %>%
   group_by(ID, Treatment) %>% 
   summarize(threshold = if_else(max(Ci.x)>333.21, TRUE, FALSE)) %>% 
   group_by(Treatment) %>% 
-  summarize(keepers = sum(threshold)) %>% 
-  View()
+  summarize(keepers = sum(threshold)) 
 # AD = 8   AW = 8    ED = 12   EW = 14 ; 42 total
 
 # Andrew asks how many samples measured per species per treatment? So, of those that passed the threshold test, what is the breakdown?
@@ -91,17 +90,20 @@ df %>%
 # how variable are the results by species.treatment? Determines how big a sample size is enough.
 # I want to interpolate the Photo.x value at 333 Ci for each curve
 # linear interpolation:
-# approx(x,y,xout=5.019802)
+# approx(x,y,xout)
 df_small <- df %>%   
   select(HHMMSS, Photo.x, Cond, Ci.x, CO2R, SWC, Date, Log, X., Time, ID, Plot, Treatment, Spp) %>% 
   group_by(ID) %>% 
   mutate(interpol = approx(Ci.x,Photo.x, xout=333.21)$y)
 
-ggplot(df_small, aes(x= factor(Treatment, levels= c("AD","ED","AW","EW")), y= interpol)) +
+df_smaller <- df_small[!duplicated(df_small$interpol),]
+
+ggplot(df_smaller, aes(x= factor(Treatment, levels= c("AD","ED","AW","EW")), y= interpol)) +
   geom_boxplot(aes(colour=Spp)) +
+  #geom_jitter(aes(colour=Spp)) +
   ggtitle("Live and Valley Oak Response to eCO2 x Water Stress") +
   scale_x_discrete(labels=c("Ambient \nDry", "Elevated \nDry", "Ambient \nWet", "Elevated \nWet")) +
   xlab("Treatment") + ylab("A(net) at 333 ppm [CO2]")
 
-ggplot(df_small, aes(x= Treatment, y= interpol)) +
+ggplot(df_smaller, aes(x= Treatment, y= interpol)) +
   geom_jitter(aes(colour=Spp))
