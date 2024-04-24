@@ -9,6 +9,61 @@ attr(testing$TIMESTAMP, "tzone") # starts out as UTC, though clock time is corre
 # force_tz keeps the clock time but reassigns the tz to be accurate
 testing$TIMESTAMP <- force_tz(testing$TIMESTAMP, "America/Los_Angeles")
 
+# examine CO2 performance after 4.9.24
+post4.9.24 <- testing %>% 
+  filter(TIMESTAMP > "2024-04-09 08:10:00") %>%
+  mutate(DeltaTest = CO2test - CO2ref) %>%
+  distinct() # remove duplicate rows
+
+post4.9.24_daytime %>% 
+  select(TIMESTAMP, CO2elev, CO2ref) %>% 
+  dygraph() %>% 
+  dySeries(drawPoints=TRUE, strokeWidth=0) %>% 
+  #dyOptions(drawPoints = TRUE) %>% 
+  #dyRoller(rollPeriod = 180) %>% 
+  dyRangeSelector()
+
+# Fig 1
+daytimeCO2_4.9to4.19 <- ggplot(post4.9.24_daytime, aes(x=DeltaObs))+
+  geom_density()+
+  geom_vline(aes(xintercept = mean(DeltaObs)),color = "red", linetype="dashed", size=1)+
+  labs(title="Daytime CO2 Elevation: 4/9-4/19/24", 
+       x= "∆ CO2 (ppm)",
+       y= "Density")+
+  theme_classic()
+
+post4.9.24_daytime <- post4.9.24 %>% 
+  filter(PARuE > 50) 
+mean(post4.9.24_daytime$DeltaObs) # 196.8225
+sd(post4.9.24_daytime$DeltaObs) # 63.57922
+sum(post4.9.24_daytime$DeltaObs < 200*1.1 & post4.9.24_daytime$DeltaObs > 200*0.9)/nrow(post4.9.24_daytime) # 32.5% of the time within 10%
+sum(post4.9.24_daytime$DeltaObs < 200*1.2 & post4.9.24_daytime$DeltaObs > 200*0.8)/nrow(post4.9.24_daytime) # 56.8% of the time within 20%
+sum(post4.9.24_daytime$DeltaObs < 200*1.25 & post4.9.24_daytime$DeltaObs > 200*0.75)/nrow(post4.9.24_daytime) # 67.0% of the time within 25%
+sum(post4.9.24_daytime$CO2elev < (post4.9.24_daytime$CO2ref+200)*1.2 & post4.9.24_daytime$CO2elev > (post4.9.24_daytime$CO2ref+200)*0.8)/nrow(post4.9.24_daytime) # 95.1% of the time within 20%
+
+# what is the mathematical difference between l30 and l32?
+# l30 has narrower bounds: focused only on ∆Obs, asking if it's within 160-240ppm (within 20% of 200)
+# l32 looks at overall CO2 levels: asks if eCO2 is within 20% of [aCO2 ± 200], a range of about 582-873ppm
+# * need to find out what other papers are using for this statistic *
+
+# CO2 consumption per area, PAR > 50
+20*mean(post4.9.24_daytime$FlowMFC)/5000 # 20L/min max * FlowMFC (mV) / 5000 mV max = 3.968844 L/min average
+3.968844*1440 # L/min * min/d = 5715.135 L/d when PAR > 50
+5715.135*0.001836 # L/d * kg/L = 10.49299 kg/d
+10.49299/4 # kg/d / 4m2 plot area = 2.623248 kg/m2/d when PAR > 50
+# cf Leadley, 6.10 kg/d/m2 (24h) ~3.05 kg/d/m2 during daylight
+# nrow(post4.9.24_daytime)*20/60 # = 7146.7 min PAR > 50
+# nrow(post4.9.24)*20/60 # = 14889.67 min total
+
+# CO2 consumption per area, 24h
+20*mean(post4.9.24$FlowMFC)/5000 # 20L/min max * FlowMFC (mV) / 5000 mV max = 2.479395 L/min average
+2.479395*1440 # L/min * min/d = 3570.329 L/d 
+3570.329*0.001836 # L/d * kg/L = 6.555124 kg/d
+6.555124/4 # kg/d / 4m2 plot area = 1.638781 kg/m2/d 
+# cf Leadley, 6.10 kg/d/m2 (24h) 
+
+
+# Spatial Performance
 testing <- testing %>% 
   filter(TIMESTAMP > "2024-04-09 08:10:00") %>% # subset to just the 2 days of quality testing in April 2024
   filter(TIMESTAMP < "2024-04-10 17:10:00")
@@ -17,11 +72,19 @@ nrow(distinct(testing)) #5970
 # why would there be duplicate rows? Is this a problem in the other CO2 data?
 
 testing %>%
-  select(TIMESTAMP, CO2ref, CO2elev, CO2test, DeltaObs) %>% 
+  # select(TIMESTAMP, CO2ref, CO2elev, CO2test, DeltaObs) %>% 
   mutate(DeltaTest = CO2test - CO2ref) %>% 
+  select(TIMESTAMP, DeltaObs, DeltaTest) %>% 
   dygraph() %>% 
+  dyRoller(rollPeriod = 180) %>% 
   dyRangeSelector()
 testing <- distinct(testing)
+
+# overall mean and sd for ∆Obs
+testing %>% 
+     filter(PARuE > 50) %>% 
+     select(DeltaObs) %>%  
+     colMeans()
 
 # above-plot testing, MFCBase = 1100
 # starting at 8:10 (10cm), until 11:10 (100cm) above, by 20m
@@ -38,12 +101,20 @@ above_4.9.24$position <- factor(above_4.9.24$position, levels = unique(above_4.9
 mean(above_4.9.24[above_4.9.24$position == "10cm",]$DeltaTest) #  200.9993
 sd(above_4.9.24[above_4.9.24$position == "10cm",]$DeltaTest) # 16.18553
 
+above_means <- above_4.9.24 %>% 
+  group_by(position) %>% 
+  summarise(mean = mean(DeltaTest), sd = sd(DeltaTest)) %>% 
+  ungroup()
+colMeans(above_means[1:4,2]) # 198.3428  is the mean within the screen
+
 above_4.9.24 %>%  # density curves for each timestep
   ggplot(aes(x=DeltaTest, group = position)) + geom_density(aes(color = position))
 
-above_4.9.24 %>% # box plots
+above_boxplots <- above_4.9.24 %>% # box plots
   ggplot(aes(x=position, y=DeltaTest)) + geom_boxplot() + coord_flip() + 
-  geom_hline(yintercept=200,color = "red", linetype="dashed", size=1)
+  annotate("rect", xmin=0, xmax=4.3, ymin=0, ymax=Inf, alpha=0.5) +
+  geom_hline(yintercept=200,color = "red", linetype="dashed", size=1) +
+  ylab("∆CO2") + xlab("Height Above Plot Center")
 
 # within-plot testing, MFCBase = 1000
 # starting at 11:40, changing every 20m
@@ -92,6 +163,14 @@ means_within <- left_join(means_within, points_within, by = "position")
 # add one more point 10cm above the center
 mean(above_4.9.24[above_4.9.24$position == "10cm",]$DeltaTest) #  200.9993
 means_within <- rbind(means_within,c(0,as.numeric(mean(above_4.9.24[above_4.9.24$position == "10cm",]$DeltaTest)),sd(above_4.9.24[above_4.9.24$position == "10cm",]$DeltaTest), as.numeric(0), as.numeric(0)))
+
+# find out average difference from sampling point to center
+# do sampling point (by row) - same row's value for eCO2
+within_4.9.24 %>% 
+  mutate(diff_center = (CO2test - CO2elev)*100/CO2elev) %>% 
+  group_by(position) %>% 
+  summarize(mean = mean(diff_center)) %>% 
+  summarise(sd(mean)) 
 
 # gridded bicubic spline interpolation from akima
 interpolated <- interp(x = means_within$x_within, y = means_within$y_within, z = means_within$mean, linear=FALSE, extrap = FALSE)
@@ -198,6 +277,13 @@ points_out <- points_out[-3,]
 # get x y data into CO2 df
 CO2_out <- left_join(CO2_out, points_out, by="position")
 
+# average CO2 level for each distance from screen for CO2_out
+CO2_out %>% 
+  rowwise() %>% 
+  mutate(distance = max(abs(x),abs(y))) %>% 
+  mutate(diff_center = (CO2test - CO2elev)*100/CO2elev) %>% View()
+  summarize(mean = mean(CO2test)) %>% 
+
 CO2_out %>% # box plots
   ggplot(aes(x=position, y=DeltaTest)) + geom_boxplot()
 CO2_out %>%  # density curves for each timestep
@@ -248,7 +334,7 @@ interp_df2 <- expand_grid(i = seq_along(interpolated2$x),
 # visualize all interpolated points
 ggplot(data = interp_df2, aes(x = x, y = y, color = DeltaTest)) + geom_point(size=6) + scale_color_continuous(type = "viridis") + theme_classic()
 
-ggplot() + # interpolated points plus measured values  (means) plus circle showing screen
+interpolated_CO2 <- ggplot() + # interpolated points plus measured values  (means) plus circle showing screen
   geom_point(data = interp_df2, aes(x = x, y = y, color = DeltaTest), size=5, shape=15) +
   scale_color_continuous(type = "viridis") + theme_classic() +
   geom_text(data = in.out_means, aes(x=x, y=y, label = round(mean, 1)), size = 5) +
@@ -271,7 +357,13 @@ between_4.10.24 <- testing %>%
   select(TIMESTAMP, CO2ref, CO2elev, CO2test, DeltaObs) %>%
   mutate(DeltaTest = CO2test - CO2ref) %>%
   mutate(timestep = floor_date(TIMESTAMP - 5*60, unit = "20 minutes"),
-         position = factor(c(1:16)[factor(timestep)]))
+         position = factor(c(1:16)[factor(timestep)])) %>% 
+  mutate(eCO2 = as.numeric(position %in% c(2,3,6,7,9,11,13,15))) 
+
+between_4.10.24 %>% 
+  group_by(position) %>% 
+  summarise(mean = mean(DeltaTest), sd = sd(DeltaTest)) %>% 
+  ungroup() %>% View()
 
 # NB I think plots 3 and 4 got swapped when I rebuilt the thing!! 3 is E now and 4 is A
 
@@ -281,10 +373,22 @@ sd(between_4.10.24[between_4.10.24$position %in% c(1,4,5,8,10,12,14,16),]$DeltaT
 mean(between_4.10.24[between_4.10.24$position %in% c(2,3,6,7,9,11,13,15),]$DeltaTest) # 209.8614
 sd(between_4.10.24[between_4.10.24$position %in% c(2,3,6,7,9,11,13,15),]$DeltaTest) # 56.70083
 
+#sum(between_4.10.24$CO2elev < (between_4.10.24$CO2ref+200)*1.2 & between_4.10.24$CO2elev > (between_4.10.24$CO2ref+200)*0.8)/nrow(between_4.10.24) # 99.4%
+
+sum(between_4.10.24[between_4.10.24$eCO2 ==1,]$CO2elev < (between_4.10.24[between_4.10.24$eCO2 ==1,]$CO2ref+200)*1.2 & between_4.10.24[between_4.10.24$eCO2 ==1,]$CO2elev > (between_4.10.24[between_4.10.24$eCO2 ==1,]$CO2ref+200)*0.8)/nrow(between_4.10.24[between_4.10.24$eCO2 ==1,]) # 99.4%
+
+between_4.10.24 %>% 
+  filter(eCO2 == 1) %>% 
+  mutate(within10 = (CO2elev < (CO2ref+200)*1.1 & CO2elev > (CO2ref+200)*0.9)) %>% 
+  summarise(sum10 = sum(within10)) 
+465/nrow(between_4.10.24[between_4.10.24$eCO2==1,]) # 96.9% within 10%; 100% within 20%
+
 between_4.10.24 %>%  # density curves for each timestep
-  ggplot(aes(x=DeltaTest, group = factor(position))) + geom_density(aes(color = position))
-between_4.10.24 %>% # box plots
-  ggplot(aes(x=factor(position), y=DeltaTest)) + geom_boxplot() +
+  ggplot(aes(x=DeltaTest, group = factor(position))) + geom_density(aes(color = factor(eCO2, levels=c("1","0")))) + labs(colour = "eCO2") + xlab("∆CO2")
+
+between_boxplots <- between_4.10.24 %>% # box plots
+  ggplot(aes(x=factor(position), y=DeltaTest)) + geom_boxplot(aes(color=factor(eCO2, levels=c("1","0")))) +
+  labs(colour = "eCO2") + xlab("Plot") + ylab("∆CO2") +
   geom_hline(yintercept=200,color = "red", linetype="dashed", size=1)
 
 # 12:45 short veg, canopy height
@@ -299,10 +403,19 @@ veg_4.10.24 <- testing %>%
   select(TIMESTAMP, CO2ref, CO2elev, CO2test, DeltaObs) %>%
   mutate(DeltaTest = CO2test - CO2ref) %>%
   mutate(timestep = floor_date(TIMESTAMP - 5*60, unit = "20 minutes"),
-         position = c("short_10cm","med_10-15cm","tall_50-60cm","med_10cm","tall_10cm")[factor(timestep)])
+         position = c("short_10cm@canopy","med_25-35cm@canopy","tall_50-60cm@canopy","med_@10cm","tall_@10cm")[factor(timestep)])
+
+veg_4.10.24$position <- factor(veg_4.10.24$position, levels = unique(veg_4.10.24$position))
+
+veg_4.10.24 %>% 
+  group_by(position) %>% 
+  summarise(mean = mean(DeltaTest), sd = sd(DeltaTest)) %>% 
+  ungroup() %>% View()
 
 veg_4.10.24 %>%  # density curves for each timestep
   ggplot(aes(x=DeltaTest, group = factor(position))) + geom_density(aes(color = position))
-veg_4.10.24 %>% # box plots
-  ggplot(aes(x=factor(position), y=DeltaTest)) + geom_boxplot() +
-  geom_hline(yintercept=200,color = "red", linetype="dashed", size=1)
+
+veg_boxplot <- veg_4.10.24 %>% # box plots
+  ggplot(aes(x=position, y=DeltaTest)) + geom_boxplot() +
+  geom_hline(yintercept=200,color = "red", linetype="dashed", size=1) +
+  xlab("Vegetation Height & Sampling Height") + ylab("∆CO2")
