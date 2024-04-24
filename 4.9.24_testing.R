@@ -257,11 +257,35 @@ ggplot() + # interpolated points plus measured values  (means) plus circle showi
 ggplot(data = interp_df2, aes(x = x, y = y)) + # contour map, kinda cool
   geom_contour(aes(z = DeltaTest, colour = stat(level)), size = 1.2) +
   metR::geom_text_contour(aes(z=DeltaTest), stroke = 0.15) +
-  coord_equal()
+  scale_color_continuous(type = "viridis") +
+    coord_equal() +
+  ggforce::geom_circle(aes(x0=0,y0=0,r=39))
 
 
 # between-plot testing
 # at 7:25, 20m timesteps, plot 1-16
+
+between_4.10.24 <- testing %>%
+  filter(TIMESTAMP > "2024-04-10 07:25:00") %>%
+  filter(TIMESTAMP < "2024-04-10 12:45:00") %>%
+  select(TIMESTAMP, CO2ref, CO2elev, CO2test, DeltaObs) %>%
+  mutate(DeltaTest = CO2test - CO2ref) %>%
+  mutate(timestep = floor_date(TIMESTAMP - 5*60, unit = "20 minutes"),
+         position = factor(c(1:16)[factor(timestep)]))
+
+# NB I think plots 3 and 4 got swapped when I rebuilt the thing!! 3 is E now and 4 is A
+
+mean(between_4.10.24[between_4.10.24$position %in% c(1,4,5,8,10,12,14,16),]$DeltaTest) # 13.0398
+sd(between_4.10.24[between_4.10.24$position %in% c(1,4,5,8,10,12,14,16),]$DeltaTest) # 47.83779
+
+mean(between_4.10.24[between_4.10.24$position %in% c(2,3,6,7,9,11,13,15),]$DeltaTest) # 209.8614
+sd(between_4.10.24[between_4.10.24$position %in% c(2,3,6,7,9,11,13,15),]$DeltaTest) # 56.70083
+
+between_4.10.24 %>%  # density curves for each timestep
+  ggplot(aes(x=DeltaTest, group = factor(position))) + geom_density(aes(color = position))
+between_4.10.24 %>% # box plots
+  ggplot(aes(x=factor(position), y=DeltaTest)) + geom_boxplot() +
+  geom_hline(yintercept=200,color = "red", linetype="dashed", size=1)
 
 # 12:45 short veg, canopy height
 # 13:05 medium veg, canopy height
@@ -269,3 +293,16 @@ ggplot(data = interp_df2, aes(x = x, y = y)) + # contour map, kinda cool
 # 13:45 medium, 10cm
 # 14:05 tall, 10cm
 
+veg_4.10.24 <- testing %>%
+  filter(TIMESTAMP > "2024-04-10 12:45:00") %>%
+  filter(TIMESTAMP < "2024-04-10 14:25:00") %>%
+  select(TIMESTAMP, CO2ref, CO2elev, CO2test, DeltaObs) %>%
+  mutate(DeltaTest = CO2test - CO2ref) %>%
+  mutate(timestep = floor_date(TIMESTAMP - 5*60, unit = "20 minutes"),
+         position = c("short_10cm","med_10-15cm","tall_50-60cm","med_10cm","tall_10cm")[factor(timestep)])
+
+veg_4.10.24 %>%  # density curves for each timestep
+  ggplot(aes(x=DeltaTest, group = factor(position))) + geom_density(aes(color = position))
+veg_4.10.24 %>% # box plots
+  ggplot(aes(x=factor(position), y=DeltaTest)) + geom_boxplot() +
+  geom_hline(yintercept=200,color = "red", linetype="dashed", size=1)
