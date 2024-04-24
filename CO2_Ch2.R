@@ -205,6 +205,27 @@ ggplot(avg_within, aes(Position, mDeltaTest)) +
   geom_point() +
   geom_pointrange(data = avg_within, aes(ymin=(mDeltaTest - sd), ymax = (mDeltaTest + sd)))
 
+avg_within2 <- left_join(avg_within, points_within, join_by(Position == position))
+avg_within2 <- avg_within2[1:13,]
+
+interp10.9 <- interp(x = avg_within2$x, y = avg_within2$y, z = avg_within2$mDeltaTest, linear=FALSE, extrap = FALSE)
+#convert this to a long form dataframe
+interp_df10.9 <- expand_grid(i = seq_along(interp10.9$x), 
+                         j = seq_along(interp10.9$y)) %>% 
+  mutate(x = interp10.9$x[i],
+         y = interp10.9$y[j],
+         DeltaTest = map2_dbl(i, j, ~interp10.9$z[.x,.y])) %>% 
+  select(-i, -j)
+
+# visualize all interpolated points
+ggplot(data = interp_df10.9, aes(x = x, y = y, color = DeltaTest)) + geom_point(size=6) + scale_color_continuous(type = "viridis") + theme_classic()
+
+# visualize all interpolated points, with measured values overlaid
+ggplot() + 
+  geom_point(data = interp_df10.9, aes(x = x, y = y, color = DeltaTest), size=4.3, shape=15) +
+  scale_color_continuous(type = "viridis") + theme_classic() +
+  geom_text(data = avg_within2, aes(x=x, y=y, label = round(mDeltaTest, 1)), size = 5)
+
 CO2_20s %>% 
  # filter(DeltaObs > 25) %>% # should knock out empty-tank days and broken-pump days
 #  filter(PARuE >= 50) %>% # restricts to just daytime (on) values
