@@ -375,11 +375,11 @@ sd(between_4.10.24[between_4.10.24$position %in% c(2,3,6,7,9,11,13,15),]$DeltaTe
 
 #sum(between_4.10.24$CO2elev < (between_4.10.24$CO2ref+200)*1.2 & between_4.10.24$CO2elev > (between_4.10.24$CO2ref+200)*0.8)/nrow(between_4.10.24) # 99.4%
 
-sum(between_4.10.24[between_4.10.24$eCO2 ==1,]$CO2elev < (between_4.10.24[between_4.10.24$eCO2 ==1,]$CO2ref+200)*1.2 & between_4.10.24[between_4.10.24$eCO2 ==1,]$CO2elev > (between_4.10.24[between_4.10.24$eCO2 ==1,]$CO2ref+200)*0.8)/nrow(between_4.10.24[between_4.10.24$eCO2 ==1,]) # 99.4%
-
 between_4.10.24 %>% 
   filter(eCO2 == 1) %>% 
   mutate(within10 = (CO2elev < (CO2ref+200)*1.1 & CO2elev > (CO2ref+200)*0.9)) %>% 
+  mutate(within20 = (CO2elev < (CO2ref+200)*1.2 & CO2elev > (CO2ref+200)*0.8)) %>% 
+#  summarise(sum20 = sum(within20)) 
   summarise(sum10 = sum(within10)) 
 465/nrow(between_4.10.24[between_4.10.24$eCO2==1,]) # 96.9% within 10%; 100% within 20%
 
