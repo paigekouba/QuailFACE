@@ -138,11 +138,30 @@ sd(CO2_operational$CO2ref) # 61
 
 # check on all-time DeltaObs
 CO2_20s %>% 
-  filter(DeltaObs > 25) %>% # should knock out empty-tank days and broken-pump days
-  filter(PARuE >= 200) %>%
-  select(TIMESTAMP, CO2ref) %>% 
+  #filter(DeltaObs > 25) %>% # should knock out empty-tank days and broken-pump days
+  filter(PARuE >= 50) %>%
+  select(TIMESTAMP, CO2ref, DeltaObs) %>% 
   dygraph() %>% 
-  dyRoller(rollPeriod = 60) %>% 
+  dyRoller(rollPeriod = 180) %>% 
+  dyRangeSelector()
+# there's an error (Unsupported type passed to argument 'data'.) if you comment out the filter for DeltaObs > 25; why?
+
+# there are two periods when TIMESTAMP = NA
+View(CO2_20s[which(is.na(CO2_20s$TIMESTAMP)),])
+# starting with RECORD = 756962 and then RECORD = 1971828
+View(CO2_20s[which(CO2_20s$RECORD == 756962-50):which(CO2_20s$RECORD == 757141+50),])
+# first one starts after 2023-03-12 01:59:45, ends before 2023-03-12 03:00:05
+View(CO2_20s[which(CO2_20s$RECORD == 1971828-50):which(CO2_20s$RECORD == 1972007+50),])
+# second one starts after 2024-03-10 01:59:53, ends before 2024-03-10 03:00:13
+# weird timing, exactly 1hr between 2-3pm on a day in the second week of March??
+
+# check on all-time DeltaObs, try again
+CO2_20s %>% 
+  filter(!is.na(TIMESTAMP)) %>% # should knock out NAs
+  filter(PARuE >= 50) %>%
+  select(TIMESTAMP, CO2ref, DeltaObs, BattV_Avg, FlowMFC, SpanObs, ZeroObs) %>% 
+  dygraph() %>% 
+  dyRoller(rollPeriod = 180) %>% 
   dyRangeSelector()
 
 ggplot(CO2_operational, aes(x=DeltaObs))+
