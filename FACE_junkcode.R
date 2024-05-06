@@ -187,5 +187,74 @@ dia_long %>%
 
 # find Codes for seedlings with any herbivory and drop after the date of first  herbivory
 
+# PCA first try
+
+df_pca <- biomass_nh %>% 
+  filter(Spp == "L") %>% 
+  select(Code, StemWet_g, LeafDry_g, LeafWet_g, rootmass_g) %>% 
+  mutate(rootshoot = rootmass_g/(StemWet_g + LeafWet_g), lwc = (LeafWet_g - LeafDry_g)/LeafWet_g) %>% 
+  filter(!if_any(everything(),is.na))
+
+df_pca_new <- df_pca[,-1]
+rownames(df_pca_new) <- df_pca[,1]
+
+df_pca_norm <- scale(df_pca_new)
+
+## Covariance matrix
+corr_matrix <- cor(df_pca_norm)
+ggcorrplot(corr_matrix)
+
+## Selection of principal components
+# data.pca <- princomp(corr_matrix)
+# summary(data.pca)
+# data.pca$loadings[, 1:2]
+# screeplot(data.pca)
+# fviz_eig(data.pca, addlabels = TRUE)
+# biplot(data.pca)
+res.pca <- PCA(df_pca_norm)
+
+fviz_pca_ind(res.pca, col.ind = "cos2", gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"), repel = TRUE)
+fviz_pca_biplot(res.pca, repel = TRUE)
+
+## Selection of principal components
+# data.pca <- princomp(corr_matrix)
+# summary(data.pca)
+# data.pca$loadings[, 1:2]
+# screeplot(data.pca)
+# fviz_eig(data.pca, addlabels = TRUE)
+# biplot(data.pca)
+
+df_pca <- biomass_nh %>% 
+  #  filter(Spp == "V") %>% 
+  #  filter(Tmt == "EW") %>% 
+  select(Code, Tmt, StemWet_g, LeafDry_g, LeafWet_g, rootmass_g) %>% 
+  mutate(rootshoot = rootmass_g/(StemWet_g + LeafWet_g), lwc = (LeafWet_g - LeafDry_g)/LeafWet_g) %>% 
+  filter(!if_any(everything(),is.na)) 
+
+df_pca_new <- df_pca[,-c(1)]
+df_pca_new <- as.data.frame(df_pca_new)
+rownames(df_pca_new) <- df_pca[,1]
+#rownames(df_pca_new) <- c("AD", "AW", "ED", "EW")
+
+#df_pca_norm <- scale(df_pca_new)
+df_pca_norm <- as.data.frame(cbind(df_pca_new[,1],scale(df_pca_new[,-1])))
+df_pca_norm <- df_pca_norm %>% 
+  mutate_at(c("StemWet_g","LeafDry_g","LeafWet_g","rootmass_g","rootshoot","lwc"), as.numeric)
+
+## Covariance matrix
+corr_matrix <- cor(df_pca_norm[,-1])
+ggcorrplot(corr_matrix)
+
+#res.pca <- PCA(df_pca_norm)
+#res.pca <- prcomp(df_pca_norm[,-1])
+res.pca <- prcomp(df_pca_new[,-1], scale = TRUE)
+
+fviz_pca_ind(res.pca, col.ind = "cos2", gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"), repel = TRUE)
+fviz_pca_biplot(res.pca, repel = TRUE)
+
+fviz_pca_ind(res.pca, label = "none", habillage = df_pca_new$Tmt)
+fviz_pca_biplot(res.pca, habillage = df_pca_new$Tmt, addEllipses = TRUE, repel = TRUE) + scale_color_manual(values=c("pink", "lightblue", "red", "blue")) + scale_fill_manual(values=c("pink", "lightblue", "red", "blue"))
+
+
 # NEVER EVER GIVE UP
 # NEVER SURRENDER
