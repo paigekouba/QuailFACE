@@ -20,6 +20,7 @@ crosswalk3[212,3] <- 15
 # data entry error; log for 2V4b taken 8/26/23, misentered as 8/29
 crosswalk3[crosswalk3$ID == "2V4b",2] <- "8/26/23"
 
+
 typeof(crosswalk3$Date)
 
 crosswalk3$SurveyDay <- 
@@ -27,6 +28,8 @@ crosswalk3$SurveyDay <-
               c("8/26","8/26/23") ~ 1,
               c("8/27") ~ 2,
               c("8/29","8/29/23") ~ 3)
+
+crosswalk3 <- left_join(crosswalk3, lookup, by = "Plot")
 
 crosswalk3$LiCOR_ID <- paste0(crosswalk3$SurveyDay, "_", crosswalk3$Log)
 LiCOR_3$LiCOR_ID <- paste0(LiCOR_3$SurveyDay, "_", LiCOR_3$Obs)
@@ -43,6 +46,8 @@ df3 <- left_join(LiCOR_3, crosswalk3, by = join_by(LiCOR_ID))
 df3 <- df3 %>% 
   filter(Photo.x > 0 & Ci.x > 0) %>% 
   filter(ID != "NA")
+
+df3$HHMMSS <- parse_date_time(df3$HHMMSS, orders = c("HMS"), tz = "America/Los_Angeles")
 # now has each LiCOR measurement associated with plant ID. sets of 3 and 4. CO2 setting goes 400-600-800(-400)
 
 # test_df <- df[1:23,c(3, 6:8, 41, 86:93)]
@@ -57,7 +62,7 @@ df3 <- df3 %>%
 #   filter(Photo.x > 0 & Ci.x > 0) %>% 
 #   filter(ID != "NA")
 
-ggplot(df3, aes(x = Ci.x, y = Photo.x, colour = Treatment)) +
+ggplot(df3, aes(x = Ci.x, y = Photo.x, colour = Tmt)) +
   geom_point() +
   facet_wrap( ~ ID) +
   geom_vline(xintercept = 330, colour="blue")
@@ -73,7 +78,7 @@ ggplot(df3, aes(x = Ci.x, y = Photo.x, colour = Treatment)) +
 
 # MG says to take the average midpoint of all curves and make that the cutoff. Also a simple two-way ANOVA of the interpolated values.
 midpoints3 <- df3 %>% 
-  select(HHMMSS, Photo.x, Cond, Ci.x, CO2R, SWC, Date, Log, X., Time, ID, Plot, Treatment) %>% 
+  select(HHMMSS, Photo.x, Cond, Ci.x, CO2R, SWC, Date, Log, X., Time, ID, Plot, Tmt) %>% 
   group_by(ID) %>% 
   summarize(Ci.midpoint = (min(Ci.x)+max(Ci.x))/2) 
 mean(midpoints3$Ci.midpoint) # 340.2411
@@ -96,27 +101,46 @@ df3 <- df3 %>%
 
 # tally "acceptable" curves per treatment.spp combo
 df3 %>%   
-  select(HHMMSS, Photo.x, Cond, Ci.x, CO2R, SWC, Date, Log, X., Time, ID, Plot, Treatment, Spp) %>% 
-  group_by(ID, Treatment, Spp) %>% 
+  select(HHMMSS, Photo.x, Cond, Ci.x, CO2R, SWC, Date, Log, X., Time, ID, Plot, Tmt, Spp) %>% 
+  group_by(ID, Tmt, Spp) %>% 
   summarize(threshold = if_else(max(Ci.x)>330, TRUE, FALSE)) %>% 
-  group_by(Treatment, Spp) %>% 
+  group_by(Tmt, Spp) %>% 
   summarize(keepers = sum(threshold)) %>% 
   View()
-# between 3-8 suitable curves for each Treatment.Spp combination (threshold=328.67) 
+# between 3-10 suitable curves for each Treatment.Spp combination (threshold=328.67) 
 
 # how variable are the results by species.treatment? Determines how big a sample size is enough.
 # I want to interpolate the Photo.x value at 333 Ci for each curve
 # linear interpolation:
 # approx(x,y,xout)
 df3_small <- df3 %>%   
-  select(HHMMSS, Photo.x, Cond, Ci.x, CO2R, SWC, Date, Log, X., Time, ID, Plot, Treatment, Spp) %>% 
+  select(HHMMSS, Photo.x, Cond, Ci.x, CO2R, SWC, Date, Log, X., Time, ID, Plot, Tmt, Spp) %>% 
   group_by(ID) %>% 
-  mutate(interpol = approx(Ci.x,Photo.x, xout=328.67)$y)
+  mutate(interpol = approx(Ci.x,Photo.x, xout=330)$y)
+
+ggplot(df3_small, aes(x = Ci.x, y = Photo.x, colour = Tmt)) + # this one will show how well interpol tracks the A/Ci mini curve
+  geom_point() +
+  geom_point(aes(x = 328.67, y = interpol, color = "black")) +
+  facet_wrap( ~ ID) +
+  geom_vline(xintercept = 328.67, colour="blue")
+
+ggplot(df3_small, aes(x = Ci.x, y = Cond, colour = Tmt)) + # this one is to check how cond changes with Ci.x
+  geom_point() +
+  facet_wrap( ~ ID) +
+  geom_vline(xintercept = 328.67, colour="blue")
 
 df3_smaller <- df3_small[!duplicated(df3_small$interpol),]
 
 # combine data for survey 3 and 4
 df_all <- rbind(df3_smaller, df4_smaller)
+df_all <- df_all %>% 
+  filter(!is.na(interpol)) %>% 
+  group_by(ID) %>% 
+  mutate(HHMMSS = mean(HHMMSS), Cond = mean(Cond), SWC = mean(SWC), interpol = mean(interpol)) %>% 
+  ungroup() %>% 
+  distinct(ID, .keep_all = TRUE) %>% # removes the duplicate rows per ID
+  mutate(WUE = interpol/Cond) %>% 
+  mutate(CO2Tmt = substring(Tmt,1,1), H2OTmt = substring(Tmt,2,2))
 
 ggplot(df3_smaller, aes(x= factor(Treatment, levels= c("AD","ED","AW","EW")), y= interpol)) +
   geom_boxplot(aes(colour=Spp)) +
@@ -166,52 +190,71 @@ summarySE <- function(data=NULL, measurevar, groupvars=NULL, na.rm=FALSE,
   datac$ci <- datac$se * ciMult
   return(datac)
 }
-df_all_se <- summarySE(df_all, measurevar = "interpol", groupvars=c("Treatment","Spp"), na.rm = TRUE)
+df_all_se <- summarySE(df_all, measurevar = "interpol", groupvars=c("Tmt","Spp"), na.rm = TRUE)
+df_allspp_se <- summarySE(df_all, measurevar = "interpol", groupvars=c("Tmt"), na.rm = TRUE)
 
+# L_se_D <- df_all_se %>% 
+#   filter(Spp == "L") %>% 
+#   filter(Treatment == "AD" | Treatment == "ED") %>% 
+#   mutate(Water = "Dry") %>% 
+#   mutate(CO2 = case_when(Treatment =="AD" ~ "Ambient",
+#                          TRUE ~ "Elevated"))
 L_se_D <- df_all_se %>% 
   filter(Spp == "L") %>% 
-  filter(Treatment == "AD" | Treatment == "ED") %>% 
+  filter(Tmt == "AD" | Tmt == "ED") %>% 
   mutate(Water = "Dry") %>% 
-  mutate(CO2 = case_when(Treatment =="AD" ~ "Ambient",
+  mutate(CO2 = case_when(Tmt =="AD" ~ "Ambient",
                          TRUE ~ "Elevated"))
 
 L_se_W <- df_all_se %>% 
   filter(Spp == "L") %>% 
-  filter(Treatment == "AW" | Treatment == "EW") %>% 
+  filter(Tmt == "AW" | Tmt == "EW") %>% 
   mutate(Water = "Wet") %>% 
-  mutate(CO2 = case_when(Treatment =="AW" ~ "Ambient",
+  mutate(CO2 = case_when(Tmt =="AW" ~ "Ambient",
                          TRUE ~ "Elevated"))
 
 V_se_D <- df_all_se %>% 
   filter(Spp == "V") %>% 
-  filter(Treatment == "AD" | Treatment == "ED") %>% 
+  filter(Tmt == "AD" | Tmt == "ED") %>% 
   mutate(Water = "Dry") %>% 
-  mutate(CO2 = case_when(Treatment =="AD" ~ "Ambient",
+  mutate(CO2 = case_when(Tmt =="AD" ~ "Ambient",
                          TRUE ~ "Elevated"))
 
 V_se_W <- df_all_se %>% 
   filter(Spp == "V") %>% 
-  filter(Treatment == "AW" | Treatment == "EW") %>% 
+  filter(Tmt == "AW" | Tmt == "EW") %>% 
   mutate(Water = "Wet") %>% 
-  mutate(CO2 = case_when(Treatment =="AW" ~ "Ambient",
+  mutate(CO2 = case_when(Tmt =="AW" ~ "Ambient",
                          TRUE ~ "Elevated"))
 
 
 all_se_D <- df_all_se %>% 
-  filter(Treatment == "AD" | Treatment == "ED") %>% 
+  filter(Tmt == "AD" | Tmt == "ED") %>% 
   mutate(Water = "Dry") %>% 
-  mutate(CO2 = case_when(Treatment =="AD" ~ "Ambient",
+  mutate(CO2 = case_when(Tmt =="AD" ~ "Ambient",
                          TRUE ~ "Elevated"))
 
 all_se_W <- df_all_se %>% 
-  filter(Treatment == "AW" | Treatment == "EW") %>% 
+  filter(Tmt == "AW" | Tmt == "EW") %>% 
   mutate(Water = "Wet") %>% 
-  mutate(CO2 = case_when(Treatment =="AW" ~ "Ambient",
+  mutate(CO2 = case_when(Tmt =="AW" ~ "Ambient",
+                         TRUE ~ "Elevated"))
+
+allspp_se_D <- df_allspp_se %>% 
+  filter(Tmt == "AD" | Tmt == "ED") %>% 
+  mutate(Water = "Dry") %>% 
+  mutate(CO2 = case_when(Tmt =="AD" ~ "Ambient",
+                         TRUE ~ "Elevated"))
+
+allspp_se_W <- df_allspp_se %>% 
+  filter(Tmt == "AW" | Tmt == "EW") %>% 
+  mutate(Water = "Wet") %>% 
+  mutate(CO2 = case_when(Tmt =="AW" ~ "Ambient",
                          TRUE ~ "Elevated"))
 
 
 # Standard error of the mean
-ggplot(df_all_se, aes(x=factor(Treatment, levels= c("AD","ED","AW","EW")), y=interpol, colour=Spp)) + 
+ggplot(df_all_se, aes(x=factor(Tmt, levels= c("AD","ED","AW","EW")), y=interpol, colour=Spp)) + 
   geom_errorbar(aes(ymin=interpol-se, ymax=interpol+se), width=.1) +
   geom_line() +
   geom_point() 
@@ -248,4 +291,6 @@ facet_wrap( ~ Spp) +
   scale_x_discrete(labels=c("Ambient \nCO2", "Elevated \nCO2")) +
   xlab("Treatment") + ylab("Net CO2 Uptake") +
   theme_classic(base_size=22)
+
+# can you streamline this (cbind or rbind the dfs) and make it a function?
 

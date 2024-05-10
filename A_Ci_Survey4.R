@@ -22,6 +22,8 @@ case_match( crosswalk4$Date,
     c("10/1/23", "1-Oct") ~ 2,
      c("10/2/23", "2-Oct") ~ 3)
     
+crosswalk4 <- left_join(crosswalk4, lookup, by = "Plot")
+
 crosswalk4$LiCOR_ID <- paste0(crosswalk4$SurveyDay, "_", crosswalk4$Log)
 LiCOR_4$LiCOR_ID <- paste0(LiCOR_4$SurveyDay, "_", LiCOR_4$Obs)
 names(LiCOR_4)
@@ -32,6 +34,10 @@ sum(crosswalk4$LiCOR_ID %in% LiCOR_4$LiCOR_ID) # all match! 187 unique measureme
 # get plant ID names, treatment codes, into LiCOR measurement df
 df4 <- left_join(LiCOR_4, crosswalk4, by = join_by(LiCOR_ID))
 # now has each LiCOR measurement associated with plant ID. sets of 3 and 4. CO2 setting goes 400-600-800(-400)
+df4 <- df4 %>% 
+  filter(Photo.x > 0 & Ci.x > 0) %>% 
+  filter(ID != "NA")
+df4$HHMMSS <- parse_date_time(df4$HHMMSS, orders = c("HMS"), tz = "America/Los_Angeles")
 
 # test_df <- df[1:23,c(3, 6:8, 41, 86:93)]
 # library(ggplot2)
@@ -40,17 +46,17 @@ df4 <- left_join(LiCOR_4, crosswalk4, by = join_by(LiCOR_ID))
 #   facet_wrap( ~ ID) +
 # geom_vline(xintercept = 400, colour="blue")
 
-ggplot(df4, aes(x = Ci.x, y = Photo.x, colour = Treatment)) +
+ggplot(df4, aes(x = Ci.x, y = Photo.x, colour = Tmt)) +
   geom_point() +
   facet_wrap( ~ ID) +
   geom_vline(xintercept = 330, colour="blue")
 # average of median line for survey 3 (328) and 4 (333)
 
 df4 %>% 
-  select(HHMMSS, Photo.x, Cond, Ci.x, CO2R, SWC, Date, Log, X., Time, ID, Plot, Treatment) %>% 
-  group_by(ID, Treatment) %>% 
+  select(HHMMSS, Photo.x, Cond, Ci.x, CO2R, SWC, Date, Log, X., Time, ID, Plot, Tmt) %>% 
+  group_by(ID, Tmt) %>% 
   summarize(ambient = if_else(max(Ci.x)>400, TRUE, FALSE)) %>% 
-  group_by(Treatment) %>% 
+  group_by(Tmt) %>% 
   summarize(keepers = sum(ambient)) %>% 
   View()
 # AD = 8   AW = 5    ED = 9   EW = 10 
@@ -66,10 +72,10 @@ median(midpoints4$Ci.midpoint) # 333.2088
 # AML: can you get a bigger sample size by lowering the threshold (yes) or extrapolating?
 # using 333.21 Ci:
 df4 %>% 
-  select(HHMMSS, Photo.x, Cond, Ci.x, CO2R, SWC, Date, Log, X., Time, ID, Plot, Treatment) %>% 
-  group_by(ID, Treatment) %>% 
+  select(HHMMSS, Photo.x, Cond, Ci.x, CO2R, SWC, Date, Log, X., Time, ID, Plot, Tmt) %>% 
+  group_by(ID, Tmt) %>% 
   summarize(threshold = if_else(max(Ci.x)>333.21, TRUE, FALSE)) %>% 
-  group_by(Treatment) %>% 
+  group_by(Tmt) %>% 
   summarize(keepers = sum(threshold)) 
 # AD = 8   AW = 8    ED = 12   EW = 14 ; 42 total
 
@@ -80,31 +86,31 @@ df4 <- df4 %>%
 
 # tally "acceptable" curves per treatment.spp combo
 df4 %>%   
-  select(HHMMSS, Photo.x, Cond, Ci.x, CO2R, SWC, Date, Log, X., Time, ID, Plot, Treatment, Spp) %>% 
-  group_by(ID, Treatment, Spp) %>% 
+  select(HHMMSS, Photo.x, Cond, Ci.x, CO2R, SWC, Date, Log, X., Time, ID, Plot, Tmt, Spp) %>% 
+  group_by(ID, Tmt, Spp) %>% 
   summarize(threshold = if_else(max(Ci.x)>333.21, TRUE, FALSE)) %>% 
-  group_by(Treatment, Spp) %>% 
+  group_by(Tmt, Spp) %>% 
   summarize(keepers = sum(threshold)) %>% 
   View()
-# between 3-7 suitable curves for each Treatment.Spp combination (threshold=333.21) *note, one has all 3 pts too *high*
+# between 4-7 suitable curves for each Treatment.Spp combination (threshold=333.21) *note, one has all 3 pts too *high*
 
 # how variable are the results by species.treatment? Determines how big a sample size is enough.
 # I want to interpolate the Photo.x value at 333 Ci for each curve
 # linear interpolation:
 # approx(x,y,xout)
 df4_small <- df4 %>%   
-  select(HHMMSS, Photo.x, Cond, Ci.x, CO2R, SWC, Date, Log, X., Time, ID, Plot, Treatment, Spp) %>% 
+  select(HHMMSS, Photo.x, Cond, Ci.x, CO2R, SWC, Date, Log, X., Time, ID, Plot, Tmt, Spp) %>% 
   group_by(ID) %>% 
-  mutate(interpol = approx(Ci.x,Photo.x, xout=333.21)$y)
+  mutate(interpol = approx(Ci.x,Photo.x, xout=330)$y)
 
 df4_smaller <- df4_small[!duplicated(df4_small$interpol),]
 
-ggplot(df4_smaller, aes(x= factor(Treatment, levels= c("AD","ED","AW","EW")), y= interpol)) +
+ggplot(df4_smaller, aes(x= factor(Tmt, levels= c("AD","ED","AW","EW")), y= interpol)) +
   geom_boxplot(aes(colour=Spp)) +
   #geom_jitter(aes(colour=Spp)) +
   ggtitle("Live and Valley Oak Response to eCO2 x Water Stress") +
   scale_x_discrete(labels=c("Ambient \nDry", "Elevated \nDry", "Ambient \nWet", "Elevated \nWet")) +
   xlab("Treatment") + ylab("A(net) at 333 ppm [CO2]")
 
-ggplot(df4_smaller, aes(x= Treatment, y= interpol)) +
+ggplot(df4_smaller, aes(x= Tmt, y= interpol)) +
   geom_jitter(aes(colour=Spp))
