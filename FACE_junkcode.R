@@ -255,6 +255,87 @@ fviz_pca_biplot(res.pca, repel = TRUE)
 fviz_pca_ind(res.pca, label = "none", habillage = df_pca_new$Tmt)
 fviz_pca_biplot(res.pca, habillage = df_pca_new$Tmt, addEllipses = TRUE, repel = TRUE) + scale_color_manual(values=c("pink", "lightblue", "red", "blue")) + scale_fill_manual(values=c("pink", "lightblue", "red", "blue"))
 
+# biomass %>% ggplot() + geom_boxplot( aes(x=Tmt, y= log(StemWet_g+LeafDry_g+rootmass_g), color = Tmt)) + facet_grid(~ Spp) +
+#   geom_text(data = nequals, aes(x = Tmt, y = 4, label = paste0("N =",n)))
+# # I want number of observations for each box
+# nequals <- biomass %>% 
+#   group_by(Tmt, Spp) %>% 
+#   tally()
+
+inv_cond <- inventory_raw %>% 
+  select(Code, paste0("Cond..",c(1:8))) %>% 
+  pivot_longer(!Code, names_to = "key", values_to = "cond")
+
+cond_long <- cbind(inv_long, inv_cond) 
+
+cond_long <- cond_long[,c(1:3,5:8,11)]
+
+cond_long %>% 
+  filter(Spp == "V") %>% 
+  ggplot() +
+  geom_point(aes(x = value, y = cond, color = Tmt)) +
+  geom_line(aes(x = value, y = cond, color = Tmt)) + facet_wrap( ~ Code)  
+
+
+# want a long format df with columns =  [ Code, Plot, Tmt, Date, Ht ] x 129 
+# then, plot x = date y = ht, group_by Code, color = Tmt
+
+# # try it just with inventory date
+# inv_long1 <- inventory_thinned %>% 
+#   select(Code, Inv..1.Date, Inv..2.Date, Inv..3.Date, Inv..4.Date, Inv..5.Date, Inv..6.Date, Inv..7.Date, Inv..8.Date) %>% 
+#   mutate(Code = if_else(nchar(Code)==4,substr(Code,1,3),substr(Code,1,4)))
+# 
+# inv_long <- inv_long1 %>% 
+#   pivot_longer(!Code, names_to = "Date") %>% 
+#   mutate(value = mdy(value)) 
+# 
+# # now do it with ht data
+# inv_hts <- inventory_thinned %>% 
+#   select(Code, paste0("Ht.mm..",c(1:8))) %>% 
+#   pivot_longer(!Code, names_to = "key", values_to = "ht_mm")
+# 
+# inv_long <- cbind(inv_long, inv_hts) %>%
+#   select(!4) %>% 
+#   mutate(Plot = if_else(nchar(Code)==3,substr(Code,1,1),substr(Code,1,2)))
+# 
+# inv_long <- left_join(inv_long, lookup, by = "Plot")
+# 
+# inv_long <- inv_long %>% 
+#   mutate(Spp = substr(Code, nchar(Code)-1,nchar(Code)-1))
+# 
+# ggplot(inv_long) +
+#   geom_point(aes(x = value, y = ht_mm, group = Code, color = Spp)) +
+#   geom_line(aes(x = value, y = ht_mm, group = Code, color = Spp)) + facet_grid(Spp ~ Tmt, scales = "free")
+# 
+# inv_long %>% 
+#   group_by(Spp, Tmt, value) %>% 
+#   summarise(mean_ht = mean(ht_mm, na.rm = TRUE),sd_ht = sd(ht_mm, na.rm = TRUE)) %>% 
+#   ggplot(aes(x=value, y = mean_ht, group = Tmt)) + 
+#   geom_pointrange(aes(ymin = mean_ht - sd_ht/7, ymax = mean_ht + sd_ht/7, color = Tmt, shape = Tmt), position = position_dodge(0.2), size = 1.5, alpha = 0.75) + 
+#   scale_color_manual(values = c("red", "blue", "red", "blue")) +
+#   scale_shape_manual(values = c(16,16,17,17)) +
+#   geom_line(aes(color = Tmt), position = position_dodge(0.2), linewidth = 1.2) + facet_grid(rows = vars(Spp), scales = "free")
+# 
+# inv_long %>%
+#   filter(!is.na(ht_mm)) %>% 
+#   group_by(Spp, Tmt, value) %>%
+#   tally()
+
+# for inv_long, (get Codes w/o a and b), find Codes for seedlings with full herbivory and drop after the date of first full herbivory
+inv_long_nh0 <- right_join(firstherb, inv_long, by = "Code") 
+inv_long_nfh0 <- right_join(firstfullherb, inv_long, by = "Code") 
+
+sum(is.na(inv_long_nh0$firstherb)) # 2304
+nrow(inv_long_nh0[is.na(inv_long_nh0$firstherb),2]) # 2304
+inv_long_nh0[is.na(inv_long_nh0$firstherb),2] <- ymd("9999-09-09")
+inv_long_nfh0[is.na(inv_long_nfh0$firstherb),2] <- ymd("9999-09-09")
+
+inv_long_nh <- inv_long_nh0 %>% 
+  filter(firstherb > value)
+
+inv_long_nfh <- inv_long_nfh0 %>% 
+  filter(firstherb > value)
+
 
 # NEVER EVER GIVE UP
 # NEVER SURRENDER
