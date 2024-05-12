@@ -336,6 +336,72 @@ inv_long_nh <- inv_long_nh0 %>%
 inv_long_nfh <- inv_long_nfh0 %>% 
   filter(firstherb > value)
 
+# now I need to use these to predict the final StemWet_g 
+lm_all <- lm(StemWet_g ~ polym(Ht.mm..1,Ht.mm..4,Ht.mm..5, degree = 2, raw = TRUE), data = biomass_nh2) # test
+
+biomass2$pred1 <- abs(predict(lm_all, newdata = biomass2))
+biomass_nh2$pred2 <- predict(lm_LD, newdata = biomass_nh2)
+biomass_nh2$pred3 <- predict(lm_VD, newdata = biomass_nh2)
+
+ggplot(biomass_nh2, aes(x = StemWet_g, y=pred1)) + # plot
+  geom_point() 
+
+ggplot(biomass2, aes(x=Ht.mm..8, y = StemWet_g)) + # plot
+  geom_point(biomass2, mapping= aes(x = Ht.mm..8, y=pred1)) +
+  #  geom_point(filter(biomass_nh2, Spp == "L" & Tmt == "AD" | Tmt == "ED"), mapping= aes(x = Ht.mm..8, y=pred2)) +
+  #geom_point(filter(biomass_nh2, Spp == "V" & Tmt == "AD" | Tmt == "ED"), mapping= aes(x = Ht.mm..8, y=pred3)) +
+  geom_point(biomass2, mapping= aes(x= Ht.mm..8, y = StemWet_g, group = Tmt, color = Tmt)) + facet_grid( ~ Spp)
+
+# ggplot(biomass_nh2, aes(x = StemWet_g, y=pred1)) + # plot
+#   geom_point() 
+
+# ggplot(biomass_nh2, aes(x=Ht.mm..8, y = StemWet_g)) + # plot
+#   geom_point(biomass_nh2, mapping= aes(x = Ht.mm..8, y=pred1)) +
+#   #  geom_point(filter(biomass_nh2, Spp == "L" & Tmt == "AD" | Tmt == "ED"), mapping= aes(x = Ht.mm..8, y=pred2)) +
+#   #geom_point(filter(biomass_nh2, Spp == "V" & Tmt == "AD" | Tmt == "ED"), mapping= aes(x = Ht.mm..8, y=pred3)) +
+#   geom_point(biomass_nh2, mapping= aes(x= Ht.mm..8, y = StemWet_g, group = Tmt, color = Tmt)) + facet_grid( ~ Spp)
+
+# models to see how well hts predict final biomass
+summary(lm(StemWet_g ~ Ht.mm..1+Ht.mm..2+Ht.mm..3+Ht.mm..4+Ht.mm..5+Ht.mm..6+Ht.mm..7+Ht.mm..8, data = filter(biomass_nh2, Spp == "L" & Tmt == "AW" | Tmt == "EW")))
+summary(lm(StemWet_g ~ Ht.mm..1+Ht.mm..2+Ht.mm..3+Ht.mm..4+Ht.mm..5, data = filter(biomass_nh2, Spp == "L" & Tmt == "AD" | Tmt == "ED")))
+
+
+# this is looking so weird for VW still. I'm going to plot just that subset and just that model
+# df with just Spp == V, Tmt == W, non-herbivory
+LW_df <- biomass_nh2 %>% 
+  filter(Spp=="L") %>% 
+  filter(H2OTmt =="W")
+
+ggplot(LW_df, aes(x = Ht.mm..5, y=StemWet_g, color = H2OTmt)) + # plot
+  geom_point() + geom_smooth(aes(Ht.mm..5, StemWet_g), method = "lm") 
+# yes, this is what I want :)
+
+# LiCOR_df_extp <- 
+df_all %>%   
+  select(HHMMSS, Photo, Cond, Ci, CO2R, SWC, Date, Log, X., Time, ID, Plot, Tmt, Spp) %>% 
+  group_by(ID) %>% 
+  summarise(A_net.350 = predict(lm(Photo ~ poly(Ci,2), data = df_all), newdata=list(350))) %>% View()
+# this part is not working because data = needs to have just points from this ID grouping; time for a loop?
+
+# is it working?
+predict(lm(Photo ~ Ci, data = test7_df), newdata=data.frame(Ci = 350))
+test7_df <- df_all %>%
+  select(HHMMSS, Photo, Cond, Ci, CO2R, SWC, Date, Log, X., Time, ID, Plot, Tmt, Spp) %>%
+  filter(ID == LiCOR_IDs[7])
+
+# for(i in 1:length(LiCOR_IDs)){
+#   LiCOR_extp[i] <- predict(lm(Photo ~ Ci, data = df_all), newdata=list(350))
+# }
+
+# in this part I want to get the mean of the numerical variables  (Cond, SWC, interpol) for cases where there are two observations for a given ID. 
+df_all <- df_all %>% 
+  filter(!is.na(interpol)) %>% 
+  group_by(ID) %>% 
+  mutate(HHMMSS = mean(HHMMSS), Cond = mean(Cond), SWC = mean(SWC), interpol = mean(interpol)) %>% 
+  ungroup() %>% 
+  distinct(ID, .keep_all = TRUE) %>% # removes the duplicate rows per ID
+  mutate(WUE = interpol/Cond) %>% 
+  mutate(CO2Tmt = substring(Tmt,1,1), H2OTmt = substring(Tmt,2,2))
 
 # NEVER EVER GIVE UP
 # NEVER SURRENDER
