@@ -113,10 +113,15 @@ df3 %>%
 # I want to interpolate the Photo.x value at 333 Ci for each curve
 # linear interpolation:
 # approx(x,y,xout)
-df3_small <- df3 %>%   
-  select(HHMMSS, Photo.x, Cond, Ci.x, CO2R, SWC, Date, Log, X., Time, ID, Plot, Tmt, Spp) %>% 
-  group_by(ID) %>% 
-  mutate(interpol = approx(Ci.x,Photo.x, xout=330)$y)
+# df3_small <- df3 %>%   
+#   select(HHMMSS, Photo.x, Cond, Ci.x, CO2R, SWC, Date, Log, X., Time, ID, Plot, Tmt, Spp) %>% 
+#   group_by(ID) %>% 
+#   mutate(interpol = approx(Ci.x,Photo.x, xout=330)$y)
+## redoing this step to get linear model predictions for each curve, not interpolation
+
+## need to also interpolate Cond
+
+
 
 ggplot(df3_small, aes(x = Ci.x, y = Photo.x, colour = Tmt)) + # this one will show how well interpol tracks the A/Ci mini curve
   geom_point() +
