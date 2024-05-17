@@ -36,7 +36,8 @@ ggplot(data = df_all, aes(x=Treatment, y=Cond, color = Treatment)) +
 df_L <- filter(df_all, Spp == "L")
 df_V <- filter(df_all, Spp == "V")
 
-full_L <- glmer(interpol ~ CO2Tmt*SWC + (1|Plot), data = df_L)
+# full_L <- glmer(interpol ~ CO2Tmt*SWC + (1|Plot), data = df_L)
+full_L <- glm(interpol ~ CO2Tmt*SWC, data = df_L)
 red_L <- glmer(interpol ~ CO2Tmt + SWC + (1|Plot), data = df_L)
 
 
@@ -44,7 +45,8 @@ summary(full_L)
 summary(red_L)
 anova(full_L, red_L)
 
-full_V <- glmer(interpol ~ CO2Tmt*SWC + (1|Plot), data = df_V)
+# full_V <- glmer(interpol ~ CO2Tmt*SWC + (1|Plot), data = df_V)
+full_V <- glm(interpol ~ CO2Tmt*SWC, data = df_V)
 red_V <- glmer(interpol ~ CO2Tmt + SWC + (1|Plot), data = df_V)
 
 
@@ -53,7 +55,8 @@ summary(red_V)
 anova(full_V, red_V)
 
 
-full_all <- glmer(interpol ~ CO2Tmt*SWC + (1|Plot), data = df_all)
+#full_all <- glmer(interpol ~ CO2Tmt*SWC + (1|Plot), data = df_all)
+full_all <- glm(interpol ~ CO2Tmt*SWC, data = df_all)
 red_all <- glmer(interpol ~ CO2Tmt + SWC + (1|Plot), data = df_all)
 summary(full_all)
 summary(red_all)
