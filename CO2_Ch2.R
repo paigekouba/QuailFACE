@@ -174,10 +174,10 @@ ggplot(CO2_operational, aes(x=DeltaObs))+
 
 # preliminary between-plot testing: 10/9/23
 between_plot <- CO2_20s %>% 
-  filter(DeltaObs > 25) %>% # should knock out empty-tank days and broken-pump days
-  filter(PARuE >= 50) %>% # restricts to just daytime (on) values
+#  filter(DeltaObs > 25) %>% # should knock out empty-tank days and broken-pump days
+#  filter(PARuE >= 50) %>% # restricts to just daytime (on) values
   filter(TIMESTAMP > "2023-10-09 10:00:00" & TIMESTAMP < "2023-10-09 18:00:00") %>% 
-  select(TIMESTAMP, CO2ref, CO2elev, CO2test, DeltaObs) %>% 
+  dplyr::select(TIMESTAMP, CO2ref, CO2elev, CO2test, DeltaObs) %>% 
   mutate(DeltaTest = CO2test - CO2ref) %>% 
   dygraph() %>% 
   dyRoller(rollPeriod = 10) %>% 
