@@ -47,15 +47,16 @@ LiCOR_df %>%
 ggplot() +
   geom_boxplot(aes(x=Tmt, y=meanSWC, color = Tmt)) + geom_point(aes(x=Tmt, y=meanSWC, color = Tmt)) + scale_color_manual(values = c("pink", "lightblue", "red", "blue")) 
 
-ggplot(df_all) +
-  geom_boxplot(aes(x=Plot, y=SWC, color = Tmt)) # plot fifteen stinks but it's still >>2x SWC of highest dry plot
+ggplot(LiCOR_df) +
+  geom_boxplot(aes(x=Plot, y=SWC, color = Tmt)) # plot 10 and 15 stink but still >2x SWC of highest dry plot
 
 library(gridExtra)
 grid.arrange( # breaks down Anet, gs, and WUE
-  LiCOR_df %>% ggplot() + geom_boxplot(aes(x=Tmt, y= Photo.y, color = Tmt)) + facet_grid(rows = vars(Spp), scales = "free") + labs(y = "Standardized A(net)") +
+  LiCOR_df %>% ggplot() + geom_boxplot(aes(x=Tmt, y= Photo.y, color = Tmt)) + facet_grid(rows = vars(Spp), scales = "free") + labs(y = "Standardized A(net)") + 
+    geom_text(data = nequals_licor, aes(x = Tmt, y = 1, label = paste0("N = ",n))) +  
     scale_color_manual(values = c("pink", "lightblue", "red", "blue")) ,
-  LiCOR_df %>% ggplot() + geom_boxplot(aes(x=Tmt, y= Cond.y, color = Tmt)) + facet_grid(rows = vars(Spp), scales = "free") + labs(y = "Stomatal Conductance") +
-  scale_color_manual(values = c("pink", "lightblue", "red", "blue")) ,
+  LiCOR_df %>% ggplot() + geom_boxplot(aes(x=Tmt, y= Cond.y, color = Tmt)) + facet_grid(rows = vars(Spp), scales = "free") + labs(y = "Stomatal Conductance") + geom_text(data = nequals_licor, aes(x = Tmt, y = 0.01, label = paste0("N = ",n)))
+  +  scale_color_manual(values = c("pink", "lightblue", "red", "blue")) ,
   LiCOR_df %>% 
     filter(WUE.350 < 1500) %>% # removing one outlier from AW, L
     ggplot() + geom_boxplot(aes(x=Tmt, y= WUE.350, color = Tmt)) + facet_grid(rows = vars(Spp), scales = "free") +
@@ -69,7 +70,7 @@ grid.arrange( # breaks down Anet, gs, and WUE
 herbivory <- read.csv("/Users/paigekouba/Documents/UC_Davis/2021_Winter/Quals/Proposal/Chapter 1/TinyFACE/GitHub/QuailFACE/RawData/OakFACE Herbivory - Sheet1.csv")
 herbivory$Date <- mdy(herbivory$Date)
 # group by code, find min(date) for rows with no NA in [full / any]_herbivory
-# Find all Code x date combos where dat > date of first herbivory, exclude those
+# Find all Code x date combos where date > date of first herbivory, exclude those
 # Redo plots below
 # will need to drop as and bs from all codes 
 
@@ -99,9 +100,13 @@ library(dplyr)
 biomass_raw <- read.csv("/Users/paigekouba/Documents/UC_Davis/2021_Winter/Quals/Proposal/Chapter 1/TinyFACE/GitHub/QuailFACE/RawData/Biomass_final.csv")
 # root_mass
 rootmass_raw <- read.csv("/Users/paigekouba/Documents/UC_Davis/2021_Winter/Quals/Proposal/Chapter 1/TinyFACE/GitHub/QuailFACE/RawData/Root_mass.csv")
+# remove "4V3c" to avoid duplicate code
+biomass_raw <- biomass_raw %>% 
+  filter(Code!="4V3c") # now 384 rows
 
 rootmass <- rootmass_raw %>% 
   filter(!is.na(rootmass_g)) %>% 
+  filter(Code!="4V3c") %>% # remove "4V3c" to avoid duplicate code
   mutate(Code = if_else(nchar(Code)==4,substr(Code,1,3),substr(Code,1,4))) # shortcode
 
 biomass <- biomass_raw %>% 
@@ -139,10 +144,11 @@ rootimage <- merge(lookup, rootimage, by = 'Plot')
 
 rootimage <- rootimage %>% 
   mutate(Spp = substr(Code, nchar(Code)-2,nchar(Code)-2))
-
+library(ggpubr)
 rootimage %>% 
-ggplot(aes(x=Tmt, y=Average.Diameter.mm, color=Tmt)) + geom_boxplot(outlier.shape = NA) +
-  scale_color_manual(values = c("pink", "lightblue", "red", "blue")) + facet_grid(rows = vars(Spp))
+ggplot(aes(x=Tmt, y=Average.Diameter.mm, group=Tmt)) + geom_boxplot(outlier.shape = NA, aes(color=Tmt)) +
+  scale_color_manual(values = c("pink", "lightblue", "red", "blue")) + facet_grid(rows = vars(Spp)) +
+  geom_signif(test="wilcox.test", exact=FALSE, comparisons = combn(c("AD", "AW", "ED", "EW"),2,simplify=F),step_increase=0.2)
 
 ## SIF d13C data
 SIF_raw <- read.csv("/Users/paigekouba/Documents/UC_Davis/2021_Winter/Quals/Proposal/Chapter 1/TinyFACE/GitHub/QuailFACE/RawData/PVK_SIF.csv")
@@ -152,7 +158,9 @@ SIF_raw <- SIF_raw %>%
 SIF <- SIF_raw %>% 
   mutate(Spp = substr(Sample.ID, nchar(Sample.ID)-2,nchar(Sample.ID)-2)) %>% 
   mutate(Plot = if_else(nchar(Sample.ID) == 4, substr(Sample.ID,1,1), substr(Sample.ID,1,2))) %>% 
-  select(Sample.ID, δ13CVPDB...., Spp, Plot)
+  dplyr::select(Sample.ID, δ13CVPDB...., Spp, Plot) %>% 
+  filter(Sample.ID != "4V3c")
+  
 
 colnames(SIF) <- c("Code","d13C","Spp","Plot")
 
@@ -194,6 +202,10 @@ inventory_raw[inventory_raw$Code == "9V2b",43] <- 116 # 65; assume 116, same as 
 inventory_raw[inventory_raw$Code == "9V5a",43] <- mean(c(101,84)) # NA; assign mean of adjacent hts
 inventory_raw[inventory_raw$Code == "14L5a", 55] <- 450 # 45, assume entry error --> 450
 
+# remove "4V3c" to avoid duplicate code
+inventory_raw <- inventory_raw %>% 
+  filter(Code!="4V3c") # now 384 rows
+
 # adding to herbivory 
 ## 11V5 first herb is 8/25/23
 ## 9V3 first herb is 8/25/23
@@ -213,19 +225,15 @@ inventory_raw %>%
   summarise(germts = sum(G. == "Y"), germrate = sum(G. == "Y")*100/48, thinned = sum(Thinned. == "8/26")) %>% 
   mutate(remain = germts - thinned) 
 #   Spp   Tmt   germts germrate thinned remain
-# 1 ""    NA         1    2.08        0      1    <-- this one was the "blue oak"
-# 2 "L"   AD        31    64.6       10     21
-# 3 "L"   AW        29    60.4       12     17
-# 4 "L"   ED        33    68.8       12     21
-# 5 "L"   EW        29    60.4       10     19
-# 6 "V"   AD        13    27.1        0     13
-# 7 "V"   AW        20    41.7        1     19
-# 8 "V"   ED        16    33.3        1     15
-# 9 "V"   EW        17    35.4        0     17
+# 1 "L"   AD        31    64.6       10     21
+# 2 "L"   AW        29    60.4       12     17
+# 3 "L"   ED        33    68.8       12     21
+# 4 "L"   EW        29    60.4       10     19
+# 5 "V"   AD        13    27.1        0     13
+# 6 "V"   AW        20    41.7        1     19
+# 7 "V"   ED        16    33.3        1     15
+# 8 "V"   EW        17    35.4        0     17
 # Total:           189               46    143
-
-inventory_thinned <- inventory_raw %>% 
-  filter(Spp != "") # 385 to 384 rows
 
 # I want to find the max value entered for each XYZ[a/b], since some data was mis-entered
 inventory_thinned %>% 
@@ -331,7 +339,6 @@ inv_all <- inv_all %>%
 
 # examine conditions and see how many get to 1
 inv_all %>% 
-
   ggplot() +  geom_point(aes(x=value, y=cond, color= Tmt)) + facet_wrap(~ Code, scales = "fixed")
 
 # find Codes for seedlings with any herbivory and drop after the date of first herbivory
@@ -590,7 +597,13 @@ ggplot(biomass2_leaf, aes(x=Leaf.Ct..5, y = LeafWet_g)) + # plot
   geom_point(biomass2_leaf, mapping= aes(x=Leaf.Ct..5, y=predleaf, color = H2OTmt), shape = 3) +
   geom_point(biomass2_leaf, mapping=aes(x=Leaf.Ct..5, y=LeafWet_g, group = H2OTmt, color = H2OTmt)) + facet_grid( ~ Spp)
 
-#View(left_join(biomass2, biomass2_leaf[,c(3,34)], by = "Code"))
+# final biomass df with a column for predicted (if herb) or observed stem and leaf mass:
+biomass2 <- left_join(biomass2, biomass2_leaf[,c(3,34)], by = "Code") # combine stem and leaf predictions
+biomass2 <- biomass2 %>% 
+  mutate(StemWet_expanded = case_when(Code %in% firstherb$Code ~ pred,
+                                      TRUE ~ StemWet_g)) %>% 
+  mutate(LeafWet_expanded = case_when(Code %in% firstherb$Code ~ predleaf,
+                                      TRUE ~ LeafWet_g))
 
 ## Compare figures for filtered vs backfilled data
 # plot the resulting data (N = 128; 87 observed, 41 predicted)
@@ -600,32 +613,33 @@ nequals_nfh <- biomass_nfh %>%
 nequals_bm <- biomass %>% 
   group_by(Tmt, Spp) %>% 
   tally()
-grid.arrange( biomass_nfh %>% ggplot() + geom_boxplot( aes(x=Tmt, y=StemWet_g, color = Tmt)) + 
+grid.arrange( biomass_nfh %>% ggplot(aes(x=Tmt, y=StemWet_g)) + geom_boxplot( aes(x=Tmt, y=StemWet_g, color = Tmt)) + 
   facet_grid(rows = vars(Spp), scales = "free") +
-  geom_text(data = nequals_nfh, aes(x = Tmt, y = 0.2, label = paste0("N = ",n))) + 
+  geom_text(data = nequals_nfh, aes(x = Tmt, y = 0, label = paste0("N = ",n))) + 
   labs(y = "Stem Biomass (g)", title = "Stem Biomass (filtered)") +
-  scale_color_manual(values = c("pink", "lightblue", "red", "blue")) ,
-biomass2 %>% ggplot() + 
-  geom_boxplot(aes(x=Tmt, y=case_when(Code %in% firstherb ~ pred,
-                                      TRUE ~ StemWet_g), color = Tmt)) + 
+  scale_color_manual(values = c("pink", "lightblue", "red", "blue")) +
+    geom_signif(test="wilcox.test", exact=FALSE, comparisons = combn(c("AD", "AW", "ED", "EW"),2,simplify=F),step_increase=0.2) ,
+biomass2 %>% ggplot(aes(x=Tmt, y=StemWet_g)) + 
+  geom_boxplot(aes(x=Tmt, y=StemWet_expanded, color = Tmt)) + 
   facet_grid(rows = vars(Spp), scales = "free") +
-  geom_text(data = nequals_bm, aes(x = Tmt, y = 0.2, label = paste0("N = ",n))) + 
+  geom_text(data = nequals_bm, aes(x = Tmt, y = 0, label = paste0("N = ",n))) + 
   labs(y = "Stem Biomass (g)", title = "Stem Biomass (expanded data)") +
-  scale_color_manual(values = c("pink", "lightblue", "red", "blue")), nrow = 1 )
+  scale_color_manual(values = c("pink", "lightblue", "red", "blue")) +
+  geom_signif(test="wilcox.test", exact=FALSE, comparisons = combn(c("AD", "AW", "ED", "EW"),2,simplify=F),step_increase=0.2), nrow = 1 )
 
 # total biomass grouped by Tmt, for all seedlings without FULL herbivory
-grid.arrange( biomass_nfh %>% ggplot() + geom_boxplot( aes(x=Tmt, y= (StemWet_g+LeafDry_g+rootmass_g), color = Tmt)) + facet_grid(rows = vars(Spp), scales = "free") +
+grid.arrange( biomass_nfh %>% ggplot(aes(x=Tmt, y=StemWet_g)) + geom_boxplot( aes(x=Tmt, y= (StemWet_g+LeafWet_g+rootmass_g), color = Tmt)) + facet_grid(rows = vars(Spp), scales = "free") +
   geom_text(data = nequals_nfh, aes(x = Tmt, y = 0.2, label = paste0("N = ",n))) + labs(y = "Total Biomass (g)", title = "Total Biomass (filtered)") +
-  scale_color_manual(values = c("pink", "lightblue", "red", "blue")) ,
-left_join(biomass2, biomass2_leaf[,c(3,34)], by = "Code") %>% # combine stem and leaf predictions
-  ggplot() +
-  geom_boxplot(mapping=aes(x=Tmt, y=(case_when(Code %in% firstherb ~ pred,
-                                      TRUE ~ StemWet_g) + case_when(Code %in% firstherb ~ predleaf,
-                                                                    TRUE ~ LeafWet_g) + rootmass_g), color = Tmt)) + 
+  scale_color_manual(values = c("pink", "lightblue", "red", "blue")) +
+    geom_signif(test="wilcox.test", exact=FALSE, comparisons = combn(c("AD", "AW", "ED", "EW"),2,simplify=F),step_increase=0.2),
+biomass2 %>% # combined stem and leaf predictions
+  ggplot(aes(x=Tmt, y=StemWet_g)) +
+  geom_boxplot(mapping=aes(x=Tmt, y=rootmass_g+StemWet_expanded+LeafWet_expanded, color = Tmt)) + 
   facet_grid(rows = vars(Spp), scales = "free") +
   geom_text(data = nequals_bm, aes(x = Tmt, y = 0.2, label = paste0("N = ",n))) + 
   labs(y = "Total Biomass (g)", title = "Total Biomass (expanded data)") +
-  scale_color_manual(values = c("pink", "lightblue", "red", "blue")) , nrow = 1)
+  scale_color_manual(values = c("pink", "lightblue", "red", "blue")) +
+  geom_signif(test="wilcox.test", exact=FALSE, comparisons = combn(c("AD", "AW", "ED", "EW"),2,simplify=F),step_increase=0.2) , nrow = 1)
 
 nequals_nh <- biomass_nh %>% 
   group_by(Tmt, Spp) %>% 
@@ -636,15 +650,13 @@ biomass_nh %>% # Leaf Water Content grouped by Tmt, for all seedlings without AN
 # seems too far a stretch to do LWC on modeled LeafWet vs LeafDry ...
 
 grid.arrange( biomass_nh %>% # root:shoot ratio for seedlings without any herbivory
-  ggplot() + geom_boxplot(aes(x=Tmt, y= (rootmass_g/(StemWet_g+LeafDry_g)), color = Tmt)) + facet_grid(rows =  vars(Spp), scales = "free") +
-  geom_text(data = nequals_nh, aes(x = Tmt, y = 2.5, label = paste0("N = ",n))) + labs(y = "Root:Shoot", title = "Root:Shoot (filtered") +
+  ggplot() + geom_boxplot(aes(x=Tmt, y= (rootmass_g/(StemWet_g+LeafWet_g)), color = Tmt)) + facet_grid(rows =  vars(Spp), scales = "free") +
+  geom_text(data = nequals_nh, aes(x = Tmt, y = 0.2, label = paste0("N = ",n))) + labs(y = "Root:Shoot", title = "Root:Shoot (filtered)") +
   scale_color_manual(values = c("pink", "lightblue", "red", "blue")) ,
 
-left_join(biomass2, biomass2_leaf[,c(3,34)], by = "Code") %>% # combine stem and leaf predictions
-  ggplot() +
-  geom_boxplot(mapping=aes(x=Tmt, y=(rootmass_g/(case_when(Code %in% firstherb ~ pred,
-                                               TRUE ~ StemWet_g) + case_when(Code %in% firstherb ~ predleaf,
-                                                                             TRUE ~ LeafWet_g))), color = Tmt)) + 
+biomass2 %>% 
+    ggplot() +
+  geom_boxplot(mapping=aes(x=Tmt, y=(rootmass_g/(StemWet_expanded+LeafWet_expanded)), color = Tmt)) + 
   facet_grid(rows = vars(Spp), scales = "free") +
   geom_text(data = nequals_bm, aes(x = Tmt, y = 0.2, label = paste0("N = ",n))) + 
   labs(y = "Root:Shoot", title = "Root:Shoot (expanded data)") +
