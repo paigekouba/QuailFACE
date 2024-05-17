@@ -18,7 +18,7 @@ crosswalk3 <- crosswalk3 %>%
   mutate(Plot = if_else(nchar(ID) == 4, substr(ID,1,1), substr(ID,1,2))) %>% # add Plot 
   left_join(lookup, by = "Plot")
 # data entry error; log for 12V6b is listed as 12 four times
-which(crosswalk3$Log == "12")
+#which(crosswalk3$Log == "12")
 # 40 166 207 208 209 210
 crosswalk3[208,3] <- 13
 crosswalk3[209,3] <- 14
@@ -34,9 +34,9 @@ crosswalk3$SurveyDay <- # associate sampling dates with survey days
 
 crosswalk3$LiCOR_ID <- paste0(crosswalk3$SurveyDay, "_", crosswalk3$Log) # get a unique ID for each measurement: survey day x log #
 LiCOR_3$LiCOR_ID <- paste0(LiCOR_3$SurveyDay, "_", LiCOR_3$Obs) # same thing in LiCOR datafile
-length(unique(LiCOR_3$LiCOR_ID)) # 233 but some duds/extras
-length(unique(crosswalk3$LiCOR_ID)) # 224 recorded measurements in datasheet
-sum(unique(crosswalk3$LiCOR_ID) %in% unique(LiCOR_3$LiCOR_ID)) # 224 overlapping 
+#length(unique(LiCOR_3$LiCOR_ID)) # 233 but some duds/extras
+#length(unique(crosswalk3$LiCOR_ID)) # 224 recorded measurements in datasheet
+#sum(unique(crosswalk3$LiCOR_ID) %in% unique(LiCOR_3$LiCOR_ID)) # 224 overlapping 
 
 LiCOR_3 <- LiCOR_3 %>% 
   filter(LiCOR_ID != "NA_NA") # takes it from 983 to 232; still 3-4 measurements per leaf
@@ -56,7 +56,7 @@ LiCOR_4 <- read.csv("RawData/Quail_LiCOR4_data.csv")
 crosswalk4 <- read.csv("RawData/Survey4.csv")
 
 # Fix data entry error: 15V1a has 63, 63, 65
-crosswalk4[241:243,]
+#crosswalk4[241:243,]
 crosswalk4[242,3] <- 64
 crosswalk4 <- crosswalk4[-c(1:2),c(1:6)]
 crosswalk4 <- crosswalk4 %>% 
@@ -71,9 +71,9 @@ crosswalk4$SurveyDay <-
 
 crosswalk4$LiCOR_ID <- paste0(crosswalk4$SurveyDay, "_", crosswalk4$Log)
 LiCOR_4$LiCOR_ID <- paste0(LiCOR_4$SurveyDay, "_", LiCOR_4$Obs)
-length(unique(LiCOR_4$LiCOR_ID)) # 187
-length(unique(crosswalk4$LiCOR_ID)) # 188
-sum(crosswalk4$LiCOR_ID %in% LiCOR_4$LiCOR_ID) # 187 overlapping
+#length(unique(LiCOR_4$LiCOR_ID)) # 187
+#length(unique(crosswalk4$LiCOR_ID)) # 188
+#sum(crosswalk4$LiCOR_ID %in% LiCOR_4$LiCOR_ID) # 187 overlapping
 
 # get plant ID names, treatment codes, into LiCOR measurement df
 df4 <- left_join(LiCOR_4, crosswalk4, by = join_by(LiCOR_ID))
@@ -89,60 +89,60 @@ df4$HHMMSS <- parse_date_time(df4$HHMMSS, orders = c("HMS"), tz = "America/Los_A
 # combine dataframes, explore relationships between variables
 df_all <- rbind(df3, df4)
 
-df_all %>% 
-  group_by(ID) %>% 
-   summarise(across(HHMMSS:vp_kPa, ~ mean(.x, na.rm = TRUE))) %>% 
-   ungroup() %>% 
-   mutate(Plot = if_else(nchar(ID) == 4, substr(ID,1,1), substr(ID,1,2)), Spp = str_sub(ID, - 3, - 3))  %>%
-   left_join(lookup, by = "Plot") %>% 
-ggplot() + # is there a relationship with leaf temperature?
-  geom_point(aes(x=Tleaf, y=Photo, group=Tmt, color=Tmt)) +
-  geom_smooth(aes(x=Tleaf, y=Photo, group=Tmt, color=Tmt), se=F) + 
-  scale_color_manual(values = c("pink", "lightblue", "red", "blue")) + facet_grid(~Tmt)
+# df_all %>% 
+#   group_by(ID) %>% 
+#    summarise(across(HHMMSS:SWC, ~ mean(.x, na.rm = TRUE))) %>% 
+#    ungroup() %>% 
+#    mutate(Plot = if_else(nchar(ID) == 4, substr(ID,1,1), substr(ID,1,2)), Spp = str_sub(ID, - 3, - 3))  %>%
+#    left_join(lookup, by = "Plot") %>% 
+# ggplot() + # is there a relationship with leaf temperature?
+#   geom_point(aes(x=Tleaf, y=Photo, group=Tmt, color=Tmt)) +
+#   geom_smooth(aes(x=Tleaf, y=Photo, group=Tmt, color=Tmt), se=F) + 
+#   scale_color_manual(values = c("pink", "lightblue", "red", "blue")) + facet_grid(~Tmt)
 
-df_all %>% 
-  group_by(ID) %>% 
-  summarise(across(HHMMSS:SWC, ~ mean(.x, na.rm = TRUE))) %>% 
-  ungroup() %>% 
-  mutate(Plot = if_else(nchar(ID) == 4, substr(ID,1,1), substr(ID,1,2)), Spp = str_sub(ID, - 3, - 3))  %>%
-  left_join(lookup, by = "Plot") %>% 
-  ggplot() + # is there a relationship with PARo?
-  geom_point(aes(x=SWC, y=Photo)) +
-  geom_smooth(aes(x=SWC, y=Photo), se=F) + 
-  scale_color_manual(values = c("pink", "lightblue", "red", "blue"))
+# df_all %>% 
+#   group_by(ID) %>% 
+#   summarise(across(HHMMSS:SWC, ~ mean(.x, na.rm = TRUE))) %>% 
+#   ungroup() %>% 
+#   mutate(Plot = if_else(nchar(ID) == 4, substr(ID,1,1), substr(ID,1,2)), Spp = str_sub(ID, - 3, - 3))  %>%
+#   left_join(lookup, by = "Plot") %>% 
+#   ggplot() + # is there a relationship with SWC?
+#   geom_point(aes(x=SWC, y=Photo)) +
+#   geom_smooth(aes(x=SWC, y=Photo), se=F) + 
+#   scale_color_manual(values = c("pink", "lightblue", "red", "blue"))
 
-df_all %>% 
-  group_by(ID) %>% 
-  summarise(across(HHMMSS:SWC, ~ mean(.x, na.rm = TRUE))) %>% 
-  ungroup() %>% 
-  mutate(Plot = if_else(nchar(ID) == 4, substr(ID,1,1), substr(ID,1,2)), Spp = str_sub(ID, - 3, - 3))  %>%
-  left_join(lookup, by = "Plot") %>% 
-  ggplot() + # is there a relationship with h2o.i?
-  geom_point(aes(x=h2o_i, y=Photo, group=Tmt, color=Tmt)) +
-  geom_smooth(aes(x=h2o_i, y=Photo, group=Tmt, color=Tmt), se=F) + 
-  scale_color_manual(values = c("pink", "lightblue", "red", "blue")) + facet_grid(~Tmt)
+# df_all %>% 
+#   group_by(ID) %>% 
+#   summarise(across(HHMMSS:SWC, ~ mean(.x, na.rm = TRUE))) %>% 
+#   ungroup() %>% 
+#   mutate(Plot = if_else(nchar(ID) == 4, substr(ID,1,1), substr(ID,1,2)), Spp = str_sub(ID, - 3, - 3))  %>%
+#   left_join(lookup, by = "Plot") %>% 
+#   ggplot() + # is there a relationship with h2o.i?
+#   geom_point(aes(x=h2o_i, y=Photo, group=Tmt, color=Tmt)) +
+#   geom_smooth(aes(x=h2o_i, y=Photo, group=Tmt, color=Tmt), se=F) + 
+#   scale_color_manual(values = c("pink", "lightblue", "red", "blue")) + facet_grid(~Tmt)
 
-df_all %>% 
-  group_by(ID) %>% 
-  summarise(across(HHMMSS:SWC, ~ mean(.x, na.rm = TRUE))) %>% 
-  ungroup() %>% 
-  mutate(Plot = if_else(nchar(ID) == 4, substr(ID,1,1), substr(ID,1,2)), Spp = str_sub(ID, - 3, - 3))  %>%
-  left_join(lookup, by = "Plot") %>% 
-  ggplot() + # is there a relationship with h20diff?
-  geom_point(aes(x=h20diff, y=Photo, group=Tmt, color=Tmt)) +
-  geom_smooth(aes(x=h20diff, y=Photo, group=Tmt, color=Tmt), se=F) + 
-  scale_color_manual(values = c("pink", "lightblue", "red", "blue")) + facet_grid(~Tmt)
+# df_all %>% 
+#   group_by(ID) %>% 
+#   summarise(across(HHMMSS:SWC, ~ mean(.x, na.rm = TRUE))) %>% 
+#   ungroup() %>% 
+#   mutate(Plot = if_else(nchar(ID) == 4, substr(ID,1,1), substr(ID,1,2)), Spp = str_sub(ID, - 3, - 3))  %>%
+#   left_join(lookup, by = "Plot") %>% 
+#   ggplot() + # is there a relationship with h20diff?
+#   geom_point(aes(x=h20diff, y=Photo, group=Tmt, color=Tmt)) +
+#   geom_smooth(aes(x=h20diff, y=Photo, group=Tmt, color=Tmt), se=F) + 
+#   scale_color_manual(values = c("pink", "lightblue", "red", "blue")) + facet_grid(~Tmt)
 
-df_all %>% 
-  group_by(ID) %>% 
-  summarise(across(HHMMSS:SWC, ~ mean(.x, na.omit = TRUE))) %>% 
-  ungroup() %>% 
-  mutate(Plot = if_else(nchar(ID) == 4, substr(ID,1,1), substr(ID,1,2)), Spp = str_sub(ID, - 3, - 3))  %>%
-  left_join(lookup, by = "Plot") %>% 
-  ggplot() + # is there a relationship with Ci?
-  geom_point(aes(x=Ci, y=Photo)) +
-  geom_smooth(aes(x=Ci, y=Photo), se=F) + 
-  scale_color_manual(values = c("pink", "lightblue", "red", "blue")) 
+# df_all %>% 
+#   group_by(ID) %>% 
+#   summarise(across(HHMMSS:SWC, ~ mean(.x, na.omit = TRUE))) %>% 
+#   ungroup() %>% 
+#   mutate(Plot = if_else(nchar(ID) == 4, substr(ID,1,1), substr(ID,1,2)), Spp = str_sub(ID, - 3, - 3))  %>%
+#   left_join(lookup, by = "Plot") %>% 
+#   ggplot() + # is there a relationship with Ci?
+#   geom_point(aes(x=Ci, y=Photo, group=Tmt, color=Tmt)) +
+#   geom_smooth(aes(x=Ci, y=Photo, group=Tmt, color = Tmt), method = "lm", se=F) + 
+#   scale_color_manual(values = c("pink", "lightblue", "red", "blue")) + facet_wrap(~Spp)
 
 # Tleaf, PARo, h2o.i, h20diff, Ci.Ca   vs. Photo
 
@@ -151,17 +151,16 @@ midpoints <- df_all %>%
   select(HHMMSS, Photo, Cond, Ci, CO2R, SWC, Date, Log, X., Time, ID, Plot, Tmt) %>%
   group_by(ID) %>%
   summarize(Ci.midpoint = (min(Ci)+max(Ci))/2) 
-mean(midpoints$Ci.midpoint) # 351.6937
-median(midpoints$Ci.midpoint) # 348.1874
+#mean(midpoints$Ci.midpoint) # 351.6937
+#median(midpoints$Ci.midpoint) # 348.1874
 # go with 350
 
-ggplot(df_all, aes(x = Ci, y = Photo, colour = Tmt)) + # this one will show the A/Ci mini curves + midpoint
-  geom_point() +
-  facet_wrap( ~ ID) +
-  geom_vline(xintercept = 350, colour="blue")
+# ggplot(df_all, aes(x = Ci, y = Photo, colour = Tmt)) + # this one will show the A/Ci mini curves + midpoint
+#   geom_point() +
+#   facet_wrap( ~ ID) +
+#   geom_vline(xintercept = 350, colour="blue")
 
-## redoing this step to get linear model predictions for each curve, not interpolation
-  
+## get linear model predictions for each curve
 LiCOR_IDs <- unique(df_all$ID) # get plant codes in LiCOR sample
 LiCOR_extp <- vector(length = length(LiCOR_IDs)) # initialize results vector
 
@@ -188,26 +187,26 @@ LiCOR_gs_df$LiCOR_gs <- as.numeric(LiCOR_gs_df$LiCOR_gs)
 
 plotting_df <- data.frame(ID = c(df_all$ID, LiCOR_extp_df$ID), Ci = c(df_all$Ci, rep(350,length(unique(df_all$ID)))), Photo = c(df_all$Photo, LiCOR_extp_df$LiCOR_extp), Cond = c(df_all$Cond, LiCOR_gs_df$LiCOR_gs))
 
-plotting_df %>% 
-ggplot(aes(x = Ci, y = Photo)) + # this one will show how well predicted Anet value tracks the A/Ci mini curve
-  geom_point() +
-  geom_vline(xintercept = 350, colour="forestgreen") +
-  geom_smooth(data=plotting_df, aes(x=Ci, y=Photo),method="lm", se=F) +
-  facet_wrap( ~ ID)
+# plotting_df %>% 
+# ggplot(aes(x = Ci, y = Photo)) + # this one will show how well predicted Anet value tracks the A/Ci mini curve
+#   geom_point() +
+#   geom_vline(xintercept = 350, colour="blue", linetype="dashed") +
+#   geom_smooth(data=plotting_df, aes(x=Ci, y=Photo), color="forestgreen",method="lm", se=F) +
+#   facet_wrap( ~ ID)
 
-plotting_df %>% 
-  ggplot(aes(x = Ci, y = Cond)) + # this one will show how well predicted Cond value tracks the Cond/Ci mini curve
-  geom_point() +
-  geom_vline(xintercept = 350, colour="blue") +
-  geom_smooth(data=plotting_df, aes(x=Ci, y=Cond),method="lm", se=F) +
-  facet_wrap( ~ ID)
+# plotting_df %>% 
+#   ggplot(aes(x = Ci, y = Cond)) + # this one will show how well predicted Cond value tracks the Cond/Ci mini curve
+#   geom_point() +
+#   geom_vline(xintercept = 350, colour="blue", linetype="dashed") +
+#   geom_smooth(data=plotting_df, aes(x=Ci, y=Cond),method="lm", se=F) +
+#   facet_wrap( ~ ID)
 
 LiCOR_df <- df_all %>% 
   group_by(ID) %>% 
   summarise(across(HHMMSS:SWC, ~ mean(.x, na.rm = TRUE))) %>% 
   ungroup() %>% 
   mutate(Plot = if_else(nchar(ID) == 4, substr(ID,1,1), substr(ID,1,2)), Spp = str_sub(ID, - 3, - 3))  %>%
-  left_join(lookup, by = "Plot")
+  left_join(lookup, by = "Plot") # add Tmt codes
 
 LiCOR_df <- LiCOR_df %>% 
   left_join(plotting_df[plotting_df$Ci == 350,], by="ID") %>% 
