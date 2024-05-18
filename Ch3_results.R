@@ -43,7 +43,8 @@ rootimage. <- left_join(lookup, rootimage., by = 'Plot')
 
 rootimage. <- rootimage. %>% 
   mutate(Spp = substr(Code, nchar(Code)-2,nchar(Code)-2)) %>%
-  filter(Code != "4V3c") %>% 
+  filter(Code != "4V3c") %>% # prevent duplicate codes; 4V3c was planted late and misnamed
+  filter(Code != "16V1a") %>% # thinned but grew back
   mutate(Code = if_else(nchar(Code) == 4,substr(Code,1,3),substr(Code,1,4)), CO2Tmt = substring(Tmt,1,1), H2OTmt = substring(Tmt,2,2)) %>% 
   left_join(biomass2.[,c("Code","rootmass_g")]) %>% 
   mutate(SRL = Total.Root.Length.mm/rootmass_g) %>% 
@@ -110,9 +111,9 @@ biomass2. %>%
  # log() %>% 
   #hist(breaks = sqrt(nrow(LiCOR_df.)))
   qqPlot()
-hist((biomass2.[biomass2.$Spp=="L",]$rootshoot), breaks=2*sqrt(nrow(biomass2.))) # outliers
-qqPlot((biomass2.[biomass2.$Spp=="L",]$rootshoot)) # fatty right tail
-qqPlot(log(biomass2.[biomass2.$Spp=="L",]$rootshoot)) # better
+hist((biomass2.[biomass2.$Spp=="V",]$rootshoot), breaks=2*sqrt(nrow(biomass2.))) # outliers
+qqPlot((biomass2.[biomass2.$Spp=="V",]$rootshoot)) # fatty right tail
+qqPlot(log(biomass2.[biomass2.$Spp=="V",]$rootshoot)) # better
 # this one is tough
 
 hist(biomass2.[biomass2.$Spp=="V",]$lwc, breaks=2*sqrt(nrow(biomass2.))) 
@@ -121,7 +122,7 @@ qqPlot(biomass2.[biomass2.$Spp=="V",]$lwc)
 
 # rootimage.
 rootimage. %>% 
-  filter(SRL < 1500) %>% 
+#  filter(SRL < 1500) %>% 
   filter(Spp=="V") %>% 
   dplyr::select(SRL) %>% 
   unlist() %>% 
@@ -674,9 +675,13 @@ D = PERMANOVA::DistContinuous(X)
 V.permanova = PERMANOVA::PERMANOVA(D,as.factor(permanova.dfV$Tmt), CoordPrinc=TRUE)
 PERMANOVA::plot.PERMANOVA(V.permanova, ColorGroup = c("pink", "lightblue", "red", "blue"), VoronoiColor = c("pink", "lightblue", "red", "blue"))
 
-# now doing manova: transformed data, plot means
-# I heard a MANOVA has more power, so long as your data is normally distributed, which I've already ensured
 
+# I heard a MANOVA has more power, so long as your data is normally distributed, which I've already ensured
+# now doing manova: transformed data, plot means
+# 5/17 add 1/se term for weighted plot means
+## filter out SRL > 1500: what is that data point doing?
+
+# original version for arithmetic plot means
 manova.df <- biomass2. %>% 
   dplyr::select(Plot, Spp, Code, LeafWet_expanded, StemWet_expanded, rootmass_g, totmass, rootshoot, lwc, CO2Tmt, H2OTmt, CO2, meanSWC) %>% 
   left_join(LiCOR_df.[,c("Code","Photo.y","Cond.y", "WUE.350")], by = "Code") %>% 
@@ -689,6 +694,56 @@ manova.df <- biomass2. %>%
   left_join(lookup, by = "Plot") %>% 
   mutate(H2OTmt = substr(Tmt,2,2), CO2Tmt = substr(Tmt,1,1)) 
 #write.csv(manova.df, "QuailFACE_plotmeans.csv")
+
+# I can write my own function
+# function on a list of numbers that calculates their 1/sigma^2; then get column sum and divide each by that sum so they add up to one. Last, mutate the variable-of-interest columns (as plot means) and multiply them by those weights. Do this on a smaller dataset to keep things simple: Photo.y, Cond.y, rootshoot, logSRL
+one_over_var <- function(x){
+  1/(sd(x, na.rm=TRUE)^2)
+}
+manova.df.small0 <- biomass2. %>% 
+  filter(Spp =="V") %>% 
+  dplyr::select(Plot, Spp, Code, rootshoot, CO2, meanSWC) %>% 
+  left_join(LiCOR_df.[,c("Code","Photo.y","Cond.y")], by = "Code") %>% 
+  left_join(rootimage.[,c("Code","SRL")], by = "Code") %>% 
+  mutate(logCond.y = log(Cond.y), logSRL = log(SRL)) %>%
+  group_by(Plot, Spp) %>% 
+  mutate_at(c("Photo.y", "Cond.y", "rootshoot", "logSRL"), list(oov=one_over_var)) %>% 
+  summarise(across(where(is.numeric), ~ mean(.x, na.rm=TRUE))) %>% 
+  ungroup() %>% 
+  left_join(lookup, by = "Plot") %>% 
+  mutate(H2OTmt = substr(Tmt,2,2), CO2Tmt = substr(Tmt,1,1)) 
+
+# oov_sums <- manova.df.small0 %>% 
+#   dplyr::select(Photo.y_oov, Cond.y_oov, rootshoot_oov, logSRL_oov) %>% 
+#   summarise(across(where(is.numeric), ~ sum(., na.rm = TRUE)))
+
+#colSums(manova.df.small0[,11:14]/colSums(manova.df.small0[,11:14], na.rm=TRUE), na.rm=TRUE)
+
+manova.df.small <- manova.df.small0 %>% 
+  mutate(Photo.y_w = Photo.y*Photo.y_oov/(sum(manova.df.small0$Photo.y_oov, na.rm = T)),
+         logCond.y_w = Cond.y*Cond.y_oov/(sum(manova.df.small0$Cond.y_oov, na.rm = T) ),
+         rootshoot_w = rootshoot*rootshoot_oov/(sum(manova.df.small0$rootshoot_oov, na.rm = T) ),
+         logSRL_w = logSRL*logSRL_oov/(sum(manova.df.small0$logSRL_oov, na.rm = T)))
+
+small.cbind <- cbind(unlist(manova.df.small$Photo.y_w),unlist(manova.df.small$logCond.y_w),unlist(manova.df.small$rootshoot),unlist(manova.df.small$logSRL_w))
+
+# reasonable subset: Photo.y, logCond.y, sqrt_totmass, rootshoot
+summary(manova(small.cbind ~ CO2Tmt*H2OTmt, manova.df.small))
+
+manova.df.small0 %>% 
+  mutate(Photo.y_w = Photo.y*Photo.y_oov/(5.763902),
+         logCond.y_w = Cond.y*Cond.y_oov/(151964.8),
+         rootshoot_w = rootshoot*rootshoot_oov/(3438.991),
+         logSRL_w = logSRL*logSRL_oov/(480.5976)) %>% View()
+
+sum(manova.df.small0$Photo.y_oov, na.rm = T) # 5.763902
+sum(manova.df.small0$Cond.y_oov, na.rm = T) # 151964.8
+sum(manova.df.small0$rootshoot_oov, na.rm = T) # 3438.991
+sum(manova.df.small0$logSRL_oov, na.rm = T) # 480.5976
+
+manova.df.small0 %>% 
+  group_by(Plot, Spp, Tmt) %>% 
+  
 
 manova.dfL <- manova.df %>% 
   filter(Spp=="L") %>% 
@@ -705,7 +760,7 @@ manova.cbindL <- cbind(unlist(manova.dfL$Photo.y),unlist(manova.dfL$logCond.y),u
 manova.cbindV <- cbind(unlist(manova.dfV$Photo.y),unlist(manova.dfV$logCond.y),unlist(manova.dfV$sqrt_WUE.350),unlist(manova.dfV$sqrt_totmass),unlist(manova.dfV$rootshoot),unlist(manova.dfV$lwc),unlist(manova.dfV$logSRL),unlist(manova.dfV$logFineRoot))
 
 # reasonable subset: Photo.y, logCond.y, sqrt_totmass, rootshoot
-summary(manova(manova.cbind[,c(1,2,4,5)] ~ CO2Tmt*H2OTmt, manova.df))
+summary(manova(manova.cbind[,c(1,2,4,5)] ~ CO2Tmt*H2OTmt, manova.df, weights = manova.df[,c(3,4,6,7)]))
 summary(manova(manova.cbindL[,c(1,2,4,5)] ~ CO2Tmt*H2OTmt, filter(manova.df, Spp=="L")))
 summary(manova(manova.cbindV[,c(1,2,4,5)] ~ CO2Tmt*H2OTmt, filter(manova.df, Spp=="V")))
 
@@ -726,13 +781,18 @@ summary(manova(manova.cbindV[,c(1,2,5,7)] ~ CO2Tmt*H2OTmt, filter(manova.df, Spp
 
 manova.df2 <- biomass2. %>% 
   dplyr::select(Plot, Spp, Code, LeafWet_expanded, StemWet_expanded, rootmass_g, totmass, rootshoot, lwc, CO2Tmt, H2OTmt, CO2, meanSWC) %>% 
-  left_join(LiCOR_df.[,c("Code","Photo.y","Cond.y", "WUE.350")], by = "Code") %>% 
+  left_join(LiCOR_df.[,c("Code","Photo.y","Cond.y", "WUE.350", "CO2Tmt", "H2OTmt")], by = "Code") %>% 
   left_join(rootimage.[,c("Code","SRL", "Root.Length.Diameter.Range.1.mm","Number.of.Branch.Points")], by = "Code") %>% 
   left_join(SIF.[,c("Code","d13C")]) %>% 
   mutate(logCond.y = log(Cond.y), sqrt_WUE.350 = sqrt(WUE.350), sqrt_totmass = sqrt(totmass), logSRL = log(SRL), logFineRoot = log(Root.Length.Diameter.Range.1.mm), logBranch=log(Number.of.Branch.Points)) %>% 
   left_join(lookup, by = "Plot") %>% 
   mutate(H2OTmt = substr(Tmt,2,2), CO2Tmt = substr(Tmt,1,1)) 
 #write.csv(manova.df2, "QuailFACE_all.csv")
+
+# check correlation between variables
+cor(manova.df2[, c(4:9,14:20)], use="pairwise.complete.obs") %>% 
+  ggcorrplot()
+
 
 manova.df2L <- manova.df2 %>% 
   filter(Spp=="L") %>% 
