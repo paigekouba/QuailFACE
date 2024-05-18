@@ -1391,5 +1391,53 @@ summary(manova(manova.cbind[,c(1,2,5,7)] ~ CO2Tmt*H2OTmt, manova.df2))
 summary(manova(manova.cbind2L[,c(1,2,5,7)] ~ CO2Tmt*H2OTmt, filter(manova.df2, Spp=="L")))
 summary(manova(manova.cbind2V[,c(1,2,5,7)] ~ CO2Tmt*H2OTmt, filter(manova.df2, Spp=="V")))
 
+
+## prepping dataframe for manova on transformed plot means
+manova.df <- biomass2. %>% 
+  dplyr::select(Plot, Spp, Code, LeafWet_expanded, StemWet_expanded, rootmass_g, totmass, rootshoot, lwc, CO2Tmt, H2OTmt, CO2, meanSWC) %>% 
+  left_join(LiCOR_df.[,c("Code","Photo.y","Cond.y", "WUE.350")], by = "Code") %>% 
+  left_join(rootimage.[,c("Code","SRL", "Root.Length.Diameter.Range.1.mm","Number.of.Branch.Points")], by = "Code") %>% 
+  left_join(SIF.[,c("Code","d13C")]) %>% 
+  group_by(Plot, Spp) %>% 
+  summarise(across(where(is.numeric), ~ mean(.x, na.rm=TRUE))) %>% 
+  ungroup() %>% 
+  mutate(logCond.y = log(Cond.y), sqrt_WUE.350 = sqrt(WUE.350), sqrt_totmass = sqrt(totmass), logSRL = log(SRL), logFineRoot = log(Root.Length.Diameter.Range.1.mm), logBranch=log(Number.of.Branch.Points)) %>% 
+  left_join(lookup, by = "Plot") %>% 
+  mutate(H2OTmt = substr(Tmt,2,2), CO2Tmt = substr(Tmt,1,1)) 
+#write.csv(manova.df, "QuailFACE_plotmeans.csv")
+
+# trying to get plot mean * 1/se
+manova.df <- biomass2. %>% 
+  dplyr::select(Plot, Spp, Code, LeafWet_expanded, StemWet_expanded, rootmass_g, totmass, rootshoot, lwc, CO2, meanSWC) %>% 
+  left_join(LiCOR_df.[,c("Code","Photo.y","Cond.y", "WUE.350", "CO2Tmt", "H2OTmt")], by = "Code") %>% 
+  left_join(rootimage.[,c("Code","SRL", "Root.Length.Diameter.Range.1.mm","Number.of.Branch.Points")], by = "Code") %>% 
+  left_join(SIF.[,c("Code","d13C")]) %>% 
+  group_by(Plot, Spp) %>% 
+  mutate(n = length(Code)) %>% 
+  summarise_if(is.numeric, list(~ sd(., na.rm = TRUE), ~ mean(., na.rm = TRUE))) %>% 
+  summarise(across(where(is.numeric), ~ mean(.x, na.rm=TRUE))) %>% View()
+ungroup() %>%
+  mutate(logCond.y = log(Cond.y), sqrt_WUE.350 = sqrt(WUE.350), sqrt_totmass = sqrt(totmass), logSRL = log(SRL), logFineRoot = log(Root.Length.Diameter.Range.1.mm), logBranch=log(Number.of.Branch.Points)) %>% 
+  left_join(lookup, by = "Plot") %>% 
+  mutate(H2OTmt = substr(Tmt,2,2), CO2Tmt = substr(Tmt,1,1)) 
+
+library(sjstats)
+v <- sample(1:4, 20, TRUE)
+table(v)
+w <- abs(rnorm(20))
+table(weight(v, w))
+table(weight2(v, w))
+
+set.seed(1)
+x <- sample(letters[1:5], size = 20, replace = TRUE)
+w <- runif(n = 20)
+
+table(x)
+table(weight(x, w))
+
+wt <- c(5,  5,  4,  1)/15
+x <- c(3.7,3.3,3.5,2.8)
+xm <- weighted.mean(x, wt)
+
 # NEVER EVER GIVE UP
 # NEVER SURRENDER
