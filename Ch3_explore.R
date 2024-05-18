@@ -78,7 +78,7 @@ firstherb <- herbivory %>% # most conservative: first date any herbivory was obs
   group_by(Code) %>% 
   summarise(firstherb = min(Date)) %>% # next, removing some that look undamaged per growth curves
   ## come back and check this!! 
-  filter(!(Code %in% c("10L6","10V4","11L7","11L5","11V1","11V2","14L4","14V3","15V1","1V3","1V5"))) 
+  filter(!(Code %in% c("10L6","10V4","11L7","11L5","11V1","11V2","14L4","14V3","15V1","1V3","1V5", "4V3c", "14V1c"))) 
 # add in these:
 new_ones <- data.frame(c("11V5","9V3", "9V5","7L6","8L6"),c("8/25/23","8/25/23","8/25/23", "6/13/23", "8/25/23"))
 colnames(new_ones) <- c("Code", "firstherb")
@@ -102,20 +102,23 @@ biomass_raw <- read.csv("/Users/paigekouba/Documents/UC_Davis/2021_Winter/Quals/
 rootmass_raw <- read.csv("/Users/paigekouba/Documents/UC_Davis/2021_Winter/Quals/Proposal/Chapter 1/TinyFACE/GitHub/QuailFACE/RawData/Root_mass.csv")
 # remove "4V3c" to avoid duplicate code
 biomass_raw <- biomass_raw %>% 
-  filter(Code!="4V3c") # now 384 rows
+  filter(Code!="4V3c") %>%  # now 384 rows
+  filter(Code != "16V1a") # thinned but grew back; now 383
 
 rootmass <- rootmass_raw %>% 
   filter(!is.na(rootmass_g)) %>% 
   filter(Code!="4V3c") %>% # remove "4V3c" to avoid duplicate code
+  filter(Code != "16V1a") %>% # thinned but grew back
   mutate(Code = if_else(nchar(Code)==4,substr(Code,1,3),substr(Code,1,4))) # shortcode
+# remove outlier, root 16V1 (likely thinned but roots remained)
 
 biomass <- biomass_raw %>% 
-  select(Code, StemWet_g, LeafWet_g, LeafDry_g) %>% 
+  dplyr::select(Code, StemWet_g, LeafWet_g, LeafDry_g) %>% 
   mutate(Code = if_else(nchar(Code)==4,substr(Code,1,3),substr(Code,1,4))) %>%  # removes the a or b from the end of the seedling ID ("Code")
   group_by(Code) %>% 
   summarise_if(is.numeric, ~ max(.x, na.rm = TRUE)) %>% # group by shortened Code and collapse values in case of a/b confusion
   ungroup() %>% 
- merge(select(rootmass, Code, Plot, Spp, SeedMass.g., Cond..7, rootmass_g), all.x=F, all.y=T)  %>% 
+ merge(dplyr::select(rootmass, Code, Plot, Spp, SeedMass.g., Cond..7, rootmass_g), all.x=F, all.y=T)  %>% 
   mutate(across(c(StemWet_g, LeafWet_g, LeafDry_g), na_if, -Inf))
 
 lookup <- data.frame(as.character(c(1:16)), c("AW","ED","AD","EW",
@@ -140,7 +143,8 @@ biomass_nfh <- biomass %>%
 
 ## Root structure
 rootimage <- read.csv("/Users/paigekouba/Documents/UC_Davis/2021_Winter/Quals/Proposal/Chapter 1/TinyFACE/GitHub/QuailFACE/RawData/features_4.26.24_final.csv")
-rootimage <- merge(lookup, rootimage, by = 'Plot')
+rootimage <- merge(lookup, rootimage, by = 'Plot') %>% 
+  filter(Code != "16V1a") # thinned but grew back
 
 rootimage <- rootimage %>% 
   mutate(Spp = substr(Code, nchar(Code)-2,nchar(Code)-2))
@@ -419,6 +423,7 @@ biomass2 <- biomass %>% # prediction data with full dataset and extra inventory 
   left_join(inventory_thinned[,c(1,7,10,13,17,22,27,32,37)]) %>% 
   mutate(across(c(StemWet_g, LeafWet_g, LeafDry_g, rootmass_g, Ht.mm..1, Ht.mm..2, Ht.mm..3, Ht.mm..4, Ht.mm..5, Ht.mm..6, Ht.mm..7, Ht.mm..8), na_if, -Inf))  %>% 
   mutate(H2OTmt = substr(Tmt,2,2))
+
 
 ## model selection
 # VW
