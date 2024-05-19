@@ -78,7 +78,7 @@ firstherb <- herbivory %>% # most conservative: first date any herbivory was obs
   group_by(Code) %>% 
   summarise(firstherb = min(Date)) %>% # next, removing some that look undamaged per growth curves
   ## come back and check this!! 
-  filter(!(Code %in% c("10L6","10V4","11L7","11L5","11V1","11V2","14L4","14V3","15V1","1V3","1V5", "4V3c", "14V1c"))) 
+  filter(!(Code %in% c("10L6","10V4","11L7","11L5","11V1","11V2","14L4","14V3","15V1", "1V5", "4V3c", "14V1c"))) 
 # add in these:
 new_ones <- data.frame(c("11V5","9V3", "9V5","7L6","8L6"),c("8/25/23","8/25/23","8/25/23", "6/13/23", "8/25/23"))
 colnames(new_ones) <- c("Code", "firstherb")
@@ -90,7 +90,7 @@ firstfullherb <- herbivory %>% # first date full stem herbivory was observed
   group_by(Code) %>% 
   filter(full_herb == "x") %>% 
   summarise(firstherb = min(Date)) %>% 
-  filter(!(Code %in% c("10L6","10V4","11L7","11L5","11V1","11V2","14L4","14V3","15V1","1V3","1V5"))) 
+  filter(!(Code %in% c("10L6","10V4","11L7","11L5","11V1","11V2","14L4","14V3","15V1","1V5"))) 
 firstfullherb <- rbind(firstfullherb, new_ones)
 
 ## Above and below-ground biomass data
