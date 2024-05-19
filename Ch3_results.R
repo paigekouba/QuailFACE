@@ -678,8 +678,10 @@ PERMANOVA::plot.PERMANOVA(V.permanova, ColorGroup = c("pink", "lightblue", "red"
 
 # I heard a MANOVA has more power, so long as your data is normally distributed, which I've already ensured
 # now doing manova: transformed data, plot means
-# 5/17 add 1/se term for weighted plot means
+# 5/19 add normalized 1/variance term for weighted plot means
 ## filter out SRL > 1500: what is that data point doing?
+## add n = to plot means, this may account for exceptionally low variance in cases where n = 1
+## go undo seedlings you took off the herbivory list :| (see if there's still enough data left to work with)
 
 # original version for arithmetic plot means
 manova.df <- biomass2. %>% 
@@ -696,10 +698,11 @@ manova.df <- biomass2. %>%
 #write.csv(manova.df, "QuailFACE_plotmeans.csv")
 
 # I can write my own function
-# function on a list of numbers that calculates their 1/sigma^2; then get column sum and divide each by that sum so they add up to one. Last, mutate the variable-of-interest columns (as plot means) and multiply them by those weights. Do this on a smaller dataset to keep things simple: Photo.y, Cond.y, rootshoot, logSRL
+# function on a list of numbers that calculates their 1/sigma^2; then get column sum and divide each by that sum so they add up to one. Last, use these as the weights in univariate models. Still have to figure out what to do about MANOVA; can use just one variable's weights (Photo.y) or some kind of combined? Do this on a smaller dataset to keep things simple: Photo.y, Cond.y, rootshoot, logSRL
 one_over_var <- function(x){
   1/(sd(x, na.rm=TRUE)^2)
 }
+
 manova.df.small0 <- biomass2. %>% 
   filter(Spp =="V") %>% 
   dplyr::select(Plot, Spp, Code, rootshoot, CO2, meanSWC) %>% 
@@ -707,43 +710,44 @@ manova.df.small0 <- biomass2. %>%
   left_join(rootimage.[,c("Code","SRL")], by = "Code") %>% 
   mutate(logCond.y = log(Cond.y), logSRL = log(SRL)) %>%
   group_by(Plot, Spp) %>% 
-  mutate_at(c("Photo.y", "Cond.y", "rootshoot", "logSRL"), list(oov=one_over_var)) %>% 
+  mutate_at(c("Photo.y", "rootshoot", "logCond.y", "logSRL"), list(oov=one_over_var)) %>%
+  #mutate_at(c("logCond.y", "logSRL"), list(oolv=one_over_log_var)) %>%
   summarise(across(where(is.numeric), ~ mean(.x, na.rm=TRUE))) %>% 
   ungroup() %>% 
   left_join(lookup, by = "Plot") %>% 
   mutate(H2OTmt = substr(Tmt,2,2), CO2Tmt = substr(Tmt,1,1)) 
 
-# oov_sums <- manova.df.small0 %>% 
-#   dplyr::select(Photo.y_oov, Cond.y_oov, rootshoot_oov, logSRL_oov) %>% 
-#   summarise(across(where(is.numeric), ~ sum(., na.rm = TRUE)))
-
-#colSums(manova.df.small0[,11:14]/colSums(manova.df.small0[,11:14], na.rm=TRUE), na.rm=TRUE)
-
 manova.df.small <- manova.df.small0 %>% 
-  mutate(Photo.y_w = Photo.y*Photo.y_oov/(sum(manova.df.small0$Photo.y_oov, na.rm = T)),
-         logCond.y_w = Cond.y*Cond.y_oov/(sum(manova.df.small0$Cond.y_oov, na.rm = T) ),
-         rootshoot_w = rootshoot*rootshoot_oov/(sum(manova.df.small0$rootshoot_oov, na.rm = T) ),
-         logSRL_w = logSRL*logSRL_oov/(sum(manova.df.small0$logSRL_oov, na.rm = T)))
+  mutate(Photo.y_w = Photo.y_oov/(sum(manova.df.small0$Photo.y_oov, na.rm = T)),
+         logCond.y_w = logCond.y_oov/(sum(manova.df.small0$logCond.y_oov, na.rm = T)),
+         rootshoot_w = rootshoot_oov/(sum(manova.df.small0$rootshoot_oov, na.rm = T) ),
+         logSRL_w = logSRL_oov/(sum(manova.df.small0$logSRL_oov, na.rm = T)) )
 
 small.cbind <- cbind(unlist(manova.df.small$Photo.y_w),unlist(manova.df.small$logCond.y_w),unlist(manova.df.small$rootshoot),unlist(manova.df.small$logSRL_w))
 
+# first try the weights in an lm, with plot means
+summary(lm(Photo.y ~ CO2*H2OTmt , data = manova.df.small, weights = Photo.y_w)) # ** for CO2 and water, .08 for intx
+summary(lm(Photo.y ~ CO2*H2OTmt , data = manova.df.small)) # unweighted, NS
+
+summary(lm(logCond.y ~ CO2*H2OTmt , data = manova.df.small, weights = logCond.y_w)) # NS
+summary(lm(logCond.y ~ CO2*H2OTmt , data = manova.df.small)) # unweighted, all p < .05 ....
+summary(lm(logCond.y ~ CO2*H2OTmt , data = manova.df.small, weights = Photo.y_w)) # all p < .05
+
+summary(lm(rootshoot ~ CO2*H2OTmt , data = manova.df.small, weights = rootshoot_w)) # NS
+summary(lm(rootshoot ~ CO2*H2OTmt , data = manova.df.small, weights = Photo.y_w)) # CO2 = .005
+
+summary(lm(logSRL ~ CO2*H2OTmt , data = manova.df.small, weights = logSRL_w)) # NS
+summary(lm(logSRL ~ CO2*H2OTmt , data = manova.df.small, weights = Photo.y_w)) # NS
+
 # reasonable subset: Photo.y, logCond.y, sqrt_totmass, rootshoot
-summary(manova(small.cbind ~ CO2Tmt*H2OTmt, manova.df.small))
+summary(manova(small.cbind ~ CO2Tmt*H2OTmt, manova.df.small, weights = Photo.y_w))
+# with weights from just Photo.y_w, all p < .05
 
-manova.df.small0 %>% 
-  mutate(Photo.y_w = Photo.y*Photo.y_oov/(5.763902),
-         logCond.y_w = Cond.y*Cond.y_oov/(151964.8),
-         rootshoot_w = rootshoot*rootshoot_oov/(3438.991),
-         logSRL_w = logSRL*logSRL_oov/(480.5976)) %>% View()
 
-sum(manova.df.small0$Photo.y_oov, na.rm = T) # 5.763902
-sum(manova.df.small0$Cond.y_oov, na.rm = T) # 151964.8
-sum(manova.df.small0$rootshoot_oov, na.rm = T) # 3438.991
-sum(manova.df.small0$logSRL_oov, na.rm = T) # 480.5976
-
-manova.df.small0 %>% 
-  group_by(Plot, Spp, Tmt) %>% 
   
+
+### 
+# This was regular manova without weights:
 
 manova.dfL <- manova.df %>% 
   filter(Spp=="L") %>% 
