@@ -33,6 +33,9 @@ biomass2. <- biomass2. %>%
   left_join(plot_CO2., by = "Plot") %>% 
   left_join(plot_SWC., by = "Plot") 
 
+# exclude rootshoot for 6V2, an outlier: was herbivory list but predicted values failed to adjust appropriately
+biomass2.[which.max(biomass2.$rootshoot),"rootshoot"] <- NA
+
 # now remove lwc for seedlings from herbivory list, likely to have no leaves 
 biomass2.[which(biomass2.$Code %in% firstherb$Code),]$lwc <- NA 
 
@@ -111,9 +114,9 @@ biomass2. %>%
  # log() %>% 
   #hist(breaks = sqrt(nrow(LiCOR_df.)))
   qqPlot()
-hist((biomass2.[biomass2.$Spp=="V",]$rootshoot), breaks=2*sqrt(nrow(biomass2.))) # outliers
-qqPlot((biomass2.[biomass2.$Spp=="V",]$rootshoot)) # fatty right tail
-qqPlot(log(biomass2.[biomass2.$Spp=="V",]$rootshoot)) # better
+hist((biomass2.[biomass2.$Spp=="L",]$rootshoot), breaks=2*sqrt(nrow(biomass2.))) # outliers
+qqPlot((biomass2.[biomass2.$Spp=="L",]$rootshoot)) # fatty right tail
+qqPlot(log(biomass2.[biomass2.$Spp=="L",]$rootshoot)) # better for V, worse for L
 # this one is tough
 
 hist(biomass2.[biomass2.$Spp=="V",]$lwc, breaks=2*sqrt(nrow(biomass2.))) 
@@ -710,34 +713,103 @@ manova.df.small0 <- biomass2. %>%
   left_join(rootimage.[,c("Code","SRL")], by = "Code") %>% 
   mutate(logCond.y = log(Cond.y), logSRL = log(SRL)) %>%
   group_by(Plot, Spp) %>% 
+  mutate(n = n()) %>% 
   mutate_at(c("Photo.y", "rootshoot", "logCond.y", "logSRL"), list(oov=one_over_var)) %>%
-  #mutate_at(c("logCond.y", "logSRL"), list(oolv=one_over_log_var)) %>%
   summarise(across(where(is.numeric), ~ mean(.x, na.rm=TRUE))) %>% 
   ungroup() %>% 
   left_join(lookup, by = "Plot") %>% 
   mutate(H2OTmt = substr(Tmt,2,2), CO2Tmt = substr(Tmt,1,1)) 
+# for plot 3, L has n = 1, but measurements for all data types
+# assign it a weight based on the variance of all other points from its treatment group (AD):
+
+biomass2. %>% 
+  filter(Spp =="L") %>% 
+  dplyr::select(Plot, Spp, Code, rootshoot, CO2, meanSWC) %>% 
+  left_join(LiCOR_df.[,c("Code","Photo.y","Cond.y")], by = "Code") %>% 
+  left_join(rootimage.[,c("Code","SRL")], by = "Code") %>% 
+  mutate(logCond.y = log(Cond.y), logSRL = log(SRL)) %>%
+  left_join(lookup, by = "Plot") %>% 
+  filter(Tmt == "AD") %>% # get 1/var
+  summarise_at(c("Photo.y", "rootshoot", "logCond.y", "logSRL"), ~ 1/sd(.x, na.rm = T)^2)
+# add this to 1/var columns in row for plot 3, then do next step to scale 1/var and get weights
+
+#manova.df.small0[manova.df.small0$Plot=="3",12:15] <- list(0.02501195,  30.50882,  1.673602, 4.632909)
+# only do this for L !!
 
 manova.df.small <- manova.df.small0 %>% 
   mutate(Photo.y_w = Photo.y_oov/(sum(manova.df.small0$Photo.y_oov, na.rm = T)),
          logCond.y_w = logCond.y_oov/(sum(manova.df.small0$logCond.y_oov, na.rm = T)),
          rootshoot_w = rootshoot_oov/(sum(manova.df.small0$rootshoot_oov, na.rm = T) ),
-         logSRL_w = logSRL_oov/(sum(manova.df.small0$logSRL_oov, na.rm = T)) )
+         logSRL_w = logSRL_oov/(sum(manova.df.small0$logSRL_oov, na.rm = T))) %>% 
+  mutate(all_w = Photo.y_w+logCond.y_w+rootshoot_w+logSRL_w) %>% 
+  mutate(all_w = all_w/sum(all_w, na.rm=T)) %>% 
+  mutate(quad_w = sqrt((Photo.y_w^2)+(logCond.y_w^2)+(rootshoot_w^2)+(logSRL_w^2)) ) %>% 
+  mutate(quad_w = quad_w/sum(quad_w, na.rm=T)) 
 
 small.cbind <- cbind(unlist(manova.df.small$Photo.y_w),unlist(manova.df.small$logCond.y_w),unlist(manova.df.small$rootshoot),unlist(manova.df.small$logSRL_w))
 
-# first try the weights in an lm, with plot means
-summary(lm(Photo.y ~ CO2*H2OTmt , data = manova.df.small, weights = Photo.y_w)) # ** for CO2 and water, .08 for intx
+# the weights come from inverse variance; check for outliers
+manova.df.small00 <- biomass2. %>% 
+  filter(Spp =="L") %>% 
+  dplyr::select(Plot, Spp, Code, rootshoot, CO2, meanSWC) %>% 
+  left_join(LiCOR_df.[,c("Code","Photo.y","Cond.y")], by = "Code") %>% 
+  left_join(rootimage.[,c("Code","SRL")], by = "Code") %>% 
+  mutate(logCond.y = log(Cond.y), logSRL = log(SRL)) %>% 
+  left_join(lookup, by = "Plot") %>% 
+  mutate(H2OTmt = substr(Tmt,2,2), CO2Tmt = substr(Tmt,1,1)) 
+ggplot(manova.df.small00) +
+  geom_point(aes(x=Plot, y=Photo.y, color=Tmt)) + 
+  scale_color_manual(values = c("pink", "lightblue", "red", "blue"))
+
+# first try the weights in an lm, with plot means, for V:
+summary(lm(Photo.y ~ CO2*H2OTmt , data = manova.df.small, weights = Photo.y_w)) # ** for CO2, ** for water, . for intx
 summary(lm(Photo.y ~ CO2*H2OTmt , data = manova.df.small)) # unweighted, NS
+summary(lm(Photo.y ~ CO2*H2OTmt , data = manova.df.small, weights = all_w)) # combined weight, NS
+summary(lm(Photo.y ~ CO2*H2OTmt , data = manova.df.small, weights = quad_w)) # quadrature NS
 
 summary(lm(logCond.y ~ CO2*H2OTmt , data = manova.df.small, weights = logCond.y_w)) # NS
-summary(lm(logCond.y ~ CO2*H2OTmt , data = manova.df.small)) # unweighted, all p < .05 ....
-summary(lm(logCond.y ~ CO2*H2OTmt , data = manova.df.small, weights = Photo.y_w)) # all p < .05
+summary(lm(logCond.y ~ CO2*H2OTmt , data = manova.df.small)) # **, **, *
+summary(lm(logCond.y ~ CO2*H2OTmt , data = manova.df.small, weights = Photo.y_w)) # CO2***, H2O***, intx*
+summary(lm(logCond.y ~ CO2*H2OTmt , data = manova.df.small, weights = all_w)) # *, **, *
+summary(lm(logCond.y ~ CO2*H2OTmt , data = manova.df.small, weights = quad_w)) # *, **, *
 
-summary(lm(rootshoot ~ CO2*H2OTmt , data = manova.df.small, weights = rootshoot_w)) # NS
-summary(lm(rootshoot ~ CO2*H2OTmt , data = manova.df.small, weights = Photo.y_w)) # CO2 = .005
+summary(lm(rootshoot ~ CO2*H2OTmt , data = manova.df.small, weights = rootshoot_w)) # CO2 .
+summary(lm(rootshoot ~ CO2*H2OTmt , data = manova.df.small, weights = Photo.y_w)) # CO2 **
+summary(lm(rootshoot ~ CO2*H2OTmt , data = manova.df.small, weights = all_w)) # CO2 .
+summary(lm(rootshoot ~ CO2*H2OTmt , data = manova.df.small, weights = quad_w)) # CO2 *
 
 summary(lm(logSRL ~ CO2*H2OTmt , data = manova.df.small, weights = logSRL_w)) # NS
 summary(lm(logSRL ~ CO2*H2OTmt , data = manova.df.small, weights = Photo.y_w)) # NS
+summary(lm(logSRL ~ CO2*H2OTmt , data = manova.df.small, weights = all_w)) # NS
+summary(lm(logSRL ~ CO2*H2OTmt , data = manova.df.small, weights = quad_w)) # NS
+
+# reasonable subset: Photo.y, logCond.y, sqrt_totmass, rootshoot
+summary(manova(small.cbind ~ CO2Tmt*H2OTmt, manova.df.small, weights = Photo.y_w))
+# with weights from just Photo.y_w, all p < .05
+summary(manova(small.cbind ~ CO2Tmt*H2OTmt, manova.df.small, weights = all_w)) 
+# with combined weights, * *** **
+summary(manova(small.cbind ~ CO2Tmt*H2OTmt, manova.df.small, weights = quad_w)) # **, ***, ***
+
+## now for fun, do ggpredict with weighted model, and with weighted model and outlier filter
+ggpredict(lm(Photo.y ~ CO2*H2OTmt , data = manova.df.small, weights = Photo.y_w), terms=c("CO2","H2OTmt")) %>% 
+  plot(add.data = TRUE, ci = TRUE)
+ggpredict(lm(Photo.y ~ CO2*H2OTmt , data = manova.df.small, weights = quad_w), terms=c("CO2","H2OTmt")) %>% 
+  plot(add.data = TRUE, ci = TRUE)
+
+
+# now for L: (HAVE TO RE RUN manova.df.small)
+summary(lm(Photo.y ~ CO2*H2OTmt , data = manova.df.small, weights = Photo.y_w)) # *** for CO2, ** for water, * for intx
+summary(lm(Photo.y ~ CO2*H2OTmt , data = manova.df.small)) # unweighted, NS
+
+summary(lm(logCond.y ~ CO2*H2OTmt , data = manova.df.small, weights = logCond.y_w)) # NS
+summary(lm(logCond.y ~ CO2*H2OTmt , data = manova.df.small)) # NS
+summary(lm(logCond.y ~ CO2*H2OTmt , data = manova.df.small, weights = Photo.y_w)) # CO2***, H2O*, intxNS
+
+summary(lm(rootshoot ~ CO2*H2OTmt , data = manova.df.small, weights = rootshoot_w)) # CO2 *
+summary(lm(rootshoot ~ CO2*H2OTmt , data = manova.df.small, weights = Photo.y_w)) # CO2 ***
+
+summary(lm(logSRL ~ CO2*H2OTmt , data = manova.df.small, weights = logSRL_w)) # CO2 .
+summary(lm(logSRL ~ CO2*H2OTmt , data = manova.df.small, weights = Photo.y_w)) # CO2***, H2O., intx**
 
 # reasonable subset: Photo.y, logCond.y, sqrt_totmass, rootshoot
 summary(manova(small.cbind ~ CO2Tmt*H2OTmt, manova.df.small, weights = Photo.y_w))
