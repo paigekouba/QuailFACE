@@ -17,17 +17,6 @@ nequals_licor <- LiCOR_df %>% # here I want a count per Spp per Tmt
   group_by(Tmt, Spp) %>% 
   tally()
 
-colnames(LiCOR_df)
-# [1] "ID"       "HHMMSS"   "FTime"    "EBal."    "Photo.x"  "Cond.x"   "Ci.x"     "FCnt"     "DCnt"     "Fo"       "Fm"      
-# [12] "Fo."      "Fm."      "Fs"       "Fv.Fm"    "Fv..Fm."  "PhiPS2"   "Adark"    "RedAbs"   "BlueAbs"  "X.Blue"   "LeafAbs" 
-# [23] "PhiCO2"   "qP"       "qN"       "NPQ"      "ParIn.Fs" "PS2.1"    "ETR"      "Trmmol"   "VpdL"     "CTleaf"   "Area"    
-# [34] "BLC_1"    "StmRat"   "BLCond"   "Tair"     "Tleaf"    "TBlk"     "CO2R"     "CO2S"     "H2OR"     "H2OS"     "RH_R"    
-# [45] "RH_S"     "Flow"     "PARi"     "PARo"     "Press"    "CsMch"    "HsMch"    "StableF"  "BLCslope" "BLCoffst" "f_parin" 
-# [56] "f_parout" "alphaK"   "Status"   "fda"      "Trans"    "Tair_K"   "Twall_K"  "R.W.m2."  "Tl.Ta"    "SVTleaf"  "h2o_i"   
-# [67] "h20diff"  "CTair"    "SVTair"   "CndTotal" "vp_kPa"   "VpdA"     "CndCO2"   "Ci_Pa"    "Ci.Ca"    "RHsfc"    "C2sfc"   
-# [78] "AHs.Cs"   "Fv"       "PARabs"   "Fv."      "qP_Fo"    "qN_Fo"    "LiCOR_ID" "SWC"      "Plot"     "Spp"      "Tmt"     
-# [89] "Ci.y"     "Photo.y"  "Cond.y"   "WUE.350" 
-
 # LiCOR_df is a combination of the mini ACi curves from two sampling efforts, collapsed to include one predicted Anet (@350ppm  Ci) and one predicted gs (@350ppm  Ci) per plant, with averages of other numeric variables. Conductance and the interpolated value of Anet are used to calculate WUE. SWC was measured with a TDR probe immediately before LiCOR samples were taken for each plot. HHMMSS is probably necessary because photosynthetic rates may change throughout the day. Plot as a blocking variable; separate models for Spp?
 
 # how does time affect Anet? 
@@ -78,7 +67,7 @@ firstherb <- herbivory %>% # most conservative: first date any herbivory was obs
   group_by(Code) %>% 
   summarise(firstherb = min(Date)) %>% # next, removing some that look undamaged per growth curves
   ## come back and check this!! 
-  filter(!(Code %in% c("10L6","10V4","11L7","11L5","11V1","11V2","14L4","14V3","15V1", "1V5", "4V3c", "14V1c"))) 
+ # filter(!(Code %in% c("10L6","10V4","11L7","11L5","11V1","11V2","14L4","14V3","15V1", "1V5", "4V3c", "14V1c"))) 
 # add in these:
 new_ones <- data.frame(c("11V5","9V3", "9V5","7L6","8L6"),c("8/25/23","8/25/23","8/25/23", "6/13/23", "8/25/23"))
 colnames(new_ones) <- c("Code", "firstherb")
@@ -90,7 +79,7 @@ firstfullherb <- herbivory %>% # first date full stem herbivory was observed
   group_by(Code) %>% 
   filter(full_herb == "x") %>% 
   summarise(firstherb = min(Date)) %>% 
-  filter(!(Code %in% c("10L6","10V4","11L7","11L5","11V1","11V2","14L4","14V3","15V1","1V5"))) 
+#  filter(!(Code %in% c("10L6","10V4","11L7","11L5","11V1","11V2","14L4","14V3","15V1","1V5"))) 
 firstfullherb <- rbind(firstfullherb, new_ones)
 
 ## Above and below-ground biomass data
