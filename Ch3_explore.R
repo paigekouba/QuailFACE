@@ -101,6 +101,23 @@ biomass_raw <- read.csv("/Users/paigekouba/Documents/UC_Davis/2021_Winter/Quals/
 # root_mass
 rootmass_raw <- read.csv("/Users/paigekouba/Documents/UC_Davis/2021_Winter/Quals/Proposal/Chapter 1/TinyFACE/GitHub/QuailFACE/RawData/Root_mass.csv")
 # remove "4V3c" to avoid duplicate code
+lai_raw <- read.csv("/Users/paigekouba/Documents/UC_Davis/2021_Winter/Quals/Proposal/Chapter 1/TinyFACE/GitHub/QuailFACE/RawData/Quail_Leaf_Data.csv")
+lai <- lai_raw %>% 
+  group_by(Code) %>% 
+  summarise(avg_area = mean(Area), perim_per_A = mean(Perim/Area), tot_area = sum(Area)) %>% 
+  mutate(Spp = substr(Code, nchar(Code)-2,nchar(Code)-2)) %>% 
+  mutate(Plot = if_else(nchar(Code) == 4, substr(Code,1,1), substr(Code,1,2))) %>% 
+  left_join(lookup, by = "Plot") %>% 
+  mutate(Code = if_else(nchar(Code)==4,substr(Code,1,3),substr(Code,1,4))) %>% 
+  left_join(biomass[,c("Code","LeafDry_g")], by = "Code") %>% 
+  mutate(SLA = tot_area/LeafDry_g)
+
+lai %>% 
+  filter(!Code%in%firstherb$Code) %>% 
+ggplot() +
+  geom_boxplot(aes(x=Tmt, y=SLA, group = Tmt, color= Tmt)) +
+  scale_color_manual(values = c("pink", "lightblue", "red", "blue")) + facet_grid(rows=vars(Spp), scales="free") + geom_text(data = lai %>% filter(!Code%in%firstherb$Code) %>% group_by(Tmt, Spp)%>%tally(), aes(x = Tmt, y = 10500, label = paste0("N = ",n)))
+
 biomass_raw <- biomass_raw %>% 
   filter(Code!="4V3c") %>%  # now 384 rows
   filter(Code != "16V1a") # thinned but grew back; now 383
