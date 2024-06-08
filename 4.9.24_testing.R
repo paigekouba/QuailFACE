@@ -29,7 +29,8 @@ daytimeCO2_4.9to4.19 <- ggplot(post4.9.24_daytime, aes(x=DeltaObs))+
   geom_vline(aes(xintercept = mean(DeltaObs)),color = "red", linetype="dashed", size=1)+
   labs(title="Daytime CO2 Elevation: 4/9-4/19/24", 
        x= "∆ CO2 (ppm)",
-       y= "Density")+
+       y= "Density") +
+  scale_y_continuous(expand = c(0,0), limits=c(0,0.0087)) +
   theme_classic()
 
 post4.9.24_daytime <- post4.9.24 %>% 
@@ -114,7 +115,14 @@ above_boxplots <- above_4.9.24 %>% # box plots
   ggplot(aes(x=position, y=DeltaTest)) + geom_boxplot() + coord_flip() + 
   annotate("rect", xmin=0, xmax=4.3, ymin=0, ymax=Inf, alpha=0.5) +
   geom_hline(yintercept=200,color = "red", linetype="dashed", size=1) +
-  ylab("∆CO2") + xlab("Height Above Plot Center")
+  ylab("∆CO2") + xlab("Height Above Plot Center") +   theme_classic(base_size = 20)
+
+above_pointrange <- above_means %>% # box plots
+  ggplot() +
+  annotate("rect", xmin=0, xmax=4.3, ymin=0, ymax=Inf, alpha=0.5) +
+  geom_pointrange(data=above_means, aes(x= position, y=mean, ymin=mean-sd, ymax=mean+sd)) + coord_flip() + 
+  geom_hline(yintercept=200,color = "red", linetype="dashed", size=1) +
+  ylab("∆CO2") + xlab("Height Above Plot Center") +   theme_classic(base_size = 20)
 
 # within-plot testing, MFCBase = 1000
 # starting at 11:40, changing every 20m
@@ -131,7 +139,7 @@ within_4.9.24 <- testing %>%
   select(TIMESTAMP, CO2ref, CO2elev, CO2test, DeltaObs) %>% 
   mutate(DeltaTest = CO2test - CO2ref) %>% 
   mutate(timestep = floor_date(TIMESTAMP, unit = "20 minutes"), # assigns a time-group ID
-         position = pos_within[factor(timestep)]) # turns time-group into corresponding position ID
+         position = position[factor(timestep)]) # turns time-group into corresponding position ID
 #summarize(mDeltaTest = mean(DeltaTest), sd = sd(DeltaTest))
 #group_by(TIMESTAMP = cut(TIMESTAMP, breaks = "20 min")) %>% 
 mean(within_4.9.24$DeltaTest) # 198.9011
@@ -275,12 +283,14 @@ CO2_out <- CO2_out %>%
 points_out <- points_out[-3,]
 
 # get x y data into CO2 df
-CO2_out <- left_join(CO2_out, points_out, by="position")
+# CO2_out <- left_join(CO2_out, points_out, by="position")
+CO2_out <- left_join(CO2_out, points_out, by=c("position"="pos_out"))
 
 # average CO2 level for each distance from screen for CO2_out
 CO2_out %>% 
   rowwise() %>% 
-  mutate(distance = max(abs(x),abs(y))) %>% 
+  # mutate(distance = max(abs(x),abs(y))) %>% 
+  mutate(distance = max(abs(x_out),abs(y_out))) %>% 
   mutate(diff_center = (CO2test - CO2elev)*100/CO2elev) %>% View()
   summarize(mean = mean(CO2test)) %>% 
 
@@ -314,7 +324,7 @@ in.out_4.9.24 %>% # means and sd for inside and outside points
    group_by(position) %>% 
    summarise(mean = mean(DeltaTest), sd = sd(DeltaTest)) %>% 
    left_join(allpoints, by = "position") %>% 
-   ggplot(aes(x=x, y=y, label = round(mean,1))) + geom_text(aes(color=sd), size = 5) 
+   ggplot(aes(x=x, y=y, label = round(mean))) + geom_text(aes(color=sd), size = 5) 
 
 in.out_means <- in.out_4.9.24 %>% # df with means already in it
   group_by(position) %>% 
@@ -337,8 +347,11 @@ ggplot(data = interp_df2, aes(x = x, y = y, color = DeltaTest)) + geom_point(siz
 interpolated_CO2 <- ggplot() + # interpolated points plus measured values  (means) plus circle showing screen
   geom_point(data = interp_df2, aes(x = x, y = y, color = DeltaTest), size=5, shape=15) +
   scale_color_continuous(type = "viridis") + theme_classic() +
-  geom_text(data = in.out_means, aes(x=x, y=y, label = round(mean, 1)), size = 5) +
-  ggforce::geom_circle(aes(x0=0,y0=0,r=39))
+  geom_text(data = in.out_means, aes(x=x, y=y, label = round(mean)), size = 5) +
+  ggforce::geom_circle(aes(x0=0,y0=0,r=39)) +
+  scale_y_continuous(expand = c(0,0)) +
+  scale_x_continuous(expand = c(0,0)) +
+  labs(color="∆CO2")
 
 ggplot(data = interp_df2, aes(x = x, y = y)) + # contour map, kinda cool
   geom_contour(aes(z = DeltaTest, colour = stat(level)), size = 1.2) +
@@ -358,12 +371,14 @@ between_4.10.24 <- testing %>%
   mutate(DeltaTest = CO2test - CO2ref) %>%
   mutate(timestep = floor_date(TIMESTAMP - 5*60, unit = "20 minutes"),
          position = factor(c(1:16)[factor(timestep)])) %>% 
-  mutate(eCO2 = as.numeric(position %in% c(2,3,6,7,9,11,13,15))) 
+  mutate(eCO2 = as.numeric(position %in% c(2,3,6,7,9,11,13,15))) %>% 
+  
 
-between_4.10.24 %>% 
-  group_by(position) %>% 
+avg_between_4.10.24 <- between_4.10.24 %>% 
+  filter((eCO2==1 & DeltaTest > 25) | (eCO2==0 & DeltaTest < 100) ) %>% 
+  group_by(position, eCO2) %>% 
   summarise(mean = mean(DeltaTest), sd = sd(DeltaTest)) %>% 
-  ungroup() %>% View()
+  ungroup()
 
 # NB I think plots 3 and 4 got swapped when I rebuilt the thing!! 3 is E now and 4 is A
 
@@ -387,9 +402,24 @@ between_4.10.24 %>%  # density curves for each timestep
   ggplot(aes(x=DeltaTest, group = factor(position))) + geom_density(aes(color = factor(eCO2, levels=c("1","0")))) + labs(colour = "eCO2") + xlab("∆CO2")
 
 between_boxplots <- between_4.10.24 %>% # box plots
+  filter((eCO2==1 & DeltaTest > 25) | (eCO2==0 & DeltaTest < 100) ) %>% 
   ggplot(aes(x=factor(position), y=DeltaTest)) + geom_boxplot(aes(color=factor(eCO2, levels=c("1","0")))) +
   labs(colour = "eCO2") + xlab("Plot") + ylab("∆CO2") +
   geom_hline(yintercept=200,color = "red", linetype="dashed", size=1)
+
+between_pointrange <- avg_between_4.10.24 %>% 
+  ggplot(aes(x=factor(position), y=mean)) +
+  geom_pointrange(data = avg_between_4.10.24, aes(ymin=(mean - sd), ymax = (mean + sd), color = as.factor(eCO2))) +
+  scale_color_discrete(type=c("darkgray", "black")) +
+  labs(title = "∆CO2 Across All Plots, April 10-19, 2024") +
+  xlab("Plot") + ylab("∆CO2 (ppm)") +
+  labs(color="CO2 Treatment") +
+  theme_classic()
+
+ggplot(avg_between, aes(factor(Plot, levels = c("1","2","3","4","5","6","7","8","9","10","11","12","13","14","15","16")), mDeltaTest)) +
+  geom_point() +
+  geom_pointrange(data = avg_between, aes(ymin=(mDeltaTest - sd), ymax = (mDeltaTest + sd))) +
+  theme_classic(base_size = 20)
 
 # 12:45 short veg, canopy height
 # 13:05 medium veg, canopy height
@@ -402,8 +432,10 @@ veg_4.10.24 <- testing %>%
   filter(TIMESTAMP < "2024-04-10 14:25:00") %>%
   select(TIMESTAMP, CO2ref, CO2elev, CO2test, DeltaObs) %>%
   mutate(DeltaTest = CO2test - CO2ref) %>%
+  # mutate(timestep = floor_date(TIMESTAMP - 5*60, unit = "20 minutes"),
+  #        position = c("short_10cm@canopy","med_25-35cm@canopy","tall_50-60cm@canopy","med_@10cm","tall_@10cm")[factor(timestep)])
   mutate(timestep = floor_date(TIMESTAMP - 5*60, unit = "20 minutes"),
-         position = c("short_10cm@canopy","med_25-35cm@canopy","tall_50-60cm@canopy","med_@10cm","tall_@10cm")[factor(timestep)])
+         position = c("Short (canopy)","Medium (canopy)","Tall (canopy)","Medium (at 10cm)","Tall (at 10cm)")[factor(timestep)])
 
 veg_4.10.24$position <- factor(veg_4.10.24$position, levels = unique(veg_4.10.24$position))
 
@@ -418,4 +450,19 @@ veg_4.10.24 %>%  # density curves for each timestep
 veg_boxplot <- veg_4.10.24 %>% # box plots
   ggplot(aes(x=position, y=DeltaTest)) + geom_boxplot() +
   geom_hline(yintercept=200,color = "red", linetype="dashed", size=1) +
-  xlab("Vegetation Height & Sampling Height") + ylab("∆CO2")
+  xlab("Vegetation Height & Sampling Height") + ylab("∆CO2") + theme_classic()
+
+
+avg_veg_4.10.24 <- veg_4.10.24 %>% 
+  group_by(position) %>% 
+  summarise(mean = mean(DeltaTest), sd = sd(DeltaTest)) %>% 
+  ungroup()
+veg_pointrange <- avg_veg_4.10.24 %>% 
+  ggplot(aes(x=factor(position), y=mean)) +
+  geom_pointrange(data = avg_veg_4.10.24, aes(ymin=(mean - sd), ymax = (mean + sd))) +
+  geom_hline(yintercept=200,color = "red", linetype="dashed", size=1) +
+  labs(title = "∆CO2 for Varying Vegetation Height") +
+  xlab("Vegetation Height & Sampling Height") + ylab("∆CO2 (ppm)") +
+  labs(color="CO2 Treatment") +
+  theme_classic(base_size = 18) +
+  theme(axis.text.x = element_text(angle = 45, hjust=1))
