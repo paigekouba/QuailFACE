@@ -24,6 +24,9 @@ ggplot(LiCOR_df) +
   geom_point(aes(x=HHMMSS, y=Photo.y, color=Tmt)) + geom_line(aes(x=HHMMSS, y=Photo.y, group=Tmt, color = Tmt)) + scale_color_manual(values = c("pink", "lightblue", "red", "blue")) + facet_grid(rows = vars(Tmt))
 # no evident effect of time of day
 
+ggplot(LiCOR_df) +
+  geom_point(aes(x=HHMMSS, y=Cond.y, color=Tmt)) + geom_line(aes(x=HHMMSS, y=Cond.y, group=Tmt, color = Tmt)) + scale_color_manual(values = c("pink", "lightblue", "red", "blue")) + facet_grid(rows = vars(Tmt))
+
 # see how they associate by plot (with per-plot eCO2 ?)
 plot_order <- c("3","8","12","16","1","5","10","14","2","6","9","13","4","7","11","15")
 ggplot(LiCOR_df) +
@@ -44,7 +47,7 @@ grid.arrange( # breaks down Anet, gs, and WUE
   LiCOR_df %>% ggplot() + geom_boxplot(aes(x=Tmt, y= Photo.y, color = Tmt)) + facet_grid(rows = vars(Spp), scales = "free") + labs(y = "Standardized A(net)") + 
     geom_text(data = nequals_licor, aes(x = Tmt, y = 1, label = paste0("N = ",n))) +  
     scale_color_manual(values = c("pink", "lightblue", "red", "blue")) ,
-  LiCOR_df %>% ggplot() + geom_boxplot(aes(x=Tmt, y= Cond.y, color = Tmt)) + facet_grid(rows = vars(Spp), scales = "free") + labs(y = "Stomatal Conductance") + geom_text(data = nequals_licor, aes(x = Tmt, y = 0.01, label = paste0("N = ",n)))
+  LiCOR_df %>% ggplot() + geom_boxplot(aes(x=Tmt, y= log(Cond.y), color = Tmt)) + facet_grid(rows = vars(Spp), scales = "free") + labs(y = "log(Stomatal Conductance)") + geom_text(data = nequals_licor, aes(x = Tmt, y = 0.01, label = paste0("N = ",n)))
   +  scale_color_manual(values = c("pink", "lightblue", "red", "blue")) ,
   LiCOR_df %>% 
     filter(WUE.350 < 1500) %>% # removing one outlier from AW, L
@@ -65,7 +68,7 @@ herbivory$Date <- mdy(herbivory$Date)
 
 firstherb <- herbivory %>% # most conservative: first date any herbivory was observed
   group_by(Code) %>% 
-  summarise(firstherb = min(Date)) %>% # next, removing some that look undamaged per growth curves
+  summarise(firstherb = min(Date)) # next, removing some that look undamaged per growth curves
   ## come back and check this!! 
  # filter(!(Code %in% c("10L6","10V4","11L7","11L5","11V1","11V2","14L4","14V3","15V1", "1V5", "4V3c", "14V1c"))) 
 # add in these:
@@ -78,7 +81,7 @@ firstherb <- rbind(firstherb, new_ones)
 firstfullherb <- herbivory %>% # first date full stem herbivory was observed
   group_by(Code) %>% 
   filter(full_herb == "x") %>% 
-  summarise(firstherb = min(Date)) %>% 
+  summarise(firstherb = min(Date))  
 #  filter(!(Code %in% c("10L6","10V4","11L7","11L5","11V1","11V2","14L4","14V3","15V1","1V5"))) 
 firstfullherb <- rbind(firstfullherb, new_ones)
 
@@ -91,22 +94,6 @@ biomass_raw <- read.csv("/Users/paigekouba/Documents/UC_Davis/2021_Winter/Quals/
 rootmass_raw <- read.csv("/Users/paigekouba/Documents/UC_Davis/2021_Winter/Quals/Proposal/Chapter 1/TinyFACE/GitHub/QuailFACE/RawData/Root_mass.csv")
 # remove "4V3c" to avoid duplicate code
 lai_raw <- read.csv("/Users/paigekouba/Documents/UC_Davis/2021_Winter/Quals/Proposal/Chapter 1/TinyFACE/GitHub/QuailFACE/RawData/Quail_Leaf_Data.csv")
-lai <- lai_raw %>% 
-  group_by(Code) %>% 
-  summarise(avg_area = mean(Area), perim_per_A = mean(Perim/Area), tot_area = sum(Area)) %>% 
-  mutate(Spp = substr(Code, nchar(Code)-2,nchar(Code)-2)) %>% 
-  mutate(Plot = if_else(nchar(Code) == 4, substr(Code,1,1), substr(Code,1,2))) %>% 
-  left_join(lookup, by = "Plot") %>% 
-  mutate(Code = if_else(nchar(Code)==4,substr(Code,1,3),substr(Code,1,4))) %>% 
-  left_join(biomass[,c("Code","LeafDry_g")], by = "Code") %>% 
-  mutate(SLA = tot_area/LeafDry_g)
-
-lai %>% 
-  filter(!Code%in%firstherb$Code) %>% 
-ggplot() +
-  geom_boxplot(aes(x=Tmt, y=SLA, group = Tmt, color= Tmt)) +
-  scale_color_manual(values = c("pink", "lightblue", "red", "blue")) + facet_grid(rows=vars(Spp), scales="free") + geom_text(data = lai %>% filter(!Code%in%firstherb$Code) %>% group_by(Tmt, Spp)%>%tally(), aes(x = Tmt, y = 10500, label = paste0("N = ",n)))
-
 biomass_raw <- biomass_raw %>% 
   filter(Code!="4V3c") %>%  # now 384 rows
   filter(Code != "16V1a") # thinned but grew back; now 383
@@ -124,16 +111,33 @@ biomass <- biomass_raw %>%
   group_by(Code) %>% 
   summarise_if(is.numeric, ~ max(.x, na.rm = TRUE)) %>% # group by shortened Code and collapse values in case of a/b confusion
   ungroup() %>% 
- merge(dplyr::select(rootmass, Code, Plot, Spp, SeedMass.g., Cond..7, rootmass_g), all.x=F, all.y=T)  %>% 
+  merge(dplyr::select(rootmass, Code, Plot, Spp, SeedMass.g., Cond..7, rootmass_g), all.x=F, all.y=T)  %>% 
   mutate(across(c(StemWet_g, LeafWet_g, LeafDry_g), na_if, -Inf))
 
 lookup <- data.frame(as.character(c(1:16)), c("AW","ED","AD","EW",
-                                "AW","ED","EW","AD",
-                                "ED","AW","EW","AD",
-                                "ED","AW","EW","AD"))
+                                              "AW","ED","EW","AD",
+                                              "ED","AW","EW","AD",
+                                              "ED","AW","EW","AD"))
 names(lookup) <- c("Plot","Tmt")
 
 biomass <- merge(lookup, biomass, by = 'Plot')
+
+lai <- lai_raw %>% 
+  group_by(Code) %>% 
+  summarise(avg_area = mean(Area), perim_per_A = mean(Perim/Area), tot_area = sum(Area), count=n()) %>% 
+  mutate(Spp = substr(Code, nchar(Code)-2,nchar(Code)-2)) %>% 
+  mutate(Plot = if_else(nchar(Code) == 4, substr(Code,1,1), substr(Code,1,2))) %>% 
+  left_join(lookup, by = "Plot") %>% 
+  mutate(Code = if_else(nchar(Code)==4,substr(Code,1,3),substr(Code,1,4))) %>% 
+  left_join(biomass[,c("Code","LeafDry_g")], by = "Code") %>% 
+  mutate(SLA = tot_area/LeafDry_g)
+
+lai %>% 
+ # filter(!Code%in%firstherb$Code) %>% 
+ # filter(SLA != 12458.28) %>% 
+ggplot() +
+  geom_boxplot(aes(x=Tmt, y=SLA, group = Tmt, color= Tmt)) + # outlier.shape = NA
+  scale_color_manual(values = c("pink", "lightblue", "red", "blue")) + facet_grid(rows=vars(Spp), scales="free") + geom_text(data = lai %>% filter(!Code%in%firstherb$Code) %>% group_by(Tmt, Spp)%>%tally(), aes(x = Tmt, y = 10000, label = paste0("N = ",n)))
 
 
 # remove seedlings with any herbivory
@@ -211,6 +215,8 @@ inventory_raw[inventory_raw$Code == "4V1b",49] <- mean(65,73) # NA; assign avera
 inventory_raw[inventory_raw$Code == "9V2b",43] <- 116 # 65; assume 116, same as adjacent hts
 inventory_raw[inventory_raw$Code == "9V5a",43] <- mean(c(101,84)) # NA; assign mean of adjacent hts
 inventory_raw[inventory_raw$Code == "14L5a", 55] <- 450 # 45, assume entry error --> 450
+inventory_raw[which(inventory_raw$Leaf.Ct..5 == 74),45] <- 7 # 74, assume entry error --> 7
+
 
 # remove "4V3c" to avoid duplicate code
 inventory_raw <- inventory_raw %>% 
@@ -246,13 +252,13 @@ inventory_raw %>%
 # Total:           189               46    143
 
 # I want to find the max value entered for each XYZ[a/b], since some data was mis-entered
-inventory_thinned %>% 
+inventory_raw %>% 
   mutate(shortcode = if_else(nchar(Code)==4,substr(Code,1,3),substr(Code,1,4))) %>% 
   group_by(shortcode) %>% 
   filter(n()>1) %>% 
   nrow() # 384 duplicated seed codes
 
-inventory_thinned <- inventory_thinned %>% # group_by shortcode and get max as summary
+inventory_thinned <- inventory_raw %>% # group_by shortcode and get max as summary
   mutate(shortcode = if_else(nchar(Code)==4,substr(Code,1,3),substr(Code,1,4))) %>% 
   group_by(shortcode) %>% 
   summarise_if(is.numeric, ~ max(.x, na.rm = TRUE)) # %>% # this results in 192 rows with the max of each shortcode
@@ -273,7 +279,7 @@ inventory_thinned$Inv..8.Date <- c(rep("11/20/23", nrow(inventory_thinned)))
 
 # # start with inventory date
 inv_long1 <- inventory_thinned %>% 
-   select(Code, Inv..1.Date, Inv..2.Date, Inv..3.Date, Inv..4.Date, Inv..5.Date, Inv..6.Date, Inv..7.Date, Inv..8.Date) #%>% 
+   dplyr::select(Code, Inv..1.Date, Inv..2.Date, Inv..3.Date, Inv..4.Date, Inv..5.Date, Inv..6.Date, Inv..7.Date, Inv..8.Date) #%>% 
  #  mutate(Code = if_else(nchar(Code)==4,substr(Code,1,3),substr(Code,1,4))) # remove as and bs
 
 inv_long <- inv_long1 %>%
@@ -282,23 +288,23 @@ inv_long <- inv_long1 %>%
 
 # add in the reorganized ht, condition, and dia values
 inv_ht <- inventory_thinned %>% 
-  select(Code, paste0("Ht.mm..",c(1:8))) %>% 
+  dplyr::select(Code, paste0("Ht.mm..",c(1:8))) %>% 
   pivot_longer(!Code, names_to = "key", values_to = "ht_mm")
 
 inv_cond <- inventory_thinned %>% 
-  select(Code, paste0("Cond..",c(1:8))) %>% 
+  dplyr::select(Code, paste0("Cond..",c(1:8))) %>% 
   pivot_longer(!Code, names_to = "key", values_to = "cond")
 
 inv_dia <- inventory_thinned %>% 
-  select(Code, paste0("Dia.mm..",c(1:8))) %>% 
+  dplyr::select(Code, paste0("Dia.mm..",c(1:8))) %>% 
   pivot_longer(!Code, names_to = "key", values_to = "dia")
 
 inv_leafct <- inventory_thinned %>% 
-  select(Code, c("Leaf.Ct.",paste0("Leaf.Ct..",c(1,5,6,7)))) %>% 
+  dplyr::select(Code, c("Leaf.Ct.",paste0("Leaf.Ct..",c(1,5,6,7)))) %>% 
   pivot_longer(!Code, names_to = "key", values_to = "leafct")
 
 inv_maxleaf <- inventory_thinned %>% 
-  select(Code, c("Max.Leaf.Length.1",paste0("Max.Leaf.",c(5,6,7,8)))) %>% 
+  dplyr::select(Code, c("Max.Leaf.Length.1",paste0("Max.Leaf.",c(5,6,7,8)))) %>% 
   pivot_longer(!Code, names_to = "key", values_to = "maxleaf")
 
 ## COME BACK TO THIS SPOT AND START FROM INV_LONG, ADD DIA AND COND
@@ -340,7 +346,7 @@ inv_all[which.max(inv_all$dia),]
 inv_all[1470,5] <- 4.24
 inv_all[1470,4] <- 100.5 # mean of Ht.mm..5 and Ht.mm..7
 
-# now add Plot and Spp
+# now add Plot and Spp, replace -Inf with NAs
 inv_all <- inv_all %>% 
   mutate(Plot = if_else(nchar(Code)==3,substr(Code,1,1),substr(Code,1,2))) %>% 
   mutate(Spp = substr(Code, nchar(Code)-1,nchar(Code)-1)) %>% 
@@ -386,7 +392,7 @@ inv_all_nfh %>% # for seedlings without *full* herbivory, how did height change 
   scale_color_manual(values = c("#e8665d", "#828cfa", "#850a01", "#010c85")) +
   scale_shape_manual(values = c(16,16,17,17)) +
   geom_text(data = inv_nequals, aes(x = value, y = as.numeric(as.factor(Tmt))*12-50, color = Tmt, label = paste0("N=",n))) +
-   facet_grid(~ Spp)
+   facet_grid(~ Spp) + theme_classic(base_size = 19)
 
 
 ## Back-filling biomass data
@@ -407,7 +413,7 @@ inv_all[which(inv_all$Code %in% firstherb$Code),] %>% # (add ! after which( to g
    facet_grid(rows=vars(Spp), scales = "free")
 # okay we have checked it out; they for sure get shorter
 
-# after reviewing the initial plots, I found 12 instances of data entry errors and 12 seedlings in the "herbivory" subset that didn't lose enough height to matter. Made those edits above (after loading inventory data and adding dates)
+# after reviewing the initial plots, I found 12 instances of data entry errors and 12 seedlings in the "herbivory" subset that didn't lose enough height to matter. Made those edits above (after loading inventory data and adding dates). **I reversed this bc better safe than sorry
 # I checked this against leaf herbivory: compare ht.8 vs leaf mass and look for outliers. 1V6 was funky, added to herbivory list to be safe
 
 
@@ -513,7 +519,9 @@ ggplot(biomass2, aes(x=Ht.mm..5, y = StemWet_g)) + # plot real values (dots) vs 
 # how far off are the pred values
 ggplot(biomass2, aes(x=Ht.mm..8, y=StemWet_g - pred, color = H2OTmt)) +
          geom_point() + facet_grid( ~Spp)
-# pretty good except VW skew too low
+# pretty good except VW skew too low; then again that makes sense because those all got eaten?
+ggplot(biomass_nh2, aes(x=Ht.mm..8, y=StemWet_g - pred, color = H2OTmt)) +
+  geom_point() + facet_grid( ~Spp) # that's what I wanted! within the non-eaten subset, this is a fairly reliable predictor
 
 ## Do it again but for LeafWet_g. Hunch is that leaf count might want to be involved
 biomass_nh2_leaf <- biomass_nh %>% # training data on seedlings with no herbivory
@@ -589,6 +597,11 @@ ggplot(biomass2_leaf, aes(x=Ht.mm..5, y=LeafWet_g - predleaf, color = H2OTmt)) +
 ggplot(biomass2_leaf, aes(x=Leaf.Ct..5, y=LeafWet_g - predleaf, color = H2OTmt)) +
   geom_point() + facet_grid( ~Spp)
 
+ggplot(biomass_nh2_leaf, aes(x=Ht.mm..5, y=LeafWet_g - pred, color = H2OTmt)) +
+  geom_point() + facet_grid( ~Spp)
+ggplot(biomass_nh2_leaf, aes(x=Leaf.Ct..5, y=LeafWet_g - pred, color = H2OTmt)) +
+  geom_point() + facet_grid( ~Spp)
+
 # It's not very good; plot model line with real and fake data to be sure 
 ggplot(biomass_nh2_leaf, aes(x = Ht.mm..5, y=LeafWet_g, color = H2OTmt)) + # plot against Ht.mm..5
   geom_point() + facet_grid(~Spp) +
@@ -628,35 +641,33 @@ grid.arrange( biomass_nfh %>% ggplot(aes(x=Tmt, y=StemWet_g)) + geom_boxplot( ae
   facet_grid(rows = vars(Spp), scales = "free") +
   geom_text(data = nequals_nfh, aes(x = Tmt, y = 0, label = paste0("N = ",n))) + 
   labs(y = "Stem Biomass (g)", title = "Stem Biomass (filtered)") +
-  scale_color_manual(values = c("pink", "lightblue", "red", "blue")) +
-    geom_signif(test="wilcox.test", exact=FALSE, comparisons = combn(c("AD", "AW", "ED", "EW"),2,simplify=F),step_increase=0.2) ,
+  scale_color_manual(values = c("pink", "lightblue", "red", "blue")) ,
+ #   geom_signif(test="wilcox.test", exact=FALSE, comparisons = combn(c("AD", "AW", "ED", "EW"),2,simplify=F),step_increase=0.2) ,
 biomass2 %>% ggplot(aes(x=Tmt, y=StemWet_g)) + 
   geom_boxplot(aes(x=Tmt, y=StemWet_expanded, color = Tmt)) + 
   facet_grid(rows = vars(Spp), scales = "free") +
   geom_text(data = nequals_bm, aes(x = Tmt, y = 0, label = paste0("N = ",n))) + 
   labs(y = "Stem Biomass (g)", title = "Stem Biomass (expanded data)") +
-  scale_color_manual(values = c("pink", "lightblue", "red", "blue")) +
-  geom_signif(test="wilcox.test", exact=FALSE, comparisons = combn(c("AD", "AW", "ED", "EW"),2,simplify=F),step_increase=0.2), nrow = 1 )
+  scale_color_manual(values = c("pink", "lightblue", "red", "blue")), nrow = 1) 
+ # geom_signif(test="wilcox.test", exact=FALSE, comparisons = combn(c("AD", "AW", "ED", "EW"),2,simplify=F),step_increase=0.2), nrow = 1 )
 
 # total biomass grouped by Tmt, for all seedlings without FULL herbivory
-grid.arrange( biomass_nfh %>% ggplot(aes(x=Tmt, y=StemWet_g)) + geom_boxplot( aes(x=Tmt, y= (StemWet_g+LeafWet_g+rootmass_g), color = Tmt)) + facet_grid(rows = vars(Spp), scales = "free") +
-  geom_text(data = nequals_nfh, aes(x = Tmt, y = 0.2, label = paste0("N = ",n))) + labs(y = "Total Biomass (g)", title = "Total Biomass (filtered)") +
-  scale_color_manual(values = c("pink", "lightblue", "red", "blue")) +
-    geom_signif(test="wilcox.test", exact=FALSE, comparisons = combn(c("AD", "AW", "ED", "EW"),2,simplify=F),step_increase=0.2),
+grid.arrange( biomass_nfh %>% ggplot(aes(x=Tmt, y=StemWet_g)) + geom_boxplot( aes(x=Tmt, y= log(StemWet_g+LeafWet_g+rootmass_g), color = Tmt)) + facet_grid(rows = vars(Spp), scales = "free") +
+  geom_text(data = nequals_nfh, aes(x = Tmt, y = 0.2, label = paste0("N = ",n))) + labs(y = "log Total Biomass (g)", title = "Total Biomass (filtered)") +
+  scale_color_manual(values = c("pink", "lightblue", "red", "blue")) ,
 biomass2 %>% # combined stem and leaf predictions
   ggplot(aes(x=Tmt, y=StemWet_g)) +
-  geom_boxplot(mapping=aes(x=Tmt, y=rootmass_g+StemWet_expanded+LeafWet_expanded, color = Tmt)) + 
+  geom_boxplot(mapping=aes(x=Tmt, y=log(rootmass_g+StemWet_expanded+LeafWet_expanded), color = Tmt)) + 
   facet_grid(rows = vars(Spp), scales = "free") +
   geom_text(data = nequals_bm, aes(x = Tmt, y = 0.2, label = paste0("N = ",n))) + 
-  labs(y = "Total Biomass (g)", title = "Total Biomass (expanded data)") +
-  scale_color_manual(values = c("pink", "lightblue", "red", "blue")) +
-  geom_signif(test="wilcox.test", exact=FALSE, comparisons = combn(c("AD", "AW", "ED", "EW"),2,simplify=F),step_increase=0.2) , nrow = 1)
+  labs(y = "log Total Biomass (g)", title = "Total Biomass (expanded data)") +
+  scale_color_manual(values = c("pink", "lightblue", "red", "blue")) , nrow = 1)
 
 nequals_nh <- biomass_nh %>% 
   group_by(Tmt, Spp) %>% 
   tally()
 biomass_nh %>% # Leaf Water Content grouped by Tmt, for all seedlings without ANY herbivory
-  ggplot() + geom_boxplot(aes(x = Tmt, y = (LeafWet_g - LeafDry_g)*100/LeafWet_g, color=Tmt)) + facet_grid(rows = vars(Spp), scales = "free") + geom_text(data = nequals_nh, aes(x = Tmt, y = 0.5, label = paste0("N = ",n))) + labs(y = "Leaf Water Content (% by mass)", title="Leaf Water Content (filtered)") +
+  ggplot() + geom_boxplot(aes(x = Tmt, y = (LeafWet_g - LeafDry_g)*100/LeafWet_g, color=Tmt)) + facet_grid(rows = vars(Spp), scales = "free") + geom_text(data = nequals_nh, aes(x = Tmt, y = 40, label = paste0("N = ",n))) + labs(y = "Leaf Water Content (% by mass)", title="Leaf Water Content (filtered)") +
   scale_color_manual(values = c("pink", "lightblue", "red", "blue")) 
 # seems too far a stretch to do LWC on modeled LeafWet vs LeafDry ...
 
@@ -674,37 +685,6 @@ biomass2 %>%
   scale_color_manual(values = c("pink", "lightblue", "red", "blue")), nrow = 1)
 
 
-# Let us try a linear extrapolation from the time series data in the style of stack overflow:
-# first with one that has all 8 values and no herb
-extpTest_df <- data.frame(unique(inv_all_nh$value), inv_all[which(inv_all$Code == "14L1"),]$ht_mm) # prep df
-colnames(extpTest_df) <- c("Date","ht_mm")
-extpTest_df$pred1 <- predict(lm(ht_mm ~ poly(Date,3), data=extpTest_df)) # add predicted values
-
-pred <- data.frame(Date = c(extpTest_df$Date, ymd("2023-12-20"),ymd("2024-01-20"),ymd("2024-02-20")))
-pred$ht_mm <- predict(lm(ht_mm ~ poly(Date,3), data = extpTest_df), newdata=pred)
-
-ggplot(extpTest_df, aes(x = Date, y=ht_mm)) + # plot
-  geom_line() +
-  geom_point() +
-  geom_hline(aes(yintercept=0)) +
-  geom_line(aes(y = pred1), color = "red") +
-  geom_point(color="blue", data=pred)
-
-# 3rd degree is best for prediction past November
-# now for one that has herb, so only 5 values; or you could fit the average curve for the whole nh set?
-extpTest_df2 <- data.frame(unique(inv_all_nh[which(inv_all_nh$Code == "11V3"),]$value), inv_all_nh[which(inv_all_nh$Code == "11V3"),]$ht_mm) # prep df
-colnames(extpTest_df2) <- c("Date","ht_mm")
-extpTest_df2$pred1 <- predict(lm(ht_mm ~ poly(Date,3), data=extpTest_df2)) # add predicted values
-
-pred2 <- data.frame(Date = c(unique(inv_all_nh$value)))
-pred2$ht_mm <- predict(lm(ht_mm ~ poly(Date,3), data = extpTest_df2), newdata=pred2)
-
-ggplot(extpTest_df2, aes(x = Date, y=ht_mm)) + # plot
-  geom_line() +
-  geom_point() +
-  geom_hline(aes(yintercept=0)) +
-  geom_point(color="blue", shape=15, data=pred2) +
-  geom_line(color="blue", data=pred2)
 
 # Test to see if herbivory is significantly associated with Spp
 # need a 2x2 table where the rows are (herb / no herb), cols are L / V, and cells are counts
