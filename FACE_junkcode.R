@@ -802,8 +802,10 @@ summary(lmer(Photo.y ~ rescale(CO2)*rescale(SWC) + (1|Plot), data = filter(LiCOR
 summary(lmer(Photo.y ~ rescale(CO2)*rescale(SWC) + (1|Plot), data = filter(LiCOR_df., Spp == "L" | Spp == "L"))) # SWC p<.05
 summary(lmer(Photo.y ~ rescale(CO2)*rescale(SWC) + (1|Plot), data = filter(LiCOR_df., Spp == "V" | Spp == "V"))) # SWC p<.04
 m1 <- lmer(Photo.y ~ CO2*H2OTmt + (1|Plot), data = filter(LiCOR_df., Spp == "V" | Spp == "V"))
-ggpredict(m1, terms=c("CO2","H2OTmt")) %>% 
-  plot(add.data = TRUE, ci = FALSE)
+m1 <- lm(Photo.y ~ rescale(CO2)*rescale(meanSWC), data = trans_dfwV)
+m1 <- lm(sqrtTotArea ~ rescale(CO2)*rescale(meanSWC), data = trans_dfwL)
+ggpredict(m1, terms=c("CO2","meanSWC [4,42]")) %>% 
+  plot(add.data = TRUE, ci = T)
 
 cooksd1 <- cooks.distance(m1)
 sample_size <- nobs(m1)
@@ -812,11 +814,11 @@ abline(h = 4/sample_size, col="red")  # add cutoff line
 text(x=1:length(cooksd1)+1, y=cooksd1, labels=ifelse(cooksd1>4/sample_size, names(cooksd1),""), col="red")  # add labels
 
 influential1 <- as.numeric(names(cooksd1)[(cooksd1 > (4/sample_size))])
-ggpredict(lmer(Photo.y ~ CO2*H2OTmt + (1|Plot), data = LiCOR_df. %>% 
-                 filter(Spp == "V") %>% 
-                 filter(!row_number() %in% influential1) ), terms=c("CO2","H2OTmt")) %>% plot(add.data = TRUE, ci = FALSE)
-summary(lmer(Photo.y ~ CO2*H2OTmt + (1|Plot), data = LiCOR_df. %>% 
-               filter(Spp == "V") %>% 
+ggpredict(lm(sqrtTotArea ~ rescale(CO2)*rescale(meanSWC) , data = trans_dfwL %>% 
+                # filter(Spp == "L") %>% 
+                 filter(!row_number() %in% influential1) ), terms=c("CO2","meanSWC [4,42]")) %>% plot(add.data = TRUE, ci = T)
+summary(lm(sqrtTotArea ~ rescale(CO2)*rescale(meanSWC), data = trans_dfwL %>% 
+             #  filter(Spp == "L") %>% 
                filter(!row_number() %in% influential1) ))
 library(lmerTest)  
 
@@ -2441,6 +2443,1270 @@ summary(manova(manova.cbind2V[,c(1,2,4,5)] ~ CO2Tmt*H2OTmt, filter(manova.df2, S
 summary(manova(manova.cbind[,c(1,2,5,7)] ~ CO2Tmt*H2OTmt, manova.df2))
 summary(manova(manova.cbind2L[,c(1,2,5,7)] ~ CO2Tmt*H2OTmt, filter(manova.df2, Spp=="L")))
 summary(manova(manova.cbind2V[,c(1,2,5,7)] ~ CO2Tmt*H2OTmt, filter(manova.df2, Spp=="V")))
+
+## time series extrapolation
+# Let us try a linear extrapolation from the time series data in the style of stack overflow:
+# first with one that has all 8 values and no herb
+extpTest_df <- data.frame(unique(inv_all_nh$value), inv_all[which(inv_all$Code == "14L1"),]$ht_mm) # prep df
+colnames(extpTest_df) <- c("Date","ht_mm")
+extpTest_df$pred1 <- predict(lm(ht_mm ~ poly(Date,3), data=extpTest_df)) # add predicted values
+
+pred <- data.frame(Date = c(extpTest_df$Date, ymd("2023-12-20"),ymd("2024-01-20"),ymd("2024-02-20")))
+pred$ht_mm <- predict(lm(ht_mm ~ poly(Date,3), data = extpTest_df), newdata=pred)
+
+ggplot(extpTest_df, aes(x = Date, y=ht_mm)) + # plot
+  geom_line() +
+  geom_point() +
+  geom_hline(aes(yintercept=0)) +
+  geom_line(aes(y = pred1), color = "red") +
+  geom_point(color="blue", data=pred)
+
+# 3rd degree is best for prediction past November
+# now for one that has herb, so only 5 values; or you could fit the average curve for the whole nh set?
+extpTest_df2 <- data.frame(unique(inv_all_nh[which(inv_all_nh$Code == "11V3"),]$value), inv_all_nh[which(inv_all_nh$Code == "11V3"),]$ht_mm) # prep df
+colnames(extpTest_df2) <- c("Date","ht_mm")
+extpTest_df2$pred1 <- predict(lm(ht_mm ~ poly(Date,3), data=extpTest_df2)) # add predicted values
+
+pred2 <- data.frame(Date = c(unique(inv_all_nh$value)))
+pred2$ht_mm <- predict(lm(ht_mm ~ poly(Date,3), data = extpTest_df2), newdata=pred2)
+
+ggplot(extpTest_df2, aes(x = Date, y=ht_mm)) + # plot
+  geom_line() +
+  geom_point() +
+  geom_hline(aes(yintercept=0)) +
+  geom_point(color="blue", shape=15, data=pred2) +
+  geom_line(color="blue", data=pred2)
+
+
+# is there a relationship between Ht.mm..5, Leaf.Ct..5, or Max.Leaf..5 and final leaf count, leaf size, leaf total area?
+left_join(biomass2_leaf, lai[,c("Code","avg_area","tot_area","SLA", "count")], by = "Code") %>% 
+ggplot(aes(x=Leaf.Ct..5, y = tot_area)) + # plot real values (dots) vs predicted (crosses)
+  geom_point(aes(color = H2OTmt)) + facet_grid( ~ Spp) + scale_y_continuous(limits=c(0,30000))
+
+# data loading duplicate
+## load the data fresh with "." suffix; do steps from Ch3_explore and Ch3_LiCOR. Examine colnames
+
+# plot_CO2, plot_SWC
+plot_SWC. <- LiCOR_df.[,c("Plot", "SWC")] %>% 
+  group_by(Plot) %>% 
+  summarise(meanSWC=mean(SWC)) %>% 
+  as.data.frame()
+
+plot_CO2. <- avg_between %>% # from CO2_Ch2.R
+  dplyr::select(Plot, mDeltaTest) %>% 
+  mutate(CO2 = 420+mDeltaTest) %>% 
+  as.data.frame()
+
+# LiCOR_df
+# actually just load this one after running Ch3_LiCOR
+LiCOR_df. <- LiCOR_df
+LiCOR_df.[,80:94] # has SWC, Plot, Spp, Tmt, Photo.y, Cond.y, WUE.350, CO2Tmt and H2OTmt
+# needs shortcode, CO2
+LiCOR_df. <- LiCOR_df. %>% 
+  mutate(Code = if_else(nchar(ID) == 4,substr(ID,1,3),substr(ID,1,4))) %>% 
+  left_join(plot_CO2., by = "Plot")
+
+# biomass2
+# jeez too many steps. get this one after Ch3_explore, it is messy but w/e
+## add leaf area columns to biomass2 in explore script ##
+biomass2. <- biomass2
+biomass2.[1,]
+biomass2. <- biomass2. %>% 
+  mutate(rootshoot = rootmass_g/(StemWet_expanded + LeafWet_expanded), totmass = rootmass_g + StemWet_expanded + LeafWet_expanded, lwc = (LeafWet_g-LeafDry_g)*100/LeafWet_g) %>% 
+  left_join(plot_CO2., by = "Plot") %>% 
+  left_join(plot_SWC., by = "Plot") 
+
+# exclude rootshoot for 6V2, an outlier: was herbivory list but predicted values failed to adjust appropriately
+biomass2.[which.max(biomass2.$rootshoot),"rootshoot"] <- NA
+
+# now remove lwc for seedlings from herbivory list, likely to have no leaves 
+biomass2.[which(biomass2.$Code %in% firstherb$Code),]$lwc <- NA 
+
+# rootimage
+rootimage. <- read.csv("/Users/paigekouba/Documents/UC_Davis/2021_Winter/Quals/Proposal/Chapter 1/TinyFACE/GitHub/QuailFACE/RawData/features_4.26.24_final.csv") %>% 
+  mutate(Plot = as.character(Plot))
+rootimage. <- left_join(lookup, rootimage., by = 'Plot')
+
+rootimage. <- rootimage. %>% 
+  mutate(Spp = substr(Code, nchar(Code)-2,nchar(Code)-2)) %>%
+  filter(Code != "4V3c") %>% # prevent duplicate codes; 4V3c was planted late and misnamed
+  filter(Code != "16V1a") %>% # thinned but grew back
+  mutate(Code = if_else(nchar(Code) == 4,substr(Code,1,3),substr(Code,1,4)), CO2Tmt = substring(Tmt,1,1), H2OTmt = substring(Tmt,2,2)) %>% 
+  left_join(biomass2.[,c("Code","rootmass_g")]) %>% 
+  mutate(SRL = Total.Root.Length.mm/rootmass_g) %>% 
+  left_join(plot_CO2., by = "Plot") %>% 
+  left_join(plot_SWC., by = "Plot") 
+rootimage.[1,]
+
+# SIF
+SIF_raw <- read.csv("/Users/paigekouba/Documents/UC_Davis/2021_Winter/Quals/Proposal/Chapter 1/TinyFACE/GitHub/QuailFACE/RawData/PVK_SIF.csv")
+SIF_raw <- SIF_raw %>% 
+  filter(!is.na(Internal.ID))
+SIF. <- SIF_raw %>% 
+  filter(Sample.ID != "4V3c") %>% 
+  mutate(Spp = substr(Sample.ID, nchar(Sample.ID)-2,nchar(Sample.ID)-2)) %>% 
+  mutate(Plot = if_else(nchar(Sample.ID) == 4, substr(Sample.ID,1,1), substr(Sample.ID,1,2))) %>% 
+  dplyr::select(Sample.ID, δ13CVPDB...., Spp, Plot) 
+colnames(SIF.) <- c("Code","d13C","Spp","Plot")
+SIF. <- left_join(SIF., lookup, by = "Plot") %>% 
+  mutate(Code=if_else(nchar(Code) == 4,substr(Code,1,3),substr(Code,1,4)), CO2Tmt = substring(Tmt,1,1), H2OTmt = substring(Tmt,2,2)) %>% 
+  left_join(plot_CO2., by = "Plot") %>% 
+  left_join(plot_SWC., by = "Plot") 
+SIF.[1,]
+
+### clean copy of manova and weighted models
+
+# original version for arithmetic plot means
+manova.df <- biomass2. %>% 
+  dplyr::select(Plot, Spp, Code, LeafWet_expanded, StemWet_expanded, rootmass_g, totmass, rootshoot, lwc, CO2Tmt, H2OTmt, CO2, meanSWC) %>% 
+  left_join(LiCOR_df.[,c("Code","Photo.y","Cond.y", "WUE.350")], by = "Code") %>% 
+  left_join(rootimage.[,c("Code","SRL", "Root.Length.Diameter.Range.1.mm","Number.of.Branch.Points")], by = "Code") %>% 
+  left_join(SIF.[,c("Code","d13C")]) %>% 
+  group_by(Plot, Spp) %>% 
+  summarise(across(where(is.numeric), ~ mean(.x, na.rm=TRUE))) %>% 
+  ungroup() %>% 
+  mutate(logCond.y = log(Cond.y), sqrt_WUE.350 = sqrt(WUE.350), sqrt_totmass = sqrt(totmass), logSRL = log(SRL), logFineRoot = log(Root.Length.Diameter.Range.1.mm), logBranch=log(Number.of.Branch.Points)) %>% 
+  left_join(lookup, by = "Plot") %>% 
+  mutate(H2OTmt = substr(Tmt,2,2), CO2Tmt = substr(Tmt,1,1)) 
+#write.csv(manova.df, "QuailFACE_plotmeans.csv")
+
+# I can write my own function
+# function on a list of numbers that calculates their 1/sigma^2; then get column sum and divide each by that sum so they add up to one. Last, use these as the weights in univariate models. Still have to figure out what to do about MANOVA; can use just one variable's weights (Photo.y) or some kind of combined? Do this on a smaller dataset to keep things simple: Photo.y, Cond.y, rootshoot, logSRL
+one_over_var <- function(x){
+  1/(sd(x, na.rm=TRUE)^2)
+}
+
+manova.df.small0 <- biomass2. %>% 
+  filter(Spp =="V") %>% 
+  dplyr::select(Plot, Spp, Code, rootshoot, CO2, meanSWC) %>% 
+  left_join(LiCOR_df.[,c("Code","Photo.y","Cond.y")], by = "Code") %>% 
+  left_join(rootimage.[,c("Code","SRL")], by = "Code") %>% 
+  mutate(logCond.y = log(Cond.y), logSRL = log(SRL)) %>%
+  group_by(Plot, Spp) %>% 
+  mutate(n = n()) %>% 
+  mutate_at(c("Photo.y", "rootshoot", "logCond.y", "logSRL"), list(oov=one_over_var)) %>%
+  summarise(across(where(is.numeric), ~ mean(.x, na.rm=TRUE))) %>% 
+  ungroup() %>% 
+  left_join(lookup, by = "Plot") %>% 
+  mutate(H2OTmt = substr(Tmt,2,2), CO2Tmt = substr(Tmt,1,1)) 
+# for plot 3, L has n = 1, but measurements for all data types
+# assign it a weight based on the variance of all other points from its treatment group (AD):
+
+biomass2. %>% 
+  filter(Spp =="L") %>% 
+  dplyr::select(Plot, Spp, Code, rootshoot, CO2, meanSWC) %>% 
+  left_join(LiCOR_df.[,c("Code","Photo.y","Cond.y")], by = "Code") %>% 
+  left_join(rootimage.[,c("Code","SRL")], by = "Code") %>% 
+  mutate(logCond.y = log(Cond.y), logSRL = log(SRL)) %>%
+  left_join(lookup, by = "Plot") %>% 
+  filter(Tmt == "AD") %>% # get 1/var
+  summarise_at(c("Photo.y", "rootshoot", "logCond.y", "logSRL"), ~ 1/sd(.x, na.rm = T)^2)
+# add this to 1/var columns in row for plot 3, then do next step to scale 1/var and get weights
+
+#manova.df.small0[manova.df.small0$Plot=="3",12:15] <- list(0.02501195,  30.50882,  1.673602, 4.632909)
+# only do this for L !!
+
+manova.df.small <- manova.df.small0 %>% 
+  mutate(Photo.y_w = Photo.y_oov/(sum(manova.df.small0$Photo.y_oov, na.rm = T)),
+         logCond.y_w = logCond.y_oov/(sum(manova.df.small0$logCond.y_oov, na.rm = T)),
+         rootshoot_w = rootshoot_oov/(sum(manova.df.small0$rootshoot_oov, na.rm = T) ),
+         logSRL_w = logSRL_oov/(sum(manova.df.small0$logSRL_oov, na.rm = T))) %>% 
+  mutate(all_w = Photo.y_w+logCond.y_w+rootshoot_w+logSRL_w) %>% 
+  mutate(all_w = all_w/sum(all_w, na.rm=T)) %>% 
+  mutate(quad_w = sqrt((Photo.y_w^2)+(logCond.y_w^2)+(rootshoot_w^2)+(logSRL_w^2)) ) %>% 
+  mutate(quad_w = quad_w/sum(quad_w, na.rm=T)) 
+
+small.cbind <- cbind(unlist(manova.df.small$Photo.y_w),unlist(manova.df.small$logCond.y_w),unlist(manova.df.small$rootshoot),unlist(manova.df.small$logSRL_w))
+
+# the weights come from inverse variance; check for outliers
+manova.df.small00 <- biomass2. %>% 
+  filter(Spp =="L") %>% 
+  dplyr::select(Plot, Spp, Code, rootshoot, CO2, meanSWC) %>% 
+  left_join(LiCOR_df.[,c("Code","Photo.y","Cond.y")], by = "Code") %>% 
+  left_join(rootimage.[,c("Code","SRL")], by = "Code") %>% 
+  mutate(logCond.y = log(Cond.y), logSRL = log(SRL)) %>% 
+  left_join(lookup, by = "Plot") %>% 
+  mutate(H2OTmt = substr(Tmt,2,2), CO2Tmt = substr(Tmt,1,1)) 
+ggplot(manova.df.small00) +
+  geom_point(aes(x=Plot, y=Photo.y, color=Tmt)) + 
+  scale_color_manual(values = c("pink", "lightblue", "red", "blue"))
+
+# first try the weights in an lm, with plot means, for V:
+summary(lm(Photo.y ~ CO2*H2OTmt , data = manova.df.small, weights = Photo.y_w)) # ** for CO2, ** for water, . for intx
+summary(lm(Photo.y ~ CO2*H2OTmt , data = manova.df.small)) # unweighted, NS
+summary(lm(Photo.y ~ CO2*H2OTmt , data = manova.df.small, weights = all_w)) # combined weight, NS
+summary(lm(Photo.y ~ CO2*H2OTmt , data = manova.df.small, weights = quad_w)) # quadrature NS
+
+summary(lm(logCond.y ~ CO2*H2OTmt , data = manova.df.small, weights = logCond.y_w)) # NS
+summary(lm(logCond.y ~ CO2*H2OTmt , data = manova.df.small)) # **, **, *
+summary(lm(logCond.y ~ CO2*H2OTmt , data = manova.df.small, weights = Photo.y_w)) # CO2***, H2O***, intx*
+summary(lm(logCond.y ~ CO2*H2OTmt , data = manova.df.small, weights = all_w)) # *, **, *
+summary(lm(logCond.y ~ CO2*H2OTmt , data = manova.df.small, weights = quad_w)) # *, **, *
+
+summary(lm(rootshoot ~ CO2*H2OTmt , data = manova.df.small, weights = rootshoot_w)) # CO2 .
+summary(lm(rootshoot ~ CO2*H2OTmt , data = manova.df.small, weights = Photo.y_w)) # CO2 **
+summary(lm(rootshoot ~ CO2*H2OTmt , data = manova.df.small, weights = all_w)) # CO2 .
+summary(lm(rootshoot ~ CO2*H2OTmt , data = manova.df.small, weights = quad_w)) # CO2 *
+
+summary(lm(logSRL ~ CO2*H2OTmt , data = manova.df.small, weights = logSRL_w)) # NS
+summary(lm(logSRL ~ CO2*H2OTmt , data = manova.df.small, weights = Photo.y_w)) # NS
+summary(lm(logSRL ~ CO2*H2OTmt , data = manova.df.small, weights = all_w)) # NS
+summary(lm(logSRL ~ CO2*H2OTmt , data = manova.df.small, weights = quad_w)) # NS
+
+# reasonable subset: Photo.y, logCond.y, sqrt_totmass, rootshoot
+summary(manova(small.cbind ~ CO2Tmt*H2OTmt, manova.df.small, weights = Photo.y_w))
+# with weights from just Photo.y_w, all p < .05
+summary(manova(small.cbind ~ CO2Tmt*H2OTmt, manova.df.small, weights = all_w)) 
+# with combined weights, * *** **
+summary(manova(small.cbind ~ CO2Tmt*H2OTmt, manova.df.small, weights = quad_w)) # **, ***, ***
+
+## now for fun, do ggpredict with weighted model, and with weighted model and outlier filter
+ggpredict(lm(Photo.y ~ CO2*H2OTmt , data = manova.df.small, weights = Photo.y_w), terms=c("CO2","H2OTmt")) %>% 
+  plot(add.data = TRUE, ci = TRUE)
+ggpredict(lm(Photo.y ~ CO2*H2OTmt , data = manova.df.small, weights = quad_w), terms=c("CO2","H2OTmt")) %>% 
+  plot(add.data = TRUE, ci = TRUE)
+
+
+# now for L: (HAVE TO RE RUN manova.df.small)
+summary(lm(Photo.y ~ CO2*H2OTmt , data = manova.df.small, weights = Photo.y_w)) # *** for CO2, ** for water, * for intx
+summary(lm(Photo.y ~ CO2*H2OTmt , data = manova.df.small)) # unweighted, NS
+
+summary(lm(logCond.y ~ CO2*H2OTmt , data = manova.df.small, weights = logCond.y_w)) # NS
+summary(lm(logCond.y ~ CO2*H2OTmt , data = manova.df.small)) # NS
+summary(lm(logCond.y ~ CO2*H2OTmt , data = manova.df.small, weights = Photo.y_w)) # CO2***, H2O*, intxNS
+
+summary(lm(rootshoot ~ CO2*H2OTmt , data = manova.df.small, weights = rootshoot_w)) # CO2 *
+summary(lm(rootshoot ~ CO2*H2OTmt , data = manova.df.small, weights = Photo.y_w)) # CO2 ***
+
+summary(lm(logSRL ~ CO2*H2OTmt , data = manova.df.small, weights = logSRL_w)) # CO2 .
+summary(lm(logSRL ~ CO2*H2OTmt , data = manova.df.small, weights = Photo.y_w)) # CO2***, H2O., intx**
+
+# reasonable subset: Photo.y, logCond.y, sqrt_totmass, rootshoot
+summary(manova(small.cbind ~ CO2Tmt*H2OTmt, manova.df.small, weights = Photo.y_w))
+# with weights from just Photo.y_w, all p < .05
+
+# comparison plots for different models
+grid.arrange(
+  +   ggpredict(lm(logCond.y ~ CO2*H2OTmt , data = trans_dfwV, weights = logCond.y_w), terms=c("CO2","H2OTmt")) %>% 
+    +     plot(rawdata = TRUE, ci = TRUE),
+  +   ggpredict(lm(logCond.y ~ CO2*H2OTmt , data = trans_dfwV, weights = all_w), terms=c("CO2","H2OTmt")) %>% 
+    +     plot(rawdata = TRUE, ci = TRUE), ggpredict(lm(logCond.y ~ CO2*H2OTmt , data = trans_dfwV), terms=c("CO2","H2OTmt")) %>% 
+    +       plot(rawdata = TRUE, ci = TRUE),
+  +   ggplot(trans_dfwV, aes(x=CO2, y=logCond.y, group = H2OTmt)) + geom_point(aes(group = H2OTmt, color = H2OTmt)), nrow=4 )
+
+> grid.arrange(
+  +   ggpredict(lm(Photo.y ~ CO2*H2OTmt , data = trans_dfwV, weights = Photo.y_w), terms=c("CO2","H2OTmt")) %>% 
+    +     plot(rawdata = TRUE, ci = TRUE),
+  +   ggpredict(lm(Photo.y ~ CO2*H2OTmt , data = trans_dfwV, weights = all_w), terms=c("CO2","H2OTmt")) %>% 
+    +     plot(rawdata = TRUE, ci = TRUE), ggpredict(lm(Photo.y ~ CO2*H2OTmt , data = trans_dfwV), terms=c("CO2","H2OTmt")) %>% 
+    +       plot(rawdata = TRUE, ci = TRUE),
+  +   ggplot(trans_dfwV, aes(x=CO2, y=logCond.y, group = H2OTmt)) + geom_point(aes(group = H2OTmt, color = H2OTmt)), nrow = 4 )
+
+## clean copy of weighting calculation before trying pooled variance for LiCOR measurements by tmt group
+### combine into one giant, all-inclusive, transformed dataset
+# one_over_var <- function(x){
+#   1/(sd(x, na.rm=TRUE)^2)
+# }
+one_over_se <- function(x){
+  1/(sd(x, na.rm=TRUE)/sqrt(length(x[!is.na(x)])))
+}
+
+trans_df <- biomass2. %>% 
+  dplyr::select(Plot, Spp, Code, totmass, rootshoot, lwc, CO2, meanSWC) %>% 
+  left_join(LiCOR_df.[,c("Code","Photo.y","Cond.y", "WUE.350")], by = "Code") %>% 
+  left_join(lai.[,c("Code","avg_area","perim_per_A","tot_area")], by = "Code") %>% 
+  left_join(rootimage.[,c("Code","SRL")], by = "Code") %>% 
+  left_join(SIF.[,c("Code","d13C")], by = "Code") %>% 
+  mutate(logCond.y = log(Cond.y), sqrtWUE = sqrt(WUE.350), sqrtTotmass = sqrt(totmass), logAvg_area = log(avg_area), logPerimArea = log(perim_per_A), sqrtTotArea = sqrt(tot_area), logSRL = log(SRL)) %>%
+  group_by(Plot, Spp) %>% 
+  dplyr::mutate(n = n()) %>% 
+  mutate_at(c("sqrtTotmass", "rootshoot", "lwc", "Photo.y", "logCond.y", "sqrtWUE", "logAvg_area", "logPerimArea", "sqrtTotArea", "logSRL", "d13C"), list(oov=one_over_se)) %>%
+  dplyr::summarise(across(where(is.numeric), ~ mean(.x, na.rm=TRUE))) %>% 
+  ungroup() %>% 
+  left_join(lookup, by = "Plot") %>% 
+  mutate(H2OTmt = substr(Tmt,2,2), CO2Tmt = substr(Tmt,1,1))
+# for plot 3, L has n = 1, but measurements for all data types. Same for plot 16, V
+# assign it a weight based on the variance of all other points from its treatment group (AD):
+
+plot3L_vars <- biomass2. %>% 
+  filter(Spp =="L") %>% 
+  dplyr::select(Plot, Spp, Code, totmass, rootshoot, lwc, CO2, meanSWC) %>% 
+  left_join(LiCOR_df.[,c("Code","Photo.y","Cond.y", "WUE.350")], by = "Code") %>% 
+  left_join(lai.[,c("Code","avg_area","perim_per_A","tot_area")], by = "Code") %>% 
+  left_join(rootimage.[,c("Code","SRL")], by = "Code") %>% 
+  left_join(SIF.[,c("Code","d13C")], by = "Code") %>% 
+  mutate(logCond.y = log(Cond.y), sqrtWUE = sqrt(WUE.350), sqrtTotmass = sqrt(totmass), logAvg_area = log(avg_area), logPerimArea = log(perim_per_A), sqrtTotArea = sqrt(tot_area), logSRL = log(SRL)) %>%
+  group_by(Plot, Spp) %>% 
+  mutate(n = n()) %>% 
+  ungroup() %>% 
+  left_join(lookup, by = "Plot") %>% 
+  filter(Tmt == "AD") %>% # get 1/var
+  summarise_at(c("sqrtTotmass", "rootshoot", "lwc", "Photo.y", "logCond.y", "sqrtWUE", "logAvg_area", "logPerimArea", "sqrtTotArea", "logSRL", "d13C"), list(one_over_se)) %>% 
+  unlist()
+# add this to 1/var columns in row for plot 3, then do next step to scale 1/var and get weights
+# trans_df[trans_df$Plot=="3" & trans_df$Spp=="L",24:34] <- list(6.663002e-01, 2.655873e+01, 3.921653e-02, 3.963671e-02, 2.706536e+00, 9.376510e-02, 1.648682e+01, 3.025422e+01, 5.375108e-04, 4.618791e+00, 9.799790e+00)
+trans_df[trans_df$Plot=="3" & trans_df$Spp=="L",24:34] <- list(3.65400837, 20.66696664,  0.97963889,  0.54785341,  4.48143137,  1.00380582,  8.66588962, 12.88699028,  0.09953649, 8.33628397,  3.89290435)
+
+# same for plot 16, V
+plot16V_vars <- biomass2. %>% 
+  filter(Spp =="V") %>% 
+  dplyr::select(Plot, Spp, Code, totmass, rootshoot, lwc, CO2, meanSWC) %>% 
+  left_join(LiCOR_df.[,c("Code","Photo.y","Cond.y", "WUE.350")], by = "Code") %>% 
+  left_join(lai.[,c("Code","avg_area","perim_per_A","tot_area")], by = "Code") %>% 
+  left_join(rootimage.[,c("Code","SRL")], by = "Code") %>% 
+  left_join(SIF.[,c("Code","d13C")], by = "Code") %>% 
+  mutate(logCond.y = log(Cond.y), sqrtWUE = sqrt(WUE.350), sqrtTotmass = sqrt(totmass), logAvg_area = log(avg_area), logPerimArea = log(perim_per_A), sqrtTotArea = sqrt(tot_area), logSRL = log(SRL)) %>%
+  group_by(Plot, Spp) %>% 
+  mutate(n = n()) %>% 
+  ungroup() %>% 
+  left_join(lookup, by = "Plot") %>% 
+  filter(Tmt == "AD") %>% # get 1/var
+  summarise_at(c("sqrtTotmass", "rootshoot", "lwc", "Photo.y", "logCond.y", "sqrtWUE", "logAvg_area", "logPerimArea", "sqrtTotArea", "logSRL", "d13C"), list(one_over_se)) %>% 
+  unlist()
+
+# trans_df[trans_df$Plot=="16" & trans_df$Spp=="V",24:34] <- list(9.917998e+00, 8.742674e-01, 7.279417e-03, 7.063863e-02, 1.519038e+02, 1.883699e-01, 1.258911e+00, 5.279206e+00, 6.309727e-03, 1.165876e+02, 1.134142e+01)
+trans_df[trans_df$Plot=="16" & trans_df$Spp=="V",24:34] <- list(9.5139324, 2.8393556, 0.2239555, 0.3804126, 7.7273218, 0.7254999, 2.3770735, 5.6281224, 0.1268094, 9.2005139, 4.2598168)
+
+# need to calculate the weights AFTER filtering for species
+# now add the weights; note that the combined weights will include variables not in the final model
+## !!! trying 1/se to see if it fixes the weighting issue; "oov" is now "one over SE", will rename if it works
+## addendum; 1/se is better but I also want to pool Tmt groups for LiCOR variables
+trans_dfwV <- trans_df %>% 
+  filter(Spp=="V") %>% 
+  mutate(sqrtTotmass_w = sqrtTotmass_oov/(sum(trans_df$sqrtTotmass_oov, na.rm = T)),
+         rootshoot_w = rootshoot_oov/(sum(trans_df$rootshoot_oov, na.rm = T)),
+         lwc_w = lwc_oov/(sum(trans_df$lwc_oov, na.rm = T)),
+         Photo.y_w = Photo.y_oov/(sum(trans_df$Photo.y_oov, na.rm = T)),
+         logCond.y_w = logCond.y_oov/(sum(trans_df$logCond.y_oov, na.rm = T)),
+         sqrtWUE_w = sqrtWUE_oov/(sum(trans_df$sqrtWUE_oov, na.rm =T)),
+         logAvg_area_w = logAvg_area_oov/(sum(trans_df$logAvg_area_oov, na.rm = T)),
+         logPerimArea_w = logPerimArea_oov/(sum(trans_df$logPerimArea_oov, na.rm = T)),
+         sqrtTotArea_w = sqrtTotArea_oov/(sum(trans_df$sqrtTotArea_oov, na.rm = T)),
+         logSRL_w = logSRL_oov/(sum(trans_df$logSRL_oov, na.rm = T)),
+         d13C_w = d13C_oov/sum(trans_df$d13C_oov, na.rm = T)) %>% 
+  mutate(all_w = sqrtTotmass_w+rootshoot_w+lwc_w+Photo.y_w+logCond.y_w+sqrtWUE_w+logAvg_area_w+logPerimArea_w+sqrtTotArea_w+logSRL_w+d13C_w) %>% 
+  mutate(all_w = all_w/sum(all_w, na.rm=T)) %>% 
+  mutate(quad_w = (sqrtTotmass_w^2)+(rootshoot_w^2)+(lwc_w^2)+(Photo.y_w^2)+(logCond.y_w^2)+(sqrtWUE_w^2)+(logAvg_area_w^2)+(logPerimArea_w^2)+(sqrtTotArea_w^2)+(logSRL_w^2)+(d13C_w^2)) %>% 
+  mutate(quad_w = quad_w/sum(quad_w, na.rm=T)) 
+
+trans_dfwL <- trans_df %>% 
+  filter(Spp=="L") %>% 
+  mutate(sqrtTotmass_w = sqrtTotmass_oov/(sum(trans_df$sqrtTotmass_oov, na.rm = T)),
+         rootshoot_w = rootshoot_oov/(sum(trans_df$rootshoot_oov, na.rm = T)),
+         lwc_w = lwc_oov/(sum(trans_df$lwc_oov, na.rm = T)),
+         Photo.y_w = Photo.y_oov/(sum(trans_df$Photo.y_oov, na.rm = T)),
+         logCond.y_w = logCond.y_oov/(sum(trans_df$logCond.y_oov, na.rm = T)),
+         sqrtWUE_w = sqrtWUE_oov/(sum(trans_df$sqrtWUE_oov, na.rm =T)),
+         logAvg_area_w = logAvg_area_oov/(sum(trans_df$logAvg_area_oov, na.rm = T)),
+         logPerimArea_w = logPerimArea_oov/(sum(trans_df$logPerimArea_oov, na.rm = T)),
+         sqrtTotArea_w = sqrtTotArea_oov/(sum(trans_df$sqrtTotArea_oov, na.rm = T)),
+         logSRL_w = logSRL_oov/(sum(trans_df$logSRL_oov, na.rm = T)),
+         d13C_w = d13C_oov/sum(trans_df$d13C_oov, na.rm = T)) %>% 
+  mutate(all_w = sqrtTotmass_w+rootshoot_w+lwc_w+Photo.y_w+logCond.y_w+sqrtWUE_w+logAvg_area_w+logPerimArea_w+sqrtTotArea_w+logSRL_w+d13C_w) %>% 
+  mutate(all_w = all_w/sum(all_w, na.rm=T)) %>% 
+  mutate(quad_w = (sqrtTotmass_w^2)+(rootshoot_w^2)+(lwc_w^2)+(Photo.y_w^2)+(logCond.y_w^2)+(sqrtWUE_w^2)+(logAvg_area_w^2)+(logPerimArea_w^2)+(sqrtTotArea_w^2)+(logSRL_w^2)+(d13C_w^2)) %>% 
+  mutate(quad_w = quad_w/sum(quad_w, na.rm=T)) 
+
+# check correlation between variables
+cor(trans_dfwV[, c("sqrtTotmass", "rootshoot", "lwc", "Photo.y", "logCond.y", "sqrtWUE", "logAvg_area", "logPerimArea", "sqrtTotArea", "logSRL", "d13C")], use="pairwise.complete.obs") %>% 
+  ggcorrplot()
+
+# I heard a MANOVA has more power, so long as your data is normally distributed, which I've already ensured
+# now doing manova: transformed data, plot means
+# 5/19 add normalized 1/variance term for weighted plot means
+## filter out SRL > 1500: what is that data point doing?
+## add n = to plot means, this may account for exceptionally low variance in cases where n = 1
+## go undo seedlings you took off the herbivory list :| (see if there's still enough data left to work with)
+
+# add the other seven variables in order here
+trans_dfwV.cbind <- cbind(unlist(trans_dfwV$Photo.y_w),unlist(trans_dfwV$logCond.y_w),unlist(trans_dfwV$rootshoot),unlist(trans_dfwV$logSRL_w))
+
+# the weights come from inverse variance; check for outliers # do this tomorrow
+trans_df_full <- biomass2. %>% 
+  #  filter(Spp =="V") %>% 
+  dplyr::select(Plot, Spp, Code, totmass, rootshoot, lwc, CO2, meanSWC) %>% 
+  left_join(LiCOR_df.[,c("Code","Photo.y","Cond.y", "WUE.350")], by = "Code") %>% 
+  left_join(lai.[,c("Code","avg_area","perim_per_A","tot_area")], by = "Code") %>% 
+  left_join(rootimage.[,c("Code","SRL")], by = "Code") %>% 
+  left_join(SIF.[,c("Code","d13C")], by = "Code") %>% 
+  mutate(logCond.y = log(Cond.y), sqrtWUE = sqrt(WUE.350), sqrtTotmass = sqrt(totmass), logAvg_area = log(avg_area), logPerimArea = log(perim_per_A), sqrtTotArea = sqrt(tot_area), logSRL = log(SRL)) %>%
+  group_by(Plot, Spp) %>% 
+  mutate(n = n()) %>% 
+  left_join(lookup, by = "Plot") %>% 
+  mutate(H2OTmt = substr(Tmt,2,2), CO2Tmt = substr(Tmt,1,1)) 
+trans_df_full %>% filter(Spp=="V") %>% 
+  ggplot() +
+  geom_point(aes(x=Plot, y=logCond.y, color=Tmt)) + 
+  scale_color_manual(values = c("pink", "lightblue", "red", "blue")) +
+  labs(title = "Individual Responses per Plot: Stomatal Conductance")
+
+# first try the weights in an lm, with plot means, for V:
+# REDO the *s
+summary(lmer(Photo.y ~ CO2*H2OTmt + (1|Plot), data = trans_dfwV, weights = Photo.y_w)) # ** for CO2, ** for water, . for intx
+summary(lmer(Photo.y ~ CO2*H2OTmt + (1|Plot), data = trans_dfwV)) # unweighted, NS
+summary(lmer(Photo.y ~ CO2*H2OTmt + (1|Plot), data = trans_dfwV, weights = all_w)) # combined weight, NS
+summary(lmer(Photo.y ~ CO2*H2OTmt + (1|Plot), data = trans_dfwV, weights = quad_w)) # quadrature NS
+
+summary(lm(logCond.y ~ CO2*H2OTmt , data = trans_dfwV, weights = logCond.y_w)) # NS
+summary(lm(logCond.y ~ CO2*H2OTmt , data = trans_dfwV)) # **, **, *
+summary(lm(logCond.y ~ CO2*H2OTmt , data = trans_dfwV, weights = Photo.y_w)) # CO2***, H2O***, intx*
+summary(lm(logCond.y ~ CO2*H2OTmt , data = trans_dfwV, weights = all_w)) # *, **, *
+summary(lm(logCond.y ~ CO2*H2OTmt , data = trans_dfwV, weights = quad_w)) # *, **, *
+
+summary(lm(rootshoot ~ CO2*H2OTmt , data = trans_dfwV, weights = rootshoot_w)) # CO2 .
+summary(lm(rootshoot ~ CO2*H2OTmt , data = trans_dfwV, weights = Photo.y_w)) # CO2 **
+summary(lm(rootshoot ~ CO2*H2OTmt , data = trans_dfwV, weights = all_w)) # CO2 .
+summary(lm(rootshoot ~ CO2*H2OTmt , data = trans_dfwV, weights = quad_w)) # CO2 *
+
+summary(lm(logSRL ~ CO2*H2OTmt , data = trans_dfwV, weights = logSRL_w)) # NS
+summary(lm(logSRL ~ CO2*H2OTmt , data = trans_dfwV, weights = Photo.y_w)) # NS
+summary(lm(logSRL ~ CO2*H2OTmt , data = trans_dfwV, weights = all_w)) # NS
+summary(lm(logSRL ~ CO2*H2OTmt , data = trans_dfwV, weights = quad_w)) # NS
+
+# reasonable subset: Photo.y, logCond.y, sqrt_totmass, rootshoot
+summary(manova(trans_dfwV.cbind ~ CO2Tmt*H2OTmt, trans_dfwV, weights = Photo.y_w))
+# with weights from just Photo.y_w, all p < .05
+summary(manova(trans_dfwV.cbind ~ CO2Tmt*H2OTmt, trans_dfwV, weights = all_w)) 
+# with combined weights, * *** **
+summary(manova(trans_dfwV.cbind ~ CO2Tmt*H2OTmt, trans_dfwV, weights = quad_w)) # **, ***, ***
+
+## now for fun, do ggpredict with weighted model, and with weighted model and outlier filter
+ggpredict(lm(Photo.y ~ CO2*H2OTmt, data = trans_dfwV, weights = Photo.y_w), terms=c("CO2","H2OTmt")) %>% 
+  plot(add.data = TRUE, ci = TRUE)
+
+grid.arrange(
+  ggpredict(lm(Photo.y ~ CO2*H2OTmt , data = trans_dfwV, weights = Photo.y_w), terms=c("CO2","H2OTmt")) %>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("blue","red")) + labs(title = "A(net) weights"),
+  ggpredict(lm(Photo.y ~ CO2*H2OTmt , data = trans_dfwV), terms=c("CO2","H2OTmt")) %>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("blue","red")) + labs(title = "Unweighted A(net)"),
+  ggplot(trans_dfwV, aes(x=CO2, y=Photo.y, group = H2OTmt)) + geom_point(aes(group = H2OTmt, color = H2OTmt, size = Photo.y_w)) + scale_color_manual(values = c("red", "blue")) + labs(title = "A(net) Plot Means Sized by Inverse-SE Weight"), nrow=3 )
+
+grid.arrange(
+  ggpredict(lm(logCond.y ~ CO2*H2OTmt , data=trans_dfwV, weights=logCond.y_w), terms=c("CO2","H2OTmt")) %>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("blue","red")) + labs(title = "g(s) weights"),
+  ggpredict(lm(logCond.y ~ CO2*H2OTmt , data = trans_dfwV), terms=c("CO2","H2OTmt")) %>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("blue","red"))+ labs(title = "Unweighted g(s)"),
+  ggplot(trans_dfwV, aes(x=CO2, y=logCond.y, group = H2OTmt)) + geom_point(aes(group = H2OTmt, color = H2OTmt, size=logCond.y_w)) + scale_color_manual(values = c("red", "blue")) + labs(title = "g(s) Plot Means Sized by Inverse-SE Weight"), nrow=3 )
+
+grid.arrange(
+  ggpredict(lm(sqrtTotmass~CO2*H2OTmt , data=trans_dfwV, weights=sqrtTotmass_w), terms=c("CO2","H2OTmt"))%>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("blue","red")),
+  ggpredict(lm(sqrtTotmass ~ CO2*H2OTmt , data = trans_dfwV), terms=c("CO2","H2OTmt")) %>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("blue","red")),
+  ggplot(trans_dfwV, aes(x=CO2, y=sqrtTotmass, group = H2OTmt)) + geom_point(aes(group = H2OTmt, color = H2OTmt, size=sqrtTotmass_w)) + scale_color_manual(values = c("red", "blue")) , nrow=3 )
+
+
+
+one_plot <- function(data1, thingy){
+  #thingy <- eval(as.symbol(thingy))
+  ggpredict(lm(eval(as.symbol(thingy)) ~ CO2*H2OTmt , data = data1), terms=c("CO2","H2OTmt")) %>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("blue","red")) + labs(title = paste0(thingy, " no weights"))
+}
+# one_plot <- function(data1, thingy){
+#   #thingy <- eval(as.symbol(thingy))
+#   plot(ggpredict(lm(eval(as.name(thingy)) ~ CO2*H2OTmt , data = data1), terms=c("CO2","H2OTmt")), rawdata = TRUE, ci = TRUE, colors=c("blue","red")) + labs(title = paste0(thingy, " no weights"))
+# }
+one_plot(trans_dfwV, "logCond.y")
+
+# now for L: (HAVE TO RE RUN manova.df.small)
+summary(lm(Photo.y ~ CO2*H2OTmt , data = manova.df.small, weights = Photo.y_w)) # *** for CO2, ** for water, * for intx
+summary(lm(Photo.y ~ CO2*H2OTmt , data = manova.df.small)) # unweighted, NS
+
+summary(lm(logCond.y ~ CO2*H2OTmt , data = manova.df.small, weights = logCond.y_w)) # NS
+summary(lm(logCond.y ~ CO2*H2OTmt , data = manova.df.small)) # NS
+summary(lm(logCond.y ~ CO2*H2OTmt , data = manova.df.small, weights = Photo.y_w)) # CO2***, H2O*, intxNS
+
+summary(lm(rootshoot ~ CO2*H2OTmt , data = manova.df.small, weights = rootshoot_w)) # CO2 *
+summary(lm(rootshoot ~ CO2*H2OTmt , data = manova.df.small, weights = Photo.y_w)) # CO2 ***
+
+summary(lm(logSRL ~ CO2*H2OTmt , data = manova.df.small, weights = logSRL_w)) # CO2 .
+summary(lm(logSRL ~ CO2*H2OTmt , data = manova.df.small, weights = Photo.y_w)) # CO2***, H2O., intx**
+
+# first try the weights in an lm, with plot means, for V:
+# REDO the *s
+summary(lmer(Photo.y ~ CO2*H2OTmt + (1|Plot), data = trans_dfwV, weights = Photo.y_w)) # ** for CO2, ** for water, . for intx
+summary(lmer(Photo.y ~ CO2*H2OTmt + (1|Plot), data = trans_dfwV)) # unweighted, NS
+summary(lmer(Photo.y ~ CO2*H2OTmt + (1|Plot), data = trans_dfwV, weights = all_w)) # combined weight, NS
+summary(lmer(Photo.y ~ CO2*H2OTmt + (1|Plot), data = trans_dfwV, weights = quad_w)) # quadrature NS
+
+summary(lm(logCond.y ~ CO2*H2OTmt , data = trans_dfwV, weights = logCond.y_w)) # NS
+summary(lm(logCond.y ~ CO2*H2OTmt , data = trans_dfwV)) # **, **, *
+summary(lm(logCond.y ~ CO2*H2OTmt , data = trans_dfwV, weights = Photo.y_w)) # CO2***, H2O***, intx*
+summary(lm(logCond.y ~ CO2*H2OTmt , data = trans_dfwV, weights = all_w)) # *, **, *
+summary(lm(logCond.y ~ CO2*H2OTmt , data = trans_dfwV, weights = quad_w)) # *, **, *
+
+summary(lm(rootshoot ~ CO2*H2OTmt , data = trans_dfwV, weights = rootshoot_w)) # CO2 .
+summary(lm(rootshoot ~ CO2*H2OTmt , data = trans_dfwV, weights = Photo.y_w)) # CO2 **
+summary(lm(rootshoot ~ CO2*H2OTmt , data = trans_dfwV, weights = all_w)) # CO2 .
+summary(lm(rootshoot ~ CO2*H2OTmt , data = trans_dfwV, weights = quad_w)) # CO2 *
+
+summary(lm(logSRL ~ CO2*H2OTmt , data = trans_dfwV, weights = logSRL_w)) # NS
+summary(lm(logSRL ~ CO2*H2OTmt , data = trans_dfwV, weights = Photo.y_w)) # NS
+summary(lm(logSRL ~ CO2*H2OTmt , data = trans_dfwV, weights = all_w)) # NS
+summary(lm(logSRL ~ CO2*H2OTmt , data = trans_dfwV, weights = quad_w)) # NS
+
+# reasonable subset: Photo.y, logCond.y, sqrt_totmass, rootshoot
+summary(manova(trans_dfwV.cbind ~ CO2Tmt*H2OTmt, trans_dfwV, weights = Photo.y_w))
+# with weights from just Photo.y_w, all p < .05
+summary(manova(trans_dfwV.cbind ~ CO2Tmt*H2OTmt, trans_dfwV, weights = all_w)) 
+# with combined weights, * *** **
+summary(manova(trans_dfwV.cbind ~ CO2Tmt*H2OTmt, trans_dfwV, weights = quad_w)) # **, ***, ***
+
+## now for fun, do ggpredict with weighted model, and with weighted model and outlier filter
+ggpredict(lm(Photo.y ~ CO2*H2OTmt, data = trans_dfwV, weights = Photo.y_w), terms=c("CO2","H2OTmt")) %>% 
+  plot(add.data = TRUE, ci = TRUE)
+
+## here I am trying one (last?) attempt at significance, by using the continuous variables for both CO2 and water, and/or by using continuous water and categorical CO2
+library(scales)
+## Spp == V, both continuous
+grid.arrange( # total mass
+  ggpredict(lm(sqrtTotmass~rescale(CO2)*rescale(meanSWC) , data=trans_dfwV, weights=sqrtTotmass_w), terms=c("CO2","meanSWC [4,42]"))%>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")),
+  ggpredict(lm(sqrtTotmass ~ rescale(CO2)*rescale(meanSWC) , data = trans_dfwV), terms=c("CO2","meanSWC [4,42]")) %>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")),
+  ggplot(trans_dfwV, aes(x=rescale(CO2), y=sqrtTotmass, group = rescale(meanSWC))) + geom_point(aes(group = rescale(meanSWC), color = rescale(meanSWC), size=sqrtTotmass_w)) , nrow=3 )
+summary(lm(sqrtTotmass~rescale(CO2)*rescale(meanSWC) , data=trans_dfwV, weights=sqrtTotmass_w)) # SWC . (.058)
+
+grid.arrange( # root:shoot
+  ggpredict(lm(rootshoot~rescale(CO2)*rescale(meanSWC) , data=trans_dfwV, weights=rootshoot_w), terms=c("CO2","meanSWC [4,42]"))%>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")),
+  ggpredict(lm(rootshoot ~ rescale(CO2)*rescale(meanSWC) , data = trans_dfwV), terms=c("CO2","meanSWC [4,42]")) %>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")),
+  ggplot(trans_dfwV, aes(x=rescale(CO2), y=rootshoot, group = rescale(meanSWC))) + geom_point(aes(group = rescale(meanSWC), color = rescale(meanSWC), size=rootshoot_w)) , nrow=3 )
+summary(lm(rootshoot~rescale(CO2)*rescale(meanSWC) , data=trans_dfwV, weights=rootshoot_w)) # NS
+
+grid.arrange( # lwc
+  ggpredict(lm(lwc~rescale(CO2)*rescale(meanSWC) , data=trans_dfwV, weights=lwc_w), terms=c("CO2","meanSWC [4,42]"))%>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")),
+  ggpredict(lm(lwc ~ rescale(CO2)*rescale(meanSWC) , data = trans_dfwV), terms=c("CO2","meanSWC [4,42]")) %>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")),
+  ggplot(trans_dfwV, aes(x=rescale(CO2), y=lwc, group = rescale(meanSWC))) + geom_point(aes(group = rescale(meanSWC), color = rescale(meanSWC), size=lwc_w)) , nrow=3 )
+summary(lm(lwc~rescale(CO2)*rescale(meanSWC) , data=trans_dfwV, weights=lwc_w)) # SWC . (.079)
+
+grid.arrange( # logAvg_area
+  ggpredict(lm(logAvg_area~rescale(CO2)*rescale(meanSWC) , data=trans_dfwV, weights=logAvg_area_w), terms=c("CO2","meanSWC [4,42]"))%>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")),
+  ggpredict(lm(logAvg_area ~ rescale(CO2)*rescale(meanSWC) , data = trans_dfwV), terms=c("CO2","meanSWC [4,42]")) %>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")),
+  ggplot(trans_dfwV, aes(x=rescale(CO2), y=logAvg_area, group = rescale(meanSWC))) + geom_point(aes(group = rescale(meanSWC), color = rescale(meanSWC), size=logAvg_area_w)) + geom_text(data = trans_dfwV, aes(x=rescale(CO2), y=logAvg_area+.2, label=n)), nrow=3 )
+summary(lm(logAvg_area~rescale(CO2)*rescale(meanSWC) , data=trans_dfwV, weights=logAvg_area_w))
+# log-transformed average leaf area: CO2*** (.0058), SWC* (.0128), intx* (.019)
+
+grid.arrange( # logPerimArea
+  ggpredict(lm(logPerimArea~rescale(CO2)*rescale(meanSWC) , data=trans_dfwV, weights=logPerimArea_w), terms=c("CO2","meanSWC [4,42]"))%>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")),
+  ggpredict(lm(logPerimArea ~ rescale(CO2)*rescale(meanSWC) , data = trans_dfwV), terms=c("CO2","meanSWC [4,42]")) %>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")),
+  ggplot(trans_dfwV, aes(x=rescale(CO2), y=logPerimArea, group = rescale(meanSWC))) + geom_point(aes(group = rescale(meanSWC), color = rescale(meanSWC), size=logPerimArea_w)) , nrow=3 )
+summary(lm(logPerimArea~rescale(CO2)*rescale(meanSWC) , data=trans_dfwV, weights=logPerimArea_w))
+# log-transformed perimeter-per-area: CO2 p < 0.0555
+
+grid.arrange( # sqrtTotArea
+  ggpredict(lm(sqrtTotArea~rescale(CO2)*rescale(meanSWC) , data=trans_dfwV, weights=sqrtTotArea_w), terms=c("CO2","meanSWC [4,42]"))%>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")),
+  ggpredict(lm(sqrtTotArea ~ rescale(CO2)*rescale(meanSWC) , data = trans_dfwV), terms=c("CO2","meanSWC [4,42]")) %>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")),
+  ggplot(trans_dfwV, aes(x=rescale(CO2), y=sqrtTotArea, group = rescale(meanSWC))) + geom_point(aes(group = rescale(meanSWC), color = rescale(meanSWC), size=sqrtTotArea_w)) , nrow=3 )
+summary(lm(sqrtTotArea~rescale(CO2)*rescale(meanSWC) , data=trans_dfwV, weights=sqrtTotArea_w)) # NS
+
+grid.arrange( # logSRL
+  ggpredict(lm(logSRL~rescale(CO2)*rescale(meanSWC) , data=trans_dfwV, weights=logSRL_w), terms=c("CO2","meanSWC [4,42]"))%>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")),
+  ggpredict(lm(logSRL ~ rescale(CO2)*rescale(meanSWC) , data = trans_dfwV), terms=c("CO2","meanSWC [4,42]")) %>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")),
+  ggplot(trans_dfwV, aes(x=rescale(CO2), y=logSRL, group = rescale(meanSWC))) + geom_point(aes(group = rescale(meanSWC), color = rescale(meanSWC), size=logSRL_w)) , nrow=3 )
+summary(lm(logSRL~rescale(CO2)*rescale(meanSWC) , data=trans_dfwV, weights=logSRL_w)) # NS
+
+grid.arrange( # d13C
+  ggpredict(lm(d13C~rescale(CO2)*rescale(meanSWC) , data=trans_dfwV, weights=d13C_w), terms=c("CO2","meanSWC [4,42]"))%>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")),
+  ggpredict(lm(d13C ~ rescale(CO2)*rescale(meanSWC) , data = trans_dfwV), terms=c("CO2","meanSWC [4,42]")) %>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")),
+  ggplot(trans_dfwV, aes(x=rescale(CO2), y=d13C, group = rescale(meanSWC))) + geom_point(aes(group = rescale(meanSWC), color = rescale(meanSWC), size=d13C_w)) , nrow=3 )
+summary(lm(d13C~rescale(CO2)*rescale(meanSWC) , data=trans_dfwV, weights=d13C_w))
+# d13C: CO2 * (.03), SWC . (.068)
+
+grid.arrange( # Photo.y
+  ggpredict(lm(Photo.y~rescale(CO2)*rescale(meanSWC) , data=trans_dfwV, weights=Photo.y_w), terms=c("CO2","meanSWC [4,42]"))%>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")),
+  ggpredict(lm(Photo.y ~ rescale(CO2)*rescale(meanSWC) , data = trans_dfwV), terms=c("CO2","meanSWC [4,42]")) %>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")),
+  ggplot(trans_dfwV, aes(x=rescale(CO2), y=Photo.y, group = rescale(meanSWC))) + geom_point(aes(group = rescale(meanSWC), color = rescale(meanSWC), size=Photo.y_w)) , nrow=3 )
+summary(lm(Photo.y~rescale(CO2)*rescale(meanSWC) , data=trans_dfwV, weights=Photo.y_w))
+# Photo.y: CO2 . (.068), H2O ** (.0023)
+
+grid.arrange( # Cond.y
+  ggpredict(lm(logCond.y~rescale(CO2)*rescale(meanSWC) , data=trans_dfwV, weights=logCond.y_w), terms=c("CO2","meanSWC [4,42]"))%>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")),
+  ggpredict(lm(logCond.y ~ rescale(CO2)*rescale(meanSWC) , data = trans_dfwV), terms=c("CO2","meanSWC [4,42]")) %>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")),
+  ggplot(trans_dfwV, aes(x=rescale(CO2), y=logCond.y, group = rescale(meanSWC))) + geom_point(aes(group = rescale(meanSWC), color = rescale(meanSWC), size=logCond.y_w)) , nrow=3 )
+summary(lm(logCond.y~rescale(CO2)*rescale(meanSWC) , data=trans_dfwV, weights=logCond.y_w))
+# log-transformed stomatal conductance: CO2 . (.0566), H2O *** (.00015), intx . (.059)
+
+grid.arrange( # sqrtWUE
+  ggpredict(lm(sqrtWUE~rescale(CO2)*rescale(meanSWC) , data=trans_dfwV, weights=sqrtWUE_w), terms=c("CO2","meanSWC [4,42]"))%>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")),
+  ggpredict(lm(sqrtWUE ~ rescale(CO2)*rescale(meanSWC) , data = trans_dfwV), terms=c("CO2","meanSWC [4,42]")) %>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")),
+  ggplot(trans_dfwV, aes(x=rescale(CO2), y=sqrtWUE, group = rescale(meanSWC))) + geom_point(aes(group = rescale(meanSWC), color = rescale(meanSWC), size=sqrtWUE_w)) , nrow=3 )
+summary(lm(sqrtWUE~rescale(CO2)*rescale(meanSWC) , data=trans_dfwV, weights=sqrtWUE_w)) # NS
+
+grid.arrange( # SLA
+  ggpredict(lm(SLA~rescale(CO2)*rescale(meanSWC) , data=trans_dfwV, weights=SLA_w), terms=c("CO2","meanSWC [4,42]"))%>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")),
+  ggpredict(lm(SLA ~ rescale(CO2)*rescale(meanSWC) , data = trans_dfwV), terms=c("CO2","meanSWC [4,42]")) %>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")),
+  ggplot(trans_dfwV, aes(x=rescale(CO2), y=SLA, group = rescale(meanSWC))) + geom_point(aes(group = rescale(meanSWC), color = rescale(meanSWC), size=SLA_w)) , nrow=3 )
+summary(lm(SLA~rescale(CO2)*rescale(meanSWC) , data=trans_dfwV, weights=SLA_w))
+
+## Spp == L
+
+grid.arrange( # total mass
+    ggpredict(lm(sqrtTotmass~rescale(CO2)*rescale(meanSWC) , data=trans_dfwL, weights=sqrtTotmass_w), terms=c("CO2","meanSWC [4,42]"))%>% 
+      plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")),
+    ggpredict(lm(sqrtTotmass ~ rescale(CO2)*rescale(meanSWC) , data = trans_dfwL), terms=c("CO2","meanSWC [4,42]")) %>% 
+      plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")),
+    ggplot(trans_dfwL, aes(x=rescale(CO2), y=sqrtTotmass, group = rescale(meanSWC))) + geom_point(aes(group = rescale(meanSWC), color = rescale(meanSWC), size=sqrtTotmass_w)) , nrow=3 )
+  summary(lm(sqrtTotmass~rescale(CO2)*rescale(meanSWC) , data=trans_dfwL, weights=sqrtTotmass_w))  
+# SWC * (.039)
+
+grid.arrange( # root:shoot
+  ggpredict(lm(rootshoot~rescale(CO2)*rescale(meanSWC) , data=trans_dfwL, weights=rootshoot_w), terms=c("CO2","meanSWC [4,42]"))%>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")),
+  ggpredict(lm(rootshoot ~ rescale(CO2)*rescale(meanSWC) , data = trans_dfwL), terms=c("CO2","meanSWC [4,42]")) %>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")),
+  ggplot(trans_dfwL, aes(x=rescale(CO2), y=rootshoot, group = rescale(meanSWC))) + geom_point(aes(group = rescale(meanSWC), color = rescale(meanSWC), size=rootshoot_w)) , nrow=3 )
+summary(lm(rootshoot~rescale(CO2)*rescale(meanSWC) , data=trans_dfwL, weights=rootshoot_w))  
+# SWC . (.068)
+
+grid.arrange( # lwc
+  ggpredict(lm(lwc~rescale(CO2)*rescale(meanSWC) , data=trans_dfwL, weights=lwc_w), terms=c("CO2","meanSWC [4,42]"))%>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")),
+  ggpredict(lm(lwc ~ rescale(CO2)*rescale(meanSWC) , data = trans_dfwL), terms=c("CO2","meanSWC [4,42]")) %>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")),
+  ggplot(trans_dfwL, aes(x=rescale(CO2), y=lwc, group = rescale(meanSWC))) + geom_point(aes(group = rescale(meanSWC), color = rescale(meanSWC), size=lwc_w)) , nrow=3 )
+summary(lm(lwc~rescale(CO2)*rescale(meanSWC) , data=trans_dfwL, weights=lwc_w)) 
+# SWC . (.0895)
+
+grid.arrange( # logAvg_area
+  ggpredict(lm(logAvg_area~rescale(CO2)*rescale(meanSWC) , data=trans_dfwL, weights=logAvg_area_w), terms=c("CO2","meanSWC [4,42]"))%>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")),
+  ggpredict(lm(logAvg_area ~ rescale(CO2)*rescale(meanSWC) , data = trans_dfwL), terms=c("CO2","meanSWC [4,42]")) %>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")),
+  ggplot(trans_dfwL, aes(x=rescale(CO2), y=logAvg_area, group = rescale(meanSWC))) + geom_point(aes(group = rescale(meanSWC), color = rescale(meanSWC), size=logAvg_area_w)) , nrow=3 )
+summary(lm(logAvg_area~rescale(CO2)*rescale(meanSWC) , data=trans_dfwL, weights=logAvg_area_w)) 
+# log-transformed average leaf area: intx . (.0645)
+
+grid.arrange( # logPerimArea
+  ggpredict(lm(logPerimArea~rescale(CO2)*rescale(meanSWC) , data=trans_dfwL, weights=logPerimArea_w), terms=c("CO2","meanSWC [4,42]"))%>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")),
+  ggpredict(lm(logPerimArea ~ rescale(CO2)*rescale(meanSWC) , data = trans_dfwL), terms=c("CO2","meanSWC [4,42]")) %>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")),
+  ggplot(trans_dfwL, aes(x=rescale(CO2), y=logPerimArea, group = rescale(meanSWC))) + geom_point(aes(group = rescale(meanSWC), color = rescale(meanSWC), size=logPerimArea_w)) , nrow=3 )
+summary(lm(logPerimArea~rescale(CO2)*rescale(meanSWC) , data=trans_dfwL, weights=logPerimArea_w))  # NS
+
+grid.arrange( # sqrtTotArea
+  ggpredict(lm(sqrtTotArea~rescale(CO2)*rescale(meanSWC) , data=trans_dfwL, weights=sqrtTotArea_w), terms=c("CO2","meanSWC [4,42]"))%>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")),
+  ggpredict(lm(sqrtTotArea ~ rescale(CO2)*rescale(meanSWC) , data = trans_dfwL), terms=c("CO2","meanSWC [4,42]")) %>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")),
+  ggplot(trans_dfwL, aes(x=rescale(CO2), y=sqrtTotArea, group = rescale(meanSWC))) + geom_point(aes(group = rescale(meanSWC), color = rescale(meanSWC), size=sqrtTotArea_w)) , nrow=3 )
+summary(lm(sqrtTotArea~rescale(CO2)*rescale(meanSWC) , data=trans_dfwL, weights=sqrtTotArea_w))  
+# SWC * (.022)
+
+grid.arrange( # logSRL
+  ggpredict(lm(logSRL~rescale(CO2)*rescale(meanSWC) , data=trans_dfwL, weights=logSRL_w), terms=c("CO2","meanSWC [4,42]"))%>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")),
+  ggpredict(lm(logSRL ~ rescale(CO2)*rescale(meanSWC) , data = trans_dfwL), terms=c("CO2","meanSWC [4,42]")) %>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")),
+  ggplot(trans_dfwL, aes(x=rescale(CO2), y=logSRL, group = rescale(meanSWC))) + geom_point(aes(group = rescale(meanSWC), color = rescale(meanSWC), size=logSRL_w)) , nrow=3 )
+summary(lm(logSRL~rescale(CO2)*rescale(meanSWC) , data=trans_dfwL, weights=logSRL_w))   
+# log-transformed specific root length: CO2 * .044
+
+grid.arrange( # d13C
+  ggpredict(lm(d13C~rescale(CO2)*rescale(meanSWC) , data=trans_dfwL, weights=d13C_w), terms=c("CO2","meanSWC [4,42]"))%>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")),
+  ggpredict(lm(d13C ~ rescale(CO2)*rescale(meanSWC) , data = trans_dfwL), terms=c("CO2","meanSWC [4,42]")) %>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")),
+  ggplot(trans_dfwL, aes(x=rescale(CO2), y=d13C, group = rescale(meanSWC))) + geom_point(aes(group = rescale(meanSWC), color = rescale(meanSWC), size=d13C_w)) , nrow=3 )
+summary(lm(d13C~rescale(CO2)*rescale(meanSWC) , data=trans_dfwL, weights=d13C_w))  # NS
+
+grid.arrange( # Photo.y
+  ggpredict(lm(Photo.y~rescale(CO2)*rescale(meanSWC) , data=trans_dfwL, weights=Photo.y_w), terms=c("CO2","meanSWC [4,42]"))%>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")),
+  ggpredict(lm(Photo.y ~ rescale(CO2)*rescale(meanSWC) , data = trans_dfwL), terms=c("CO2","meanSWC [4,42]")) %>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")),
+  ggplot(trans_dfwL, aes(x=rescale(CO2), y=Photo.y, group = rescale(meanSWC))) + geom_point(aes(group = rescale(meanSWC), color = rescale(meanSWC), size=Photo.y_w)) , nrow=3 )
+summary(lm(Photo.y~rescale(CO2)*rescale(meanSWC) , data=trans_dfwL, weights=Photo.y_w))  
+# Photo.y: SWC ** (.0023)
+
+grid.arrange( # Cond.y
+  ggpredict(lm(logCond.y~rescale(CO2)*rescale(meanSWC) , data=trans_dfwL, weights=logCond.y_w), terms=c("CO2","meanSWC [4,42]"))%>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")),
+  ggpredict(lm(logCond.y ~ rescale(CO2)*rescale(meanSWC) , data = trans_dfwL), terms=c("CO2","meanSWC [4,42]")) %>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")),
+  ggplot(trans_dfwL, aes(x=rescale(CO2), y=logCond.y, group = rescale(meanSWC))) + geom_point(aes(group = rescale(meanSWC), color = rescale(meanSWC), size=logCond.y_w)) , nrow=3 )
+summary(lm(logCond.y~rescale(CO2)*rescale(meanSWC) , data=trans_dfwL, weights=logCond.y_w))  
+# log-transformed stomatal conductance: SWC ** (.00139)
+
+grid.arrange( # sqrtWUE
+  ggpredict(lm(sqrtWUE~rescale(CO2)*rescale(meanSWC) , data=trans_dfwL, weights=sqrtWUE_w), terms=c("CO2","meanSWC [4,42]"))%>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")),
+  ggpredict(lm(sqrtWUE ~ rescale(CO2)*rescale(meanSWC) , data = trans_dfwL), terms=c("CO2","meanSWC [4,42]")) %>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")),
+  ggplot(trans_dfwL, aes(x=rescale(CO2), y=sqrtWUE, group = rescale(meanSWC))) + geom_point(aes(group = rescale(meanSWC), color = rescale(meanSWC), size=sqrtWUE_w)) , nrow=3 )
+summary(lm(sqrtWUE~rescale(CO2)*rescale(meanSWC) , data=trans_dfwL, weights=sqrtWUE_w))   # NS
+
+grid.arrange( # SLA
+  ggpredict(lm(SLA~rescale(CO2)*rescale(meanSWC) , data=trans_dfwL, weights=SLA_w), terms=c("CO2","meanSWC [4,42]"))%>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")),
+  ggpredict(lm(SLA ~ rescale(CO2)*rescale(meanSWC) , data = trans_dfwL), terms=c("CO2","meanSWC [4,42]")) %>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")),
+  ggplot(trans_dfwL, aes(x=rescale(CO2), y=SLA, group = rescale(meanSWC))) + geom_point(aes(group = rescale(meanSWC), color = rescale(meanSWC), size=SLA_w)) , nrow=3 )
+summary(lm(SLA~rescale(CO2)*rescale(meanSWC) , data=trans_dfwL, weights=SLA_w))  
+
+
+## Spp == V, CO2 categorical and SWC (continuous)
+grid.arrange( # total mass
+  ggpredict(lm(sqrtTotmass~CO2Tmt*meanSWC , data=trans_dfwV, weights=sqrtTotmass_w), terms=c("meanSWC", "CO2Tmt"))%>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("black","forestgreen")),
+  ggpredict(lm(sqrtTotmass ~ CO2Tmt*meanSWC , data = trans_dfwV), terms=c("meanSWC", "CO2Tmt")) %>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("black","forestgreen")),
+  ggplot(trans_dfwV, aes(x=meanSWC, y=sqrtTotmass, group = CO2Tmt)) + geom_point(aes(group = CO2Tmt, color = CO2Tmt, size=sqrtTotmass_w)) + scale_color_manual(values=c("black","forestgreen"))  , nrow=3)
+summary(lm(sqrtTotmass~CO2Tmt*meanSWC , data=trans_dfwV, weights=sqrtTotmass_w)) # SWC 0.03
+
+grid.arrange( # root:shoot
+  ggpredict(lm(rootshoot~CO2Tmt*meanSWC , data=trans_dfwV, weights=rootshoot_w), terms=c("meanSWC", "CO2Tmt"))%>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("black","forestgreen")),
+  ggpredict(lm(rootshoot ~ CO2Tmt*meanSWC , data = trans_dfwV), terms=c("meanSWC", "CO2Tmt")) %>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("black","forestgreen")),
+  ggplot(trans_dfwV, aes(x=meanSWC, y=rootshoot, group = CO2Tmt)) + geom_point(aes(group = CO2Tmt, color = CO2Tmt, size=rootshoot_w)) + scale_color_manual(values=c("black","forestgreen"))  , nrow=3)
+summary(lm(rootshoot~CO2Tmt*meanSWC , data=trans_dfwV, weights=rootshoot_w)) # NS
+
+grid.arrange( # lwc
+  ggpredict(lm(lwc~CO2Tmt*meanSWC , data=trans_dfwV, weights=lwc_w), terms=c("meanSWC", "CO2Tmt"))%>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("black","forestgreen")),
+  ggpredict(lm(lwc ~ CO2Tmt*meanSWC , data = trans_dfwV), terms=c("meanSWC", "CO2Tmt")) %>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("black","forestgreen")),
+  ggplot(trans_dfwV, aes(x=meanSWC, y=lwc, group = CO2Tmt)) + geom_point(aes(group = CO2Tmt, color = CO2Tmt, size=lwc_w)) + scale_color_manual(values=c("black","forestgreen"))  , nrow=3)
+summary(lm(lwc~CO2Tmt*meanSWC , data=trans_dfwV, weights=lwc_w)) # SWC .0558
+
+grid.arrange( # logAvg_area
+  ggpredict(lm(logAvg_area~CO2Tmt*meanSWC , data=trans_dfwV, weights=logAvg_area_w), terms=c("meanSWC", "CO2Tmt"))%>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("black","forestgreen")),
+  ggpredict(lm(logAvg_area ~ CO2Tmt*meanSWC , data = trans_dfwV), terms=c("meanSWC", "CO2Tmt")) %>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("black","forestgreen")),
+  ggplot(trans_dfwV, aes(x=meanSWC, y=logAvg_area, group = CO2Tmt)) + geom_point(aes(group = CO2Tmt, color = CO2Tmt, size=logAvg_area_w)) + scale_color_manual(values=c("black","forestgreen"))  , nrow=3)
+summary(lm(logAvg_area~CO2Tmt*meanSWC , data=trans_dfwV, weights=logAvg_area_w)) 
+# CO2 .000628, SWC .00128, intx .025
+
+
+grid.arrange( # logPerimArea
+  ggpredict(lm(logPerimArea~CO2Tmt*meanSWC , data=trans_dfwV, weights=logPerimArea_w), terms=c("meanSWC", "CO2Tmt"))%>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("black","forestgreen")),
+  ggpredict(lm(logPerimArea ~ CO2Tmt*meanSWC , data = trans_dfwV), terms=c("meanSWC", "CO2Tmt")) %>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("black","forestgreen")),
+  ggplot(trans_dfwV, aes(x=meanSWC, y=logPerimArea, group = CO2Tmt)) + geom_point(aes(group = CO2Tmt, color = CO2Tmt, size=logPerimArea_w)) + scale_color_manual(values=c("black","forestgreen"))  , nrow=3)
+summary(lm(logPerimArea~CO2Tmt*meanSWC , data=trans_dfwV, weights=logPerimArea_w)) 
+# CO2 .0405
+
+grid.arrange( # sqrtTotArea
+  ggpredict(lm(sqrtTotArea~CO2Tmt*meanSWC , data=trans_dfwV, weights=sqrtTotArea_w), terms=c("meanSWC", "CO2Tmt"))%>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("black","forestgreen")),
+  ggpredict(lm(sqrtTotArea ~ CO2Tmt*meanSWC , data = trans_dfwV), terms=c("meanSWC", "CO2Tmt")) %>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("black","forestgreen")),
+  ggplot(trans_dfwV, aes(x=meanSWC, y=sqrtTotArea, group = CO2Tmt)) + geom_point(aes(group = CO2Tmt, color = CO2Tmt, size=sqrtTotArea_w)) + scale_color_manual(values=c("black","forestgreen"))  , nrow=3)
+summary(lm(sqrtTotArea~CO2Tmt*meanSWC , data=trans_dfwV, weights=sqrtTotArea_w)) # NS
+
+grid.arrange( # logSRL
+  ggpredict(lm(logSRL~CO2Tmt*meanSWC , data=trans_dfwV, weights=logSRL_w), terms=c("meanSWC", "CO2Tmt"))%>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("black","forestgreen")),
+  ggpredict(lm(logSRL ~ CO2Tmt*meanSWC , data = trans_dfwV), terms=c("meanSWC", "CO2Tmt")) %>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("black","forestgreen")),
+  ggplot(trans_dfwV, aes(x=meanSWC, y=logSRL, group = CO2Tmt)) + geom_point(aes(group = CO2Tmt, color = CO2Tmt, size=logSRL_w)) + scale_color_manual(values=c("black","forestgreen"))  , nrow=3)
+summary(lm(logSRL~CO2Tmt*meanSWC , data=trans_dfwV, weights=logSRL_w)) 
+
+grid.arrange( # d13C
+  ggpredict(lm(d13C~CO2Tmt*meanSWC , data=trans_dfwV, weights=d13C_w), terms=c("meanSWC", "CO2Tmt"))%>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("black","forestgreen")),
+  ggpredict(lm(d13C ~ CO2Tmt*meanSWC , data = trans_dfwV), terms=c("meanSWC", "CO2Tmt")) %>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("black","forestgreen")),
+  ggplot(trans_dfwV, aes(x=meanSWC, y=d13C, group = CO2Tmt)) + geom_point(aes(group = CO2Tmt, color = CO2Tmt, size=d13C_w)) + scale_color_manual(values=c("black","forestgreen"))  , nrow=3)
+summary(lm(d13C~CO2Tmt*meanSWC , data=trans_dfwV, weights=d13C_w)) 
+# CO2 .045, SWC .0804
+
+grid.arrange( # Photo.y
+  ggpredict(lm(Photo.y~CO2Tmt*meanSWC , data=trans_dfwV, weights=Photo.y_w), terms=c("meanSWC", "CO2Tmt"))%>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("black","forestgreen")),
+  ggpredict(lm(Photo.y ~ CO2Tmt*meanSWC , data = trans_dfwV), terms=c("meanSWC", "CO2Tmt")) %>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("black","forestgreen")),
+  ggplot(trans_dfwV, aes(x=meanSWC, y=Photo.y, group = CO2Tmt)) + geom_point(aes(group = CO2Tmt, color = CO2Tmt, size=Photo.y_w)) + scale_color_manual(values=c("black","forestgreen"))  , nrow=3)
+summary(lm(Photo.y~CO2Tmt*meanSWC , data=trans_dfwV, weights=Photo.y_w)) 
+
+grid.arrange( # Cond.y
+  ggpredict(lm(logCond.y~CO2Tmt*meanSWC , data=trans_dfwV, weights=logCond.y_w), terms=c("meanSWC", "CO2Tmt"))%>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("black","forestgreen")),
+  ggpredict(lm(logCond.y ~ CO2Tmt*meanSWC , data = trans_dfwV), terms=c("meanSWC", "CO2Tmt")) %>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("black","forestgreen")),
+  ggplot(trans_dfwV, aes(x=meanSWC, y=logCond.y, group = CO2Tmt)) + geom_point(aes(group = CO2Tmt, color = CO2Tmt, size=logCond.y_w)) + scale_color_manual(values=c("black","forestgreen"))  , nrow=3)
+summary(lm(logCond.y~CO2Tmt*meanSWC , data=trans_dfwV, weights=logCond.y_w)) 
+# CO2 .053, SWC .000109, intx .0648
+
+grid.arrange( # sqrtWUE
+  ggpredict(lm(sqrtWUE~CO2Tmt*meanSWC , data=trans_dfwV, weights=sqrtWUE_w), terms=c("meanSWC", "CO2Tmt"))%>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("black","forestgreen")),
+  ggpredict(lm(sqrtWUE ~ CO2Tmt*meanSWC , data = trans_dfwV), terms=c("meanSWC", "CO2Tmt")) %>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("black","forestgreen")),
+  ggplot(trans_dfwV, aes(x=meanSWC, y=sqrtWUE, group = CO2Tmt)) + geom_point(aes(group = CO2Tmt, color = CO2Tmt, size=sqrtWUE_w)) + scale_color_manual(values=c("black","forestgreen"))  , nrow=3)
+summary(lm(sqrtWUE~CO2Tmt*meanSWC , data=trans_dfwV, weights=sqrtWUE_w)) # NS
+
+grid.arrange( # SLA
+  ggpredict(lm(SLA~CO2Tmt*meanSWC , data=trans_dfwV, weights=SLA_w), terms=c("meanSWC", "CO2Tmt"))%>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("black","forestgreen")),
+  ggpredict(lm(SLA ~ CO2Tmt*meanSWC , data = trans_dfwV), terms=c("meanSWC", "CO2Tmt")) %>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("black","forestgreen")),
+  ggplot(trans_dfwV, aes(x=meanSWC, y=SLA, group = CO2Tmt)) + geom_point(aes(group = CO2Tmt, color = CO2Tmt, size=SLA_w)) + scale_color_manual(values=c("black","forestgreen"))  , nrow=3)
+summary(lm(SLA~CO2Tmt*meanSWC , data=trans_dfwV, weights=SLA_w)) 
+
+## Spp == L
+
+grid.arrange( # total mass
+    ggpredict(lm(sqrtTotmass~CO2Tmt*meanSWC , data=trans_dfwL, weights=sqrtTotmass_w), terms=c("meanSWC", "CO2Tmt"))%>% 
+      plot(rawdata = TRUE, ci = TRUE, colors=c("black","forestgreen")),
+    ggpredict(lm(sqrtTotmass ~ CO2Tmt*meanSWC , data = trans_dfwL), terms=c("meanSWC", "CO2Tmt")) %>% 
+      plot(rawdata = TRUE, ci = TRUE, colors=c("black","forestgreen")),
+    ggplot(trans_dfwL, aes(x=meanSWC, y=sqrtTotmass, group = CO2Tmt)) + geom_point(aes(group = CO2Tmt, color = CO2Tmt, size=sqrtTotmass_w)) + scale_color_manual(values=c("black","forestgreen"))  , nrow=3)
+  summary(lm(sqrtTotmass~CO2Tmt*meanSWC , data=trans_dfwL, weights=sqrtTotmass_w)) 
+  # SWC 0.0297
+
+grid.arrange( # root:shoot
+  ggpredict(lm(rootshoot~CO2Tmt*meanSWC , data=trans_dfwL, weights=rootshoot_w), terms=c("meanSWC", "CO2Tmt"))%>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("black","forestgreen")),
+  ggpredict(lm(rootshoot ~ CO2Tmt*meanSWC , data = trans_dfwL), terms=c("meanSWC", "CO2Tmt")) %>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("black","forestgreen")),
+  ggplot(trans_dfwL, aes(x=meanSWC, y=rootshoot, group = CO2Tmt)) + geom_point(aes(group = CO2Tmt, color = CO2Tmt, size=rootshoot_w)) + scale_color_manual(values=c("black","forestgreen"))  , nrow=3)
+summary(lm(rootshoot~CO2Tmt*meanSWC , data=trans_dfwL, weights=rootshoot_w)) 
+# SWC 0.0302
+
+grid.arrange( # lwc
+  ggpredict(lm(lwc~CO2Tmt*meanSWC , data=trans_dfwL, weights=lwc_w), terms=c("meanSWC", "CO2Tmt"))%>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("black","forestgreen")),
+  ggpredict(lm(lwc ~ CO2Tmt*meanSWC , data = trans_dfwL), terms=c("meanSWC", "CO2Tmt")) %>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("black","forestgreen")),
+  ggplot(trans_dfwL, aes(x=meanSWC, y=lwc, group = CO2Tmt)) + geom_point(aes(group = CO2Tmt, color = CO2Tmt, size=lwc_w)) + scale_color_manual(values=c("black","forestgreen"))  , nrow=3)
+summary(lm(lwc~CO2Tmt*meanSWC , data=trans_dfwL, weights=lwc_w)) 
+# SWC 0.0736
+
+grid.arrange( # logAvg_area
+  ggpredict(lm(logAvg_area~CO2Tmt*meanSWC , data=trans_dfwL, weights=logAvg_area_w), terms=c("meanSWC", "CO2Tmt"))%>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("black","forestgreen")),
+  ggpredict(lm(logAvg_area ~ CO2Tmt*meanSWC , data = trans_dfwL), terms=c("meanSWC", "CO2Tmt")) %>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("black","forestgreen")),
+  ggplot(trans_dfwL, aes(x=meanSWC, y=logAvg_area, group = CO2Tmt)) + geom_point(aes(group = CO2Tmt, color = CO2Tmt, size=logAvg_area_w)) + scale_color_manual(values=c("black","forestgreen"))  , nrow=3)
+summary(lm(logAvg_area~CO2Tmt*meanSWC , data=trans_dfwL, weights=logAvg_area_w)) 
+# intx 0.0579
+
+grid.arrange( # logPerimArea
+  ggpredict(lm(logPerimArea~CO2Tmt*meanSWC , data=trans_dfwL, weights=logPerimArea_w), terms=c("meanSWC", "CO2Tmt"))%>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("black","forestgreen")),
+  ggpredict(lm(logPerimArea ~ CO2Tmt*meanSWC , data = trans_dfwL), terms=c("meanSWC", "CO2Tmt")) %>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("black","forestgreen")),
+  ggplot(trans_dfwL, aes(x=meanSWC, y=logPerimArea, group = CO2Tmt)) + geom_point(aes(group = CO2Tmt, color = CO2Tmt, size=logPerimArea_w)) + scale_color_manual(values=c("black","forestgreen"))  , nrow=3)
+summary(lm(logPerimArea~CO2Tmt*meanSWC , data=trans_dfwL, weights=logPerimArea_w)) # NS
+
+grid.arrange( # sqrtTotArea
+  ggpredict(lm(sqrtTotArea~CO2Tmt*meanSWC , data=trans_dfwL, weights=sqrtTotArea_w), terms=c("meanSWC", "CO2Tmt"))%>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("black","forestgreen")),
+  ggpredict(lm(sqrtTotArea ~ CO2Tmt*meanSWC , data = trans_dfwL), terms=c("meanSWC", "CO2Tmt")) %>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("black","forestgreen")),
+  ggplot(trans_dfwL, aes(x=meanSWC, y=sqrtTotArea, group = CO2Tmt)) + geom_point(aes(group = CO2Tmt, color = CO2Tmt, size=sqrtTotArea_w)) + scale_color_manual(values=c("black","forestgreen"))  , nrow=3)
+summary(lm(sqrtTotArea~CO2Tmt*meanSWC , data=trans_dfwL, weights=sqrtTotArea_w)) 
+# SWC 0.0161
+
+grid.arrange( # logSRL
+  ggpredict(lm(logSRL~CO2Tmt*meanSWC , data=trans_dfwL, weights=logSRL_w), terms=c("meanSWC", "CO2Tmt"))%>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("black","forestgreen")),
+  ggpredict(lm(logSRL ~ CO2Tmt*meanSWC , data = trans_dfwL), terms=c("meanSWC", "CO2Tmt")) %>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("black","forestgreen")),
+  ggplot(trans_dfwL, aes(x=meanSWC, y=logSRL, group = CO2Tmt)) + geom_point(aes(group = CO2Tmt, color = CO2Tmt, size=logSRL_w)) + scale_color_manual(values=c("black","forestgreen"))  , nrow=3)
+summary(lm(logSRL~CO2Tmt*meanSWC , data=trans_dfwL, weights=logSRL_w)) 
+# CO2 0.090
+
+grid.arrange( # d13C
+  ggpredict(lm(d13C~CO2Tmt*meanSWC , data=trans_dfwL, weights=d13C_w), terms=c("meanSWC", "CO2Tmt"))%>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("black","forestgreen")),
+  ggpredict(lm(d13C ~ CO2Tmt*meanSWC , data = trans_dfwL), terms=c("meanSWC", "CO2Tmt")) %>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("black","forestgreen")),
+  ggplot(trans_dfwL, aes(x=meanSWC, y=d13C, group = CO2Tmt)) + geom_point(aes(group = CO2Tmt, color = CO2Tmt, size=d13C_w)) + scale_color_manual(values=c("black","forestgreen"))  , nrow=3)
+summary(lm(d13C~CO2Tmt*meanSWC , data=trans_dfwL, weights=d13C_w)) 
+# intx 0.0812
+
+grid.arrange( # Photo.y
+  ggpredict(lm(Photo.y~CO2Tmt*meanSWC , data=trans_dfwL, weights=Photo.y_w), terms=c("meanSWC", "CO2Tmt"))%>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("black","forestgreen")),
+  ggpredict(lm(Photo.y ~ CO2Tmt*meanSWC , data = trans_dfwL), terms=c("meanSWC", "CO2Tmt")) %>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("black","forestgreen")),
+  ggplot(trans_dfwL, aes(x=meanSWC, y=Photo.y, group = CO2Tmt)) + geom_point(aes(group = CO2Tmt, color = CO2Tmt, size=Photo.y_w)) + scale_color_manual(values=c("black","forestgreen"))  , nrow=3)
+summary(lm(Photo.y~CO2Tmt*meanSWC , data=trans_dfwL, weights=Photo.y_w)) 
+# SWC 0.00118
+
+grid.arrange( # Cond.y
+  ggpredict(lm(logCond.y~CO2Tmt*meanSWC , data=trans_dfwL, weights=logCond.y_w), terms=c("meanSWC", "CO2Tmt"))%>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("black","forestgreen")),
+  ggpredict(lm(logCond.y ~ CO2Tmt*meanSWC , data = trans_dfwL), terms=c("meanSWC", "CO2Tmt")) %>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("black","forestgreen")),
+  ggplot(trans_dfwL, aes(x=meanSWC, y=logCond.y, group = CO2Tmt)) + geom_point(aes(group = CO2Tmt, color = CO2Tmt, size=logCond.y_w)) + scale_color_manual(values=c("black","forestgreen"))  , nrow=3)
+summary(lm(logCond.y~CO2Tmt*meanSWC , data=trans_dfwL, weights=logCond.y_w)) 
+# SWC 0.00685
+
+grid.arrange( # sqrtWUE
+  ggpredict(lm(sqrtWUE~CO2Tmt*meanSWC , data=trans_dfwL, weights=sqrtWUE_w), terms=c("meanSWC", "CO2Tmt"))%>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("black","forestgreen")),
+  ggpredict(lm(sqrtWUE ~ CO2Tmt*meanSWC , data = trans_dfwL), terms=c("meanSWC", "CO2Tmt")) %>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("black","forestgreen")),
+  ggplot(trans_dfwL, aes(x=meanSWC, y=sqrtWUE, group = CO2Tmt)) + geom_point(aes(group = CO2Tmt, color = CO2Tmt, size=sqrtWUE_w)) + scale_color_manual(values=c("black","forestgreen"))  , nrow=3)
+summary(lm(sqrtWUE~CO2Tmt*meanSWC , data=trans_dfwL, weights=sqrtWUE_w)) # NS
+
+grid.arrange( # SLA
+  ggpredict(lm(SLA~CO2Tmt*meanSWC , data=trans_dfwL, weights=SLA_w), terms=c("meanSWC", "CO2Tmt"))%>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("black","forestgreen")),
+  ggpredict(lm(SLA ~ CO2Tmt*meanSWC , data = trans_dfwL), terms=c("meanSWC", "CO2Tmt")) %>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("black","forestgreen")),
+  ggplot(trans_dfwL, aes(x=meanSWC, y=SLA, group = CO2Tmt)) + geom_point(aes(group = CO2Tmt, color = CO2Tmt, size=SLA_w)) + scale_color_manual(values=c("black","forestgreen"))  , nrow=3)
+summary(lm(SLA~CO2Tmt*meanSWC , data=trans_dfwL, weights=SLA_w)) 
+
+
+
+## categorical variables for both
+## Spp == V
+grid.arrange( # total mass
+  ggpredict(lm(sqrtTotmass~CO2Tmt*H2OTmt , data=trans_dfwV, weights=sqrtTotmass_w), terms=c("CO2Tmt", "H2OTmt"))%>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("blue","red")),
+  ggpredict(lm(sqrtTotmass ~ CO2Tmt*H2OTmt , data = trans_dfwV), terms=c("CO2Tmt", "H2OTmt")) %>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("blue","red")),
+  ggplot(trans_dfwV, aes(x=CO2, y=sqrtTotmass, group = H2OTmt)) + geom_point(aes(group = H2OTmt, color = H2OTmt, size=sqrtTotmass_w)) + scale_color_manual(values=c("red","blue"))  , nrow=3)
+summary(lm(sqrtTotmass~CO2Tmt*H2OTmt , data=trans_dfwV, weights=sqrtTotmass_w)) 
+# H2O 0.0171
+
+grid.arrange( # root:shoot
+  ggpredict(lm(rootshoot~CO2Tmt*H2OTmt , data=trans_dfwV, weights=rootshoot_w), terms=c("CO2Tmt", "H2OTmt"))%>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("blue","red")),
+  ggpredict(lm(rootshoot ~ CO2Tmt*H2OTmt , data = trans_dfwV), terms=c("CO2Tmt", "H2OTmt")) %>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("blue","red")),
+  ggplot(trans_dfwV, aes(x=CO2, y=rootshoot, group = H2OTmt)) + geom_point(aes(group = H2OTmt, color = H2OTmt, size=rootshoot_w)) + scale_color_manual(values=c("red","blue"))  , nrow=3)
+summary(lm(rootshoot~CO2Tmt*H2OTmt , data=trans_dfwV, weights=rootshoot_w)) # NS
+
+grid.arrange( # lwc
+  ggpredict(lm(lwc~CO2Tmt*H2OTmt , data=trans_dfwV, weights=lwc_w), terms=c("CO2Tmt", "H2OTmt"))%>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("blue","red")),
+  ggpredict(lm(lwc ~ CO2Tmt*H2OTmt , data = trans_dfwV), terms=c("CO2Tmt", "H2OTmt")) %>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("blue","red")),
+  ggplot(trans_dfwV, aes(x=CO2, y=lwc, group = H2OTmt)) + geom_point(aes(group = H2OTmt, color = H2OTmt, size=lwc_w)) + scale_color_manual(values=c("red","blue"))  , nrow=3)
+summary(lm(lwc~CO2Tmt*H2OTmt , data=trans_dfwV, weights=lwc_w)) 
+# H2O .0314
+
+grid.arrange( # logAvg_area
+  ggpredict(lm(logAvg_area~CO2Tmt*H2OTmt , data=trans_dfwV, weights=logAvg_area_w), terms=c("CO2Tmt", "H2OTmt"))%>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("blue","red")),
+  ggpredict(lm(logAvg_area ~ CO2Tmt*H2OTmt , data = trans_dfwV), terms=c("CO2Tmt", "H2OTmt")) %>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("blue","red")),
+  ggplot(trans_dfwV, aes(x=CO2, y=logAvg_area, group = H2OTmt)) + geom_point(aes(group = H2OTmt, color = H2OTmt, size=logAvg_area_w)) + scale_color_manual(values=c("red","blue"))  , nrow=3)
+summary(lm(logAvg_area~CO2Tmt*H2OTmt , data=trans_dfwV, weights=logAvg_area_w)) 
+# .000361, .00264, 0.0126
+
+
+grid.arrange( # logPerimArea
+  ggpredict(lm(logPerimArea~CO2Tmt*H2OTmt , data=trans_dfwV, weights=logPerimArea_w), terms=c("CO2Tmt", "H2OTmt"))%>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("blue","red")),
+  ggpredict(lm(logPerimArea ~ CO2Tmt*H2OTmt , data = trans_dfwV), terms=c("CO2Tmt", "H2OTmt")) %>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("blue","red")),
+  ggplot(trans_dfwV, aes(x=CO2, y=logPerimArea, group = H2OTmt)) + geom_point(aes(group = H2OTmt, color = H2OTmt, size=logPerimArea_w)) + scale_color_manual(values=c("red","blue"))  , nrow=3)
+summary(lm(logPerimArea~CO2Tmt*H2OTmt , data=trans_dfwV, weights=logPerimArea_w)) 
+# CO2 .035
+
+grid.arrange( # sqrtTotArea
+  ggpredict(lm(sqrtTotArea~CO2Tmt*H2OTmt , data=trans_dfwV, weights=sqrtTotArea_w), terms=c("CO2Tmt", "H2OTmt"))%>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("blue","red")),
+  ggpredict(lm(sqrtTotArea ~ CO2Tmt*H2OTmt , data = trans_dfwV), terms=c("CO2Tmt", "H2OTmt")) %>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("blue","red")),
+  ggplot(trans_dfwV, aes(x=CO2, y=sqrtTotArea, group = H2OTmt)) + geom_point(aes(group = H2OTmt, color = H2OTmt, size=sqrtTotArea_w)) + scale_color_manual(values=c("red","blue"))  , nrow=3)
+summary(lm(sqrtTotArea~CO2Tmt*H2OTmt , data=trans_dfwV, weights=sqrtTotArea_w)) # NS
+
+grid.arrange( # logSRL
+  ggpredict(lm(logSRL~CO2Tmt*H2OTmt , data=trans_dfwV, weights=logSRL_w), terms=c("CO2Tmt", "H2OTmt"))%>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("blue","red")),
+  ggpredict(lm(logSRL ~ CO2Tmt*H2OTmt , data = trans_dfwV), terms=c("CO2Tmt", "H2OTmt")) %>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("blue","red")),
+  ggplot(trans_dfwV, aes(x=CO2, y=logSRL, group = H2OTmt)) + geom_point(aes(group = H2OTmt, color = H2OTmt, size=logSRL_w)) + scale_color_manual(values=c("red","blue"))  , nrow=3)
+summary(lm(logSRL~CO2Tmt*H2OTmt , data=trans_dfwV, weights=logSRL_w)) # NS
+
+grid.arrange( # d13C
+  ggpredict(lm(d13C~CO2Tmt*H2OTmt , data=trans_dfwV, weights=d13C_w), terms=c("CO2Tmt", "H2OTmt"))%>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("blue","red")),
+  ggpredict(lm(d13C ~ CO2Tmt*H2OTmt , data = trans_dfwV), terms=c("CO2Tmt", "H2OTmt")) %>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("blue","red")),
+  ggplot(trans_dfwV, aes(x=CO2, y=d13C, group = H2OTmt)) + geom_point(aes(group = H2OTmt, color = H2OTmt, size=d13C_w)) + scale_color_manual(values=c("red","blue"))  , nrow=3)
+summary(lm(d13C~CO2Tmt*H2OTmt , data=trans_dfwV, weights=d13C_w)) 
+# CO2 .00911, H2O .05316
+
+grid.arrange( # Photo.y
+  ggpredict(lm(Photo.y~CO2Tmt*H2OTmt , data=trans_dfwV, weights=Photo.y_w), terms=c("CO2Tmt", "H2OTmt"))%>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("blue","red")),
+  ggpredict(lm(Photo.y ~ CO2Tmt*H2OTmt , data = trans_dfwV), terms=c("CO2Tmt", "H2OTmt")) %>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("blue","red")),
+  ggplot(trans_dfwV, aes(x=CO2, y=Photo.y, group = H2OTmt)) + geom_point(aes(group = H2OTmt, color = H2OTmt, size=Photo.y_w)) + scale_color_manual(values=c("red","blue"))  , nrow=3)
+summary(lm(Photo.y~CO2Tmt*H2OTmt , data=trans_dfwV, weights=Photo.y_w)) 
+# CO2 .0388, H2O .000474
+
+grid.arrange( # Cond.y
+  ggpredict(lm(logCond.y~CO2Tmt*H2OTmt , data=trans_dfwV, weights=logCond.y_w), terms=c("CO2Tmt", "H2OTmt"))%>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("blue","red")),
+  ggpredict(lm(logCond.y ~ CO2Tmt*H2OTmt , data = trans_dfwV), terms=c("CO2Tmt", "H2OTmt")) %>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("blue","red")),
+  ggplot(trans_dfwV, aes(x=CO2, y=logCond.y, group = H2OTmt)) + geom_point(aes(group = H2OTmt, color = H2OTmt, size=logCond.y_w)) + scale_color_manual(values=c("red","blue"))  , nrow=3)
+summary(lm(logCond.y~CO2Tmt*H2OTmt , data=trans_dfwV, weights=logCond.y_w)) 
+# H2O .00437
+
+grid.arrange( # sqrtWUE
+  ggpredict(lm(sqrtWUE~CO2Tmt*H2OTmt , data=trans_dfwV, weights=sqrtWUE_w), terms=c("CO2Tmt", "H2OTmt"))%>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("blue","red")),
+  ggpredict(lm(sqrtWUE ~ CO2Tmt*H2OTmt , data = trans_dfwV), terms=c("CO2Tmt", "H2OTmt")) %>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("blue","red")),
+  ggplot(trans_dfwV, aes(x=CO2, y=sqrtWUE, group = H2OTmt)) + geom_point(aes(group = H2OTmt, color = H2OTmt, size=sqrtWUE_w)) + scale_color_manual(values=c("red","blue"))  , nrow=3)
+summary(lm(sqrtWUE~CO2Tmt*H2OTmt , data=trans_dfwV, weights=sqrtWUE_w)) # NS
+
+grid.arrange( # SLA
+  ggpredict(lm(SLA~CO2Tmt*H2OTmt , data=trans_dfwV, weights=SLA_w), terms=c("CO2Tmt", "H2OTmt"))%>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("blue","red")),
+  ggpredict(lm(SLA ~ CO2Tmt*H2OTmt , data = trans_dfwV), terms=c("CO2Tmt", "H2OTmt")) %>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("blue","red")),
+  ggplot(trans_dfwV, aes(x=CO2, y=SLA, group = H2OTmt)) + geom_point(aes(group = H2OTmt, color = H2OTmt, size=SLA_w)) + scale_color_manual(values=c("red","blue"))  , nrow=3)
+summary(lm(SLA~CO2Tmt*H2OTmt , data=trans_dfwV, weights=SLA_w)) 
+
+## Spp == L
+
+grid.arrange( # total mass
+  ggpredict(lm(sqrtTotmass~CO2Tmt*H2OTmt , data=trans_dfwL, weights=sqrtTotmass_w), terms=c("CO2Tmt", "H2OTmt"))%>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("blue","red")),
+  ggpredict(lm(sqrtTotmass ~ CO2Tmt*H2OTmt , data = trans_dfwL), terms=c("CO2Tmt", "H2OTmt")) %>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("blue","red")),
+  ggplot(trans_dfwL, aes(x=CO2, y=sqrtTotmass, group = H2OTmt)) + geom_point(aes(group = H2OTmt, color = H2OTmt, size=sqrtTotmass_w)) + scale_color_manual(values=c("red","blue"))  , nrow=3)
+summary(lm(sqrtTotmass~CO2Tmt*H2OTmt , data=trans_dfwL, weights=sqrtTotmass_w)) 
+# H2O 0.0696
+
+grid.arrange( # root:shoot
+  ggpredict(lm(rootshoot~CO2Tmt*H2OTmt , data=trans_dfwL, weights=rootshoot_w), terms=c("CO2Tmt", "H2OTmt"))%>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("blue","red")),
+  ggpredict(lm(rootshoot ~ CO2Tmt*H2OTmt , data = trans_dfwL), terms=c("CO2Tmt", "H2OTmt")) %>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("blue","red")),
+  ggplot(trans_dfwL, aes(x=CO2, y=rootshoot, group = H2OTmt)) + geom_point(aes(group = H2OTmt, color = H2OTmt, size=rootshoot_w)) + scale_color_manual(values=c("red","blue"))  , nrow=3)
+summary(lm(rootshoot~CO2Tmt*H2OTmt , data=trans_dfwL, weights=rootshoot_w)) 
+# H2O .0138
+
+grid.arrange( # lwc
+  ggpredict(lm(lwc~CO2Tmt*H2OTmt , data=trans_dfwL, weights=lwc_w), terms=c("CO2Tmt", "H2OTmt"))%>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("blue","red")),
+  ggpredict(lm(lwc ~ CO2Tmt*H2OTmt , data = trans_dfwL), terms=c("CO2Tmt", "H2OTmt")) %>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("blue","red")),
+  ggplot(trans_dfwL, aes(x=CO2, y=lwc, group = H2OTmt)) + geom_point(aes(group = H2OTmt, color = H2OTmt, size=lwc_w)) + scale_color_manual(values=c("red","blue"))  , nrow=3)
+summary(lm(lwc~CO2Tmt*H2OTmt , data=trans_dfwL, weights=lwc_w))  # NS
+
+grid.arrange( # logAvg_area
+  ggpredict(lm(sqrtTotmass~CO2Tmt*H2OTmt , data=trans_dfwL, weights=sqrtTotmass_w), terms=c("CO2Tmt", "H2OTmt"))%>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("blue","red")),
+  ggpredict(lm(sqrtTotmass ~ CO2Tmt*H2OTmt , data = trans_dfwL), terms=c("CO2Tmt", "H2OTmt")) %>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("blue","red")),
+  ggplot(trans_dfwL, aes(x=CO2, y=sqrtTotmass, group = H2OTmt)) + geom_point(aes(group = H2OTmt, color = H2OTmt, size=sqrtTotmass_w)) + scale_color_manual(values=c("red","blue"))  , nrow=3)
+summary(lm(sqrtTotmass~CO2Tmt*H2OTmt , data=trans_dfwL, weights=sqrtTotmass_w)) 
+# H2O .0696
+
+grid.arrange( # logPerimArea
+  ggpredict(lm(logPerimArea~CO2Tmt*H2OTmt , data=trans_dfwL, weights=logPerimArea_w), terms=c("CO2Tmt", "H2OTmt"))%>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("blue","red")),
+  ggpredict(lm(logPerimArea ~ CO2Tmt*H2OTmt , data = trans_dfwL), terms=c("CO2Tmt", "H2OTmt")) %>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("blue","red")),
+  ggplot(trans_dfwL, aes(x=CO2, y=logPerimArea, group = H2OTmt)) + geom_point(aes(group = H2OTmt, color = H2OTmt, size=logPerimArea_w)) + scale_color_manual(values=c("red","blue"))  , nrow=3)
+summary(lm(logPerimArea~CO2Tmt*H2OTmt , data=trans_dfwL, weights=logPerimArea_w)) # NS
+
+grid.arrange( # sqrtTotArea
+  ggpredict(lm(sqrtTotArea~CO2Tmt*H2OTmt , data=trans_dfwL, weights=sqrtTotArea_w), terms=c("CO2Tmt", "H2OTmt"))%>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("blue","red")),
+  ggpredict(lm(sqrtTotArea ~ CO2Tmt*H2OTmt , data = trans_dfwL), terms=c("CO2Tmt", "H2OTmt")) %>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("blue","red")),
+  ggplot(trans_dfwL, aes(x=CO2, y=sqrtTotArea, group = H2OTmt)) + geom_point(aes(group = H2OTmt, color = H2OTmt, size=sqrtTotArea_w)) + scale_color_manual(values=c("red","blue"))  , nrow=3)
+summary(lm(sqrtTotArea~CO2Tmt*H2OTmt , data=trans_dfwL, weights=sqrtTotArea_w)) 
+# H2O .0206
+
+grid.arrange( # logSRL
+  ggpredict(lm(logSRL~CO2Tmt*H2OTmt , data=trans_dfwL, weights=logSRL_w), terms=c("CO2Tmt", "H2OTmt"))%>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("blue","red")),
+  ggpredict(lm(logSRL ~ CO2Tmt*H2OTmt , data = trans_dfwL), terms=c("CO2Tmt", "H2OTmt")) %>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("blue","red")),
+  ggplot(trans_dfwL, aes(x=CO2, y=logSRL, group = H2OTmt)) + geom_point(aes(group = H2OTmt, color = H2OTmt, size=logSRL_w)) + scale_color_manual(values=c("red","blue"))  , nrow=3)
+summary(lm(logSRL~CO2Tmt*H2OTmt , data=trans_dfwL, weights=logSRL_w)) # NS
+
+grid.arrange( # d13C
+  ggpredict(lm(d13C~CO2Tmt*H2OTmt , data=trans_dfwL, weights=d13C_w), terms=c("CO2Tmt", "H2OTmt"))%>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("blue","red")),
+  ggpredict(lm(d13C ~ CO2Tmt*H2OTmt , data = trans_dfwL), terms=c("CO2Tmt", "H2OTmt")) %>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("blue","red")),
+  ggplot(trans_dfwL, aes(x=CO2, y=d13C, group = H2OTmt)) + geom_point(aes(group = H2OTmt, color = H2OTmt, size=d13C_w)) + scale_color_manual(values=c("red","blue"))  , nrow=3)
+summary(lm(d13C~CO2Tmt*H2OTmt , data=trans_dfwL, weights=d13C_w)) # NS
+
+grid.arrange( # Photo.y
+  ggpredict(lm(Photo.y~CO2Tmt*H2OTmt , data=trans_dfwL, weights=Photo.y_w), terms=c("CO2Tmt", "H2OTmt"))%>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("blue","red")),
+  ggpredict(lm(Photo.y ~ CO2Tmt*H2OTmt , data = trans_dfwL), terms=c("CO2Tmt", "H2OTmt")) %>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("blue","red")),
+  ggplot(trans_dfwL, aes(x=CO2, y=Photo.y, group = H2OTmt)) + geom_point(aes(group = H2OTmt, color = H2OTmt, size=Photo.y_w)) + scale_color_manual(values=c("red","blue"))  , nrow=3)
+summary(lm(Photo.y~CO2Tmt*H2OTmt , data=trans_dfwL, weights=Photo.y_w)) 
+# H2O .00037
+
+grid.arrange( # Cond.y
+  ggpredict(lm(logCond.y~CO2Tmt*H2OTmt , data=trans_dfwL, weights=logCond.y_w), terms=c("CO2Tmt", "H2OTmt"))%>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("blue","red")),
+  ggpredict(lm(logCond.y ~ CO2Tmt*H2OTmt , data = trans_dfwL), terms=c("CO2Tmt", "H2OTmt")) %>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("blue","red")),
+  ggplot(trans_dfwL, aes(x=CO2, y=logCond.y, group = H2OTmt)) + geom_point(aes(group = H2OTmt, color = H2OTmt, size=logCond.y_w)) + scale_color_manual(values=c("red","blue"))  , nrow=3)
+summary(lm(logCond.y~CO2Tmt*H2OTmt , data=trans_dfwL, weights=logCond.y_w)) 
+# CO2 0.06711, H2O 0.00141
+
+grid.arrange( # sqrtWUE
+  ggpredict(lm(sqrtWUE~CO2Tmt*H2OTmt , data=trans_dfwL, weights=sqrtWUE_w), terms=c("CO2Tmt", "H2OTmt"))%>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("blue","red")),
+  ggpredict(lm(sqrtWUE ~ CO2Tmt*H2OTmt , data = trans_dfwL), terms=c("CO2Tmt", "H2OTmt")) %>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("blue","red")),
+  ggplot(trans_dfwL, aes(x=CO2, y=sqrtWUE, group = H2OTmt)) + geom_point(aes(group = H2OTmt, color = H2OTmt, size=sqrtWUE_w)) + scale_color_manual(values=c("red","blue"))  , nrow=3)
+summary(lm(sqrtWUE~CO2Tmt*H2OTmt , data=trans_dfwL, weights=sqrtWUE_w)) # NS
+
+grid.arrange( # SLA
+  ggpredict(lm(SLA~CO2Tmt*H2OTmt , data=trans_dfwL, weights=SLA_w), terms=c("CO2Tmt", "H2OTmt"))%>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("blue","red")),
+  ggpredict(lm(SLA ~ CO2Tmt*H2OTmt , data = trans_dfwL), terms=c("CO2Tmt", "H2OTmt")) %>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("blue","red")),
+  ggplot(trans_dfwL, aes(x=CO2, y=SLA, group = H2OTmt)) + geom_point(aes(group = H2OTmt, color = H2OTmt, size=SLA_w)) + scale_color_manual(values=c("red","blue"))  , nrow=3)
+summary(lm(SLA~CO2Tmt*H2OTmt , data=trans_dfwL, weights=SLA_w)) # NS
+
+
+# manova time
+# I heard a MANOVA has more power, so long as your data is normally distributed, which I've already ensured
+# now doing manova: transformed data, plot means, with weights 
+
+# add the other seven variables in order here
+trans_dfwV.cbind <- cbind(unlist(trans_dfwV$sqrtTotmass), unlist(trans_dfwV$rootshoot), unlist(trans_dfwV$lwc), unlist(trans_dfwV$logAvg_area), unlist(trans_dfwV$logPerimArea), unlist(trans_dfwV$sqrtTotArea), unlist(trans_dfwV$logSRL), unlist(trans_dfwV$d13C),unlist(trans_dfwV$Photo.y),unlist(trans_dfwV$logCond.y),unlist(trans_dfwV$sqrtWUE))
+
+trans_dfwL.cbind <- cbind(unlist(trans_dfwL$sqrtTotmass), unlist(trans_dfwL$rootshoot), unlist(trans_dfwL$lwc), unlist(trans_dfwL$logAvg_area), unlist(trans_dfwL$logPerimArea), unlist(trans_dfwL$sqrtTotArea), unlist(trans_dfwL$logSRL), unlist(trans_dfwL$d13C),unlist(trans_dfwL$Photo.y),unlist(trans_dfwL$logCond.y),unlist(trans_dfwL$sqrtWUE))
+
+# doing this for now with the weights calculated from all 11. After selecting a subset, I'll recalculate grand weights with just those variables
+# try these for V: logAvg_area, logPerimArea, Photo.y, Cond.y
+summary(manova(trans_dfwV.cbind[,c(4,5,9,10)] ~ CO2Tmt*H2OTmt, trans_dfwV, weights = quad_w)) # CO2*, H2O*
+summary(manova(trans_dfwV.cbind[,c(4,5,9,10)] ~ CO2Tmt*H2OTmt, trans_dfwV, weights = all_w)) # CO2*
+summary(manova(trans_dfwV.cbind[,c(4,5,9,10)] ~ CO2Tmt*H2OTmt, trans_dfwV)) # H2O**
+summary(manova(trans_dfwV.cbind[,c(5,9,10)] ~ CO2Tmt*H2OTmt, trans_dfwV, weights = quad_w)) # CO2**, H2O**
+summary(manova(trans_dfwV.cbind[,c(4,5)] ~ CO2Tmt*H2OTmt, trans_dfwV, weights = quad_w))
+
+# these for L: logAvg_area, logSRL, Photo.y, logCond.y
+summary(manova(trans_dfwL.cbind[,c(4,7,9,10)] ~ CO2Tmt*H2OTmt, trans_dfwL, weights = quad_w)) # CO2*,H2O***,intx .
+summary(manova(trans_dfwL.cbind[,c(4,7,9,10)] ~ CO2Tmt*H2OTmt, trans_dfwL, weights = all_w)) # H2O ***
+summary(manova(trans_dfwL.cbind[,c(4,7,9,10)] ~ CO2Tmt*H2OTmt, trans_dfwL)) # H2O***
+summary(manova(trans_dfwL.cbind[,c(5,9,10)] ~ CO2Tmt*H2OTmt, trans_dfwL, weights = quad_w)) # CO2** H2O***
+summary(manova(trans_dfwL.cbind[,c(4,7)] ~ CO2Tmt*H2OTmt, trans_dfwL, weights = quad_w)) 
+
+
+
+
+trans_dfVL <- biomass2. %>% 
+  dplyr::select(Plot, Spp, Code, totmass, rootshoot, lwc, CO2, meanSWC) %>% 
+  left_join(LiCOR_df.[,c("Code","Photo.y","Cond.y", "WUE.350")], by = "Code") %>% 
+  left_join(lai.[,c("Code","avg_area","perim_per_A","tot_area", "SLA")], by = "Code") %>% 
+  left_join(rootimage.[,c("Code","SRL")], by = "Code") %>% 
+  left_join(SIF.[,c("Code","d13C")], by = "Code") %>% 
+  mutate(logCond.y = log(Cond.y), sqrtWUE = sqrt(WUE.350), sqrtTotmass = sqrt(totmass), logAvg_area = log(avg_area), logPerimArea = log(perim_per_A), sqrtTotArea = sqrt(tot_area), logSRL = log(SRL)) %>%
+  group_by(Plot) %>% 
+  dplyr::mutate(n = n()) %>% 
+  mutate_at(c("sqrtTotmass", "rootshoot", "lwc", "logAvg_area", "logPerimArea", "sqrtTotArea", "SLA", "logSRL", "d13C", "Photo.y", "logCond.y", "sqrtWUE"), list(oov=one_over_se))  %>% 
+  dplyr::summarise(across(where(is.numeric), ~ mean(.x, na.rm=TRUE))) %>% 
+  ungroup() %>% 
+  left_join(lookup, by = "Plot") %>% 
+  mutate(H2OTmt = substr(Tmt,2,2), CO2Tmt = substr(Tmt,1,1)) 
+
+trans_dfVLw <- trans_dfVL %>% 
+  mutate(sqrtTotmass_w = sqrtTotmass_oov/(sum(trans_df$sqrtTotmass_oov, na.rm = T)),
+         rootshoot_w = rootshoot_oov/(sum(trans_df$rootshoot_oov, na.rm = T)),
+         lwc_w = lwc_oov/(sum(trans_df$lwc_oov, na.rm = T)),
+         logAvg_area_w = logAvg_area_oov/(sum(trans_df$logAvg_area_oov, na.rm = T)),
+         logPerimArea_w = logPerimArea_oov/(sum(trans_df$logPerimArea_oov, na.rm = T)),
+         sqrtTotArea_w = sqrtTotArea_oov/(sum(trans_df$sqrtTotArea_oov, na.rm = T)),
+         SLA_w = SLA_oov/(sum(trans_df$SLA_oov, na.rm = T)),
+         logSRL_w = logSRL_oov/(sum(trans_df$logSRL_oov, na.rm = T)),
+         d13C_w = d13C_oov/sum(trans_df$d13C_oov, na.rm = T),
+         Photo.y_w = Photo.y_oov/(sum(trans_df$Photo.y_oov, na.rm = T)),
+         logCond.y_w = logCond.y_oov/(sum(trans_df$logCond.y_oov, na.rm = T)),
+         sqrtWUE_w = sqrtWUE_oov/(sum(trans_df$sqrtWUE_oov, na.rm =T))) %>% 
+  mutate(all_w = sqrtTotmass_w+rootshoot_w+lwc_w+Photo.y_w+logCond.y_w+sqrtWUE_w+logAvg_area_w+logPerimArea_w+sqrtTotArea_w+logSRL_w+d13C_w) %>% 
+  #       mutate(all_w = logAvg_area_w+logSRL_w+Photo.y_w+logCond.y_w) %>% 
+  mutate(all_w = all_w/sum(all_w, na.rm=T)) %>% 
+  mutate(quad_w = (sqrtTotmass_w^2)+(rootshoot_w^2)+(lwc_w^2)+(Photo.y_w^2)+(logCond.y_w^2)+(sqrtWUE_w^2)+(logAvg_area_w^2)+(logPerimArea_w^2)+(sqrtTotArea_w^2)+(SLA_w^2)+(logSRL_w^2)+(d13C_w^2)) %>% 
+  #mutate(quad_w = (Photo.y_w^2)+(logCond.y_w^2)+(logAvg_area_w^2)+(logSRL_w^2)) %>% 
+  mutate(quad_w = quad_w/sum(quad_w, na.rm=T)) 
+
+grid.arrange( # 
+  ggpredict(lm(logCond.y~CO2*H2OTmt , data=trans_dfVw, weights=logCond.y_w), terms=c("CO2","H2OTmt"))%>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("blue","red")),
+  ggpredict(lm(logAvg_area ~ CO2*H2OTmt , data = trans_dfVLw), terms=c("CO2","H2OTmt")) %>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("blue","red")),
+  ggplot(trans_dfVLw, aes(x=CO2, y=logAvg_area, group = H2OTmt)) + geom_point(aes(group = H2OTmt, color = H2OTmt, size=logAvg_area_w)) + scale_color_manual(values = c("red", "blue")) , nrow=3 )
+summary(lm(logAvg_area~CO2*H2OTmt , data=trans_dfVLw, weights=logAvg_area_w))
+
+
+### complete pooling of the data (agnostic to species)
+
+grid.arrange( # SLA
+  ggpredict(lmer(SLA~CO2*H2OTmt + (1|Plot), data=trans_df_full), terms=c("CO2","H2OTmt"))%>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")),
+  ggpredict(lmer(SLA ~ CO2*H2OTmt + (1|Plot), data = trans_df_full), terms=c("CO2","H2OTmt")) %>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")),
+  ggplot(trans_df_full, aes(x=CO2, y=SLA, group = H2OTmt)) + geom_point(aes(group = H2OTmt, color = H2OTmt, shape=Spp)) + scale_color_manual(values = c("red", "blue")) , nrow=3 )
+summary(lmer(SLA~CO2*H2OTmt + (1|Plot), data=trans_df_full))
+# no dice
+
+### partial pooling of the data (species as a random effect: intercept slopes for CO2 and H2O are assigned by species)
+
+grid.arrange( # SLA
+  ggpredict(lmer(SLA~CO2*H2OTmt + (1+CO2*H2OTmt|Spp) + (1|Plot), data=trans_df_full), terms=c("CO2","H2OTmt"))%>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")),
+  ggplot(trans_df_full, aes(x=CO2, y=SLA, group = H2OTmt)) + geom_point(aes(group = H2OTmt, color = H2OTmt, shape=Spp)) + scale_color_manual(values = c("red", "blue")) , nrow=2 )
+summary(lmer(SLA~CO2*H2OTmt + (1+CO2*H2OTmt|Spp) + (1|Plot), data=trans_df_full))
+
+
+### partial pooling of the data (species as a random effect: random intercepts but not slopes for species)
+
+grid.arrange( # SLA
+  ggpredict(lmer(logCond.y~CO2*H2OTmt + (1|Plot) + (1|Spp), data=trans_df_full), terms=c("CO2","H2OTmt"))%>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")),
+  ggplot(trans_df_full, aes(x=CO2, y=logCond.y, group = H2OTmt)) + geom_point(aes(group = H2OTmt, color = H2OTmt, shape=Spp)) + scale_color_manual(values = c("red", "blue")) , nrow=2 )
+summary(lmer(logCond.y~CO2*H2OTmt + (1|Plot) + (1|Spp) + (1|Plot), data=trans_df_full))
+
+
+# one more time and I will try the *unweighted* plot means this time
+
+grid.arrange( # sqrtTotmass
+  ggpredict(lm(sqrtTotmass~rescale(CO2)*rescale(meanSWC) , data=trans_dfwL, weights=sqrtTotmass_w), terms=c("CO2","meanSWC [4,42]"))%>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")),
+  ggpredict(lm(sqrtTotmass ~ rescale(CO2)*rescale(meanSWC) , data = trans_dfwL), terms=c("CO2","meanSWC [4,42]")) %>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")),
+  ggplot(trans_dfwL, aes(x=CO2, y=sqrtTotmass, group = H2OTmt)) + geom_point(aes(group = H2OTmt, color = H2OTmt, size=sqrtTotmass_w)) + scale_color_manual(values = c("red", "blue")) , nrow=3 )
+summary(lm(sqrtTotmass~rescale(CO2)*rescale(meanSWC) , data=trans_dfwL))
+
+# 11th hour; do it with pseudoreplication
+grid.arrange( # rootshoot
+  ggpredict(lm(rootshoot~CO2*H2OTmt, data=trans_df_full), terms=c("CO2","H2OTmt"))%>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")),
+  ggpredict(lm(rootshoot ~ CO2*H2OTmt, data = trans_df_full), terms=c("CO2","H2OTmt")) %>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")),
+  ggplot(trans_df_full, aes(x=CO2, y=rootshoot, group = H2OTmt)) + geom_point(aes(group = H2OTmt, color = H2OTmt, shape=Spp)) + scale_color_manual(values = c("red", "blue")) , nrow=3 )
+summary(lm(rootshoot~CO2*H2OTmt, data=trans_df_full))
 
 # NEVER EVER GIVE UP
 # NEVER SURRENDER
