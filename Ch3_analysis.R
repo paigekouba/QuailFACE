@@ -4,6 +4,17 @@
 # load all data types
 ## load the data fresh with "." suffix; do steps from Ch3_explore and Ch3_LiCOR. Examine colnames
 
+# LiCOR_df
+# actually just load this one after running Ch3_LiCOR
+LiCOR_df. <- LiCOR_df
+LiCOR_df.[,80:92]
+#LiCOR_df.[,80:94] # has SWC, Plot, Spp, Tmt, Photo.y, Cond.y, WUE.350, CO2Tmt and H2OTmt
+# needs shortcode, CO2
+LiCOR_df. <- LiCOR_df. %>% 
+  mutate(Code = if_else(nchar(ID) == 4,substr(ID,1,3),substr(ID,1,4))) %>% 
+  left_join(plot_CO2., by = "Plot")
+LiCOR_df.[which(LiCOR_df$WUE.350 > 550),92] <- NA # filter outliers for WUE.350
+
 # plot_CO2, plot_SWC
 plot_SWC. <- LiCOR_df.[,c("Plot", "SWC")] %>% 
   group_by(Plot) %>% 
@@ -15,14 +26,6 @@ plot_CO2. <- avg_between %>% # from CO2_Ch2.R
   mutate(CO2 = 420+mDeltaTest) %>% 
   as.data.frame()
 
-# LiCOR_df
-# actually just load this one after running Ch3_LiCOR
-LiCOR_df. <- LiCOR_df
-LiCOR_df.[,80:94] # has SWC, Plot, Spp, Tmt, Photo.y, Cond.y, WUE.350, CO2Tmt and H2OTmt
-# needs shortcode, CO2
-LiCOR_df. <- LiCOR_df. %>% 
-  mutate(Code = if_else(nchar(ID) == 4,substr(ID,1,3),substr(ID,1,4))) %>% 
-  left_join(plot_CO2., by = "Plot")
 
 # biomass2
 # jeez too many steps. get this one after Ch3_explore, it is messy but w/e
@@ -34,11 +37,23 @@ biomass2. <- biomass2. %>%
   left_join(plot_CO2., by = "Plot") %>% 
   left_join(plot_SWC., by = "Plot") 
 
+biomass2.[which(biomass2.$totmass==47.05),"totmass"] <- NA # filter outlier for totmass
+
 # exclude rootshoot for 6V2, an outlier: was herbivory list but predicted values failed to adjust appropriately
-biomass2.[which.max(biomass2.$rootshoot),"rootshoot"] <- NA
+biomass2.[which(biomass2.$Code=="6V2"),"rootshoot"] <- NA
 
 # now remove lwc for seedlings from herbivory list, likely to have no leaves 
-biomass2.[which(biomass2.$Code %in% firstherb$Code),]$lwc <- NA 
+# biomass2.[which(biomass2.$Code %in% firstherb$Code),]$lwc <- NA 
+# actually I don't think this is necessary! water content won't be affected by leaf herbivory, it's proportional
+
+# leaf area
+lai. <- lai
+lai.[which(lai.$tot_area < 1000),]$tot_area <- NA
+lai.[which(lai.$tot_area < 1000),]$avg_area <- NA
+lai.[which(lai.$tot_area < 1000),]$count <- NA
+lai.[which(lai.$perim_per_A > 1),]$perim_per_A <- NA
+lai.[which(lai.$SLA<4000),]$SLA <- NA
+lai.[which(lai.$Spp=="L" & lai.$SLA > 12000),]$SLA <- NA
 
 # rootimage
 rootimage. <- read.csv("/Users/paigekouba/Documents/UC_Davis/2021_Winter/Quals/Proposal/Chapter 1/TinyFACE/GitHub/QuailFACE/RawData/features_4.26.24_final.csv") %>% 
@@ -79,92 +94,6 @@ SIF.[1,]
 # rootimage. responses ratio_2to1, dia_range_1 or w/e, # branchpoints
 # SIF. response d13C
 
-# Step 0: check data for normality and normality of residuals (dharma package to check residuals)
-# wait! have to do this by spp
-# try transformed data # check SWC by eCO2 to see if there's a feedback # specific root length
-# LiCOR_df.
-hist((LiCOR_df.[LiCOR_df.$Spp == "V",]$Photo.y), breaks = 2*sqrt(nrow(LiCOR_df.)))
-qqPlot(LiCOR_df.[LiCOR_df.$Spp == "V",]$Photo.y) 
-hist((LiCOR_df.[LiCOR_df.$Spp == "L",]$Photo.y), breaks = 2*sqrt(nrow(LiCOR_df.)))
-qqPlot((LiCOR_df.[LiCOR_df.$Spp == "L",]$Photo.y)) # pretty ok by spp!
-
-hist(log(LiCOR_df.[LiCOR_df.$Spp=="V",]$Cond.y))
-qqPlot(log(LiCOR_df.[LiCOR_df.$Spp=="V",]$Cond.y))
-hist(log(LiCOR_df.[LiCOR_df.$Spp=="L",]$Cond.y))
-qqPlot(log(LiCOR_df.[LiCOR_df.$Spp=="L",]$Cond.y))
-
-LiCOR_df. %>% 
-  filter(WUE.350 < 550) %>% 
-  filter(Spp=="V") %>% 
-  dplyr::select(WUE.350) %>% 
-  unlist() %>% 
-  as.numeric() %>% 
-  sqrt() %>% 
-  #  hist(breaks = sqrt(nrow(LiCOR_df.)))
-  qqPlot()
-
-# biomass2.
-hist(sqrt(biomass2.[biomass2.$Spp=="L",]$totmass), breaks=2*sqrt(nrow(biomass2.))) # outlier
-qqPlot(sqrt(biomass2.[biomass2.$Spp=="L",]$totmass)) 
-
-biomass2. %>% 
-  filter(rootshoot < 9) %>% 
-  filter(Spp=="V") %>% 
-  dplyr::select(rootshoot) %>% 
-  unlist() %>% 
-  as.numeric() %>% 
-  # log() %>% 
-  #hist(breaks = sqrt(nrow(LiCOR_df.)))
-  qqPlot()
-hist((biomass2.[biomass2.$Spp=="L",]$rootshoot), breaks=2*sqrt(nrow(biomass2.))) # outliers
-qqPlot((biomass2.[biomass2.$Spp=="L",]$rootshoot)) # fatty right tail
-qqPlot(log(biomass2.[biomass2.$Spp=="L",]$rootshoot)) # better for V, worse for L
-# this one is tough
-
-hist(biomass2.[biomass2.$Spp=="V",]$lwc, breaks=2*sqrt(nrow(biomass2.))) 
-qqPlot(biomass2.[biomass2.$Spp=="V",]$lwc) 
-# fine by spp
-
-# check leaf area variables here
-
-
-# rootimage.
-rootimage. %>% 
-  #  filter(SRL < 1500) %>% 
-  filter(Spp=="V") %>% 
-  dplyr::select(SRL) %>% 
-  unlist() %>% 
-  as.numeric() %>% 
-  log() %>% 
-  #hist(breaks = sqrt(nrow(rootimage.)))
-  qqPlot()
-hist(log(rootimage.[rootimage.$Spp=="V",]$SRL), breaks=sqrt(nrow(rootimage.)))
-qqPlot(log(rootimage.[rootimage.$Spp=="V",]$SRL))
-hist(log(rootimage.[rootimage.$Spp=="L",]$SRL), breaks=sqrt(nrow(rootimage.)))
-qqPlot(log(rootimage.[rootimage.$Spp=="L",]$SRL))
-
-hist(log(rootimage.[rootimage.$Spp=="L",]$Root.Length.Diameter.Range.1.mm))
-qqPlot(log(rootimage.[rootimage.$Spp=="L",]$Root.Length.Diameter.Range.1.mm))
-
-rootimage. %>% 
-  filter(Number.of.Branch.Points > 5) %>% 
-  filter(Spp=="V") %>% 
-  dplyr::select(Number.of.Branch.Points) %>% 
-  unlist() %>% 
-  as.numeric() %>% 
-  log() %>% 
-  #hist(breaks = sqrt(nrow(LiCOR_df.)))
-  qqPlot()
-hist(log(rootimage.[rootimage.$Spp=="L",]$Number.of.Branch.Points))
-qqPlot(log(rootimage.[rootimage.$Spp=="L",]$Number.of.Branch.Points))
-
-# SIF.
-hist(SIF.[SIF.$Spp=="V",]$d13C)
-qqPlot(SIF.[SIF.$Spp=="V",]$d13C) # cute
-
-# check correlation between variables
-cor(manova.df2[, c(4:9,14:20)], use="pairwise.complete.obs") %>% 
-  ggcorrplot()
 
 library(lmerTest)  
 
@@ -178,6 +107,8 @@ library(lmerTest)
 # models with transformed data and **weighted plot means** for variable-specific weights
 # priority is CO2*H2OTmt, like in plots; can also try CO2*SWC (rescaled)
 # get that dataset here:
+
+
 
 
 # now do each variable for each species, and do ggpredict with facet_grid
