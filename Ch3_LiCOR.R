@@ -148,7 +148,7 @@ df_all <- rbind(df3, df4)
 
 # interpolation: want to compare treatment groups on apples-to-apples basis. Find the midpoint of all the curves and extrapolate to that value, for Photo and Cond (and other variables deemed necessary)
 midpoints <- df_all %>%
-  select(HHMMSS, Photo, Cond, Ci, CO2R, SWC, Date, Log, X., Time, ID, Plot, Tmt) %>%
+  dplyr::select(HHMMSS, Photo, Cond, Ci, CO2R, SWC, Date, Log, X., Time, ID, Plot, Tmt) %>%
   group_by(ID) %>%
   summarize(Ci.midpoint = (min(Ci)+max(Ci))/2) 
 #mean(midpoints$Ci.midpoint) # 351.6937
@@ -166,7 +166,7 @@ LiCOR_extp <- vector(length = length(LiCOR_IDs)) # initialize results vector
 
 for(i in 1:length(LiCOR_IDs)){ # calculate linear interpolation for each ID's datapoints, at 350 ppm Ci
   LiCOR_extp[i] <- predict(lm(Photo ~ Ci, data = df_all %>%
-                              select(HHMMSS, Photo, Cond, Ci, CO2R, SWC, Date, Log, X., Time, ID, Plot, Tmt, Spp) %>%
+                              dplyr::select(HHMMSS, Photo, Cond, Ci, CO2R, SWC, Date, Log, X., Time, ID, Plot, Tmt, Spp) %>%
                               filter(ID == LiCOR_IDs[i])), newdata=data.frame(Ci = 350)) }
 
 LiCOR_extp_df <- data.frame(cbind(LiCOR_IDs, LiCOR_extp)) # pairs ID/code with predicted Anet at 350
@@ -178,7 +178,7 @@ LiCOR_gs <- vector(length = length(LiCOR_IDs)) # initialize results vector
 
 for(i in 1:length(LiCOR_IDs)){ # calculate linear interpolation *of Cond* for each ID's datapoints, at 350 ppm Ci
   LiCOR_gs[i] <- predict(lm(Cond ~ Ci, data = df_all %>%
-                                select(HHMMSS, Photo, Cond, Ci, CO2R, SWC, Date, Log, X., Time, ID, Plot, Tmt, Spp) %>%
+                                dplyr::select(HHMMSS, Photo, Cond, Ci, CO2R, SWC, Date, Log, X., Time, ID, Plot, Tmt, Spp) %>%
                                 filter(ID == LiCOR_IDs[i])), newdata=data.frame(Ci = 350)) }
 
 LiCOR_gs_df <- data.frame(cbind(LiCOR_IDs, LiCOR_gs)) # pairs ID/code with predicted gs at 350
