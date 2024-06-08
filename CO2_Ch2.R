@@ -116,6 +116,78 @@ CO2_operational <- CO2_20s %>%
   filter(PARuE >= 50) %>% # restricts to just daytime (on) values
   filter(TIMESTAMP < "2023-11-22") %>%  # leaves out GrassFACE era
   filter(TIMESTAMP > "2023-08-01") # reliable CO2 period
+
+CO2_total <- CO2_20s %>% 
+  filter(PARuE >= 50) %>% # restricts to just daytime (on) values
+  filter(TIMESTAMP < "2023-11-22")
+
+oaks_i %>% 
+  filter(PARuE >= 50) %>% # restricts to just daytime (on) values
+ # filter(TIMESTAMP < "2023-11-22") %>%  # leaves out GrassFACE era
+  select(TIMESTAMP, DeltaObs, FlowMFC, PARuE) %>% 
+  dygraph() %>% 
+  dyRangeSelector() 
+
+  mean(CO2_total$DeltaObs) 
+# [1] 109.9424
+
+# here is where I will connect ∆Obs with FlowMFC and then back out the overall average ∆CO2
+# CO2_total %>%   
+#   select(TIMESTAMP, DeltaObs, FlowMFC, PARuE) %>% 
+#   dygraph() %>% 
+#   dyRangeSelector() %>% 
+#   dyRoller(rollPeriod=180)
+  
+# the periods I need to fix are 2/15/23--3/2/23, and 7/1/23-7/22/23; a total of 15 + 21 = 36 days
+# I should make a relationship between DeltaObs and FlowMFC for all the days NOT counting those days
+  # then use that to predict DeltaObs from FlowMFC
+
+CO2_op_dailymeans <- CO2_operational %>% 
+  filter(DeltaObs < 1000 & DeltaObs > -200) %>% 
+  filter(TurnCO2On == 1) %>% 
+  group_by(TIMESTAMP = cut(TIMESTAMP, breaks = "1 day")) %>% 
+  summarise(DeltaObs = mean(DeltaObs), FlowMFC = mean(FlowMFC)) 
+
+CO2_op_dailymeans %>% 
+ggplot() +
+  geom_point(aes(x=FlowMFC, y=DeltaObs), alpha=0.4) +
+  geom_smooth(aes(x=FlowMFC, y=DeltaObs), method="lm")
+
+summary(lm(DeltaObs ~ FlowMFC, data= CO2_op_dailymeans))
+# Coefficients:
+#   Estimate Std. Error t value Pr(>|t|)    
+# (Intercept) -8.63487   18.68306  -0.462    0.645    
+# meanFlowMFC  0.10611    0.01181   8.986 1.43e-14 ***
+
+CO2_operational %>% 
+  filter(DeltaObs < 1000 & DeltaObs > -200) %>% 
+  filter(TurnCO2On == 1) %>% 
+  ggplot() +
+  geom_point(aes(x=FlowMFC, y=DeltaObs), alpha=0.4) +
+  geom_smooth(aes(x=FlowMFC, y=DeltaObs), method="lm")
+
+summary(lm(DeltaObs ~ FlowMFC, data= CO2_operational))
+
+# I think, use the daily means model to establish the relationship, then use instantaneous FlowMFC for the broken pump days. Try that
+
+MFCmod <- lm(DeltaObs ~ FlowMFC, data= CO2_op_dailymeans)
+
+# CO2_total_corr <- CO2_total
+# CO2_total_corr$DeltaObs_pred <- predic(MFCmod, )
+  
+ # biomass_nh2$predVW <- predict(lm_VW, newdata = biomass_nh2)
+  
+CO2_total_corr <- CO2_total %>% 
+  mutate(brokenpump = ifelse( ((TIMESTAMP > "2023-02-15" & TIMESTAMP < "2023-03-03") | (TIMESTAMP > "2023-07-01" & TIMESTAMP < "2023-07-23")) , 1,0)) %>% 
+  mutate(DeltaObs_pred = predict(MFCmod, newdata=CO2_total)) %>% 
+#  ggplot() + geom_point(aes(x=DeltaObs, y=DeltaObs_pred))
+  mutate(DeltaObs_corr = case_when(brokenpump==0 ~ DeltaObs,
+                                   brokenpump==1 ~ DeltaObs_pred))
+
+mean(CO2_total_corr$DeltaObs_corr)
+# [1] 118.2955
+
+
 # mean of DeltaObs all time until 11/22/23 = 155 ppm
 mean(CO2_operational$DeltaObs) # 157.7379
 sd(CO2_operational$DeltaObs)# 35.0
@@ -167,7 +239,7 @@ CO2_20s %>%
 ggplot(CO2_operational, aes(x=DeltaObs))+
   geom_density()+
   geom_vline(aes(xintercept = mean(DeltaObs)),color = "red", linetype="dashed", size=1)+
-  labs(title="CO2 Elevation: Daytime, with Full Tank and Functioning Pump", 
+  labs(title="CO2 Elevation", #: Daytime, with Full Tank and Functioning Pump", 
        x= "∆ CO2 (ppm)",
        y= "Density")+
   theme_classic()
@@ -178,10 +250,10 @@ between_plot <- CO2_20s %>%
 #  filter(PARuE >= 50) %>% # restricts to just daytime (on) values
   filter(TIMESTAMP > "2023-10-09 10:00:00" & TIMESTAMP < "2023-10-09 18:00:00") %>% 
   dplyr::select(TIMESTAMP, CO2ref, CO2elev, CO2test, DeltaObs) %>% 
-  mutate(DeltaTest = CO2test - CO2ref) %>% 
-  dygraph() %>% 
-  dyRoller(rollPeriod = 10) %>% 
-  dyRangeSelector()
+  mutate(DeltaTest = CO2test - CO2ref) #%>% 
+  # dygraph() %>% 
+  # dyRoller(rollPeriod = 10) %>% 
+  # dyRangeSelector()
 
 # avg_between <- between_plot %>% 
 #   group_by(TIMESTAMP = cut(TIMESTAMP, breaks = "30 min")) %>% 
@@ -195,9 +267,10 @@ avg_between$Plot <- as.character(c(4:16,1:3))
 # ggplot(avg_between, aes(Plot, mDeltaTest)) +
 #   geom_point() +
 #   geom_pointrange(data = avg_between, aes(ymin=(mDeltaTest - se), ymax = (mDeltaTest + se)))
-ggplot(avg_between, aes(Plot, mDeltaTest)) +
+ggplot(avg_between, aes(factor(Plot, levels = c("1","2","3","4","5","6","7","8","9","10","11","12","13","14","15","16")), mDeltaTest)) +
   geom_point() +
-  geom_pointrange(data = avg_between, aes(ymin=(mDeltaTest - sd), ymax = (mDeltaTest + sd)))
+  geom_pointrange(data = avg_between, aes(ymin=(mDeltaTest - sd), ymax = (mDeltaTest + sd))) +
+  theme_classic(base_size = 20)
 
 # within-plot testing: 3/27/24
 
@@ -222,7 +295,8 @@ avg_within$Position <- c("center", LETTERS[1:12], paste0(seq(20,100,by=10),"cm")
 avg_within$Position <- factor(avg_within$Position, levels = unique(avg_within$Position))
 ggplot(avg_within, aes(Position, mDeltaTest)) +
   geom_point() +
-  geom_pointrange(data = avg_within, aes(ymin=(mDeltaTest - sd), ymax = (mDeltaTest + sd)))
+  geom_pointrange(data = avg_within, aes(ymin=(mDeltaTest - sd), ymax = (mDeltaTest + sd))) +
+  theme_classic(base_size = 20)
 
 avg_within2 <- left_join(avg_within, points_within, join_by(Position == position))
 avg_within2 <- avg_within2[1:13,]
@@ -283,3 +357,29 @@ CO2_20s %>% # graph of CO2ref
   dygraph() %>% 
   dyRoller(rollPeriod = 180) %>% # hourly avg (of 20s data)
   dyRangeSelector()
+
+weather <- read.csv("/Users/paigekouba/Documents/UC_Davis/2021_Winter/Quals/Proposal/Chapter 1/TinyFACE/GitHub/QuailFACE/RawData/QuailWeather.csv")
+head(weather)
+typeof(weather$Time)
+mdy_hm(weather[1:10,1])
+weather$Time <- mdy_hm(weather$Time)
+weather$Time <- force_tz(weather$Time, "America/Los_Angeles")
+
+quail_weather <- weather %>% 
+  select(Time,Quail.Ridge.Rainfall.Cumulative.mm, Quail.Ridge.Air.Temp.Avg.degC) %>% 
+  filter(Quail.Ridge.Air.Temp.Avg.degC > -5 & Quail.Ridge.Air.Temp.Avg.degC < 37) %>% 
+  mutate(day=substr(Time,1,10)) %>% 
+  group_by(day) %>% 
+  summarise(meanRain = mean(Quail.Ridge.Rainfall.Cumulative.mm), meanTemp = mean(Quail.Ridge.Air.Temp.Avg.degC)) %>% ungroup() %>% 
+  ggplot(aes(x=ymd(day))) +
+  geom_line(aes(y=meanRain),color="darkblue") +
+  geom_line(aes(y=meanTemp*19.5),color="darkorange") +
+  scale_y_continuous(name="Cumulative Rainfall (mm)",
+                     sec.axis=sec_axis(~.*0.05128205, name="Average Temperature (ºC)")) +
+  xlab(label="Date") +
+  theme_classic(base_size = 18)
+
+  dygraph() %>% 
+  dyRangeSelector() %>% 
+  dyRoller(4383)
+
