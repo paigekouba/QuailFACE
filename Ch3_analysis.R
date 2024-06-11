@@ -21,11 +21,26 @@ plot_SWC. <- LiCOR_df.[,c("Plot", "SWC")] %>%
   summarise(meanSWC=mean(SWC)) %>% 
   as.data.frame()
 
-plot_CO2. <- avg_between %>% # from CO2_Ch2.R
-  dplyr::select(Plot, mDeltaTest) %>% 
-  mutate(CO2 = 420+mDeltaTest) %>% 
-  as.data.frame()
+## This needs to be changed ! plotwise means from 10/9 were at or near 200, but overall means from the whole experiment were 118 ppm
+# plot_CO2. <- avg_between %>% # from CO2_Ch2.R
+#   dplyr::select(Plot, mDeltaTest) %>% 
+#   mutate(CO2 = 420+mDeltaTest) %>% 
+#   as.data.frame()
+# change it here and downstream stuff will work out
 
+# get the per-plot ∆CO2 from the 10/9 test, scale it to the requisite fraction of the mean elevation (127 ppm) added to the mean ambient value (422)
+min(avg_between$mDeltaTest) # -6.114156
+max(avg_between$mDeltaTest) # 256.731
+scale((avg_between$mDeltaTest + 422), center = F, scale = T)*544
+mean(avg_between$mDeltaTest[avg_between$mDeltaTest>100]) # 210.8419
+mean(avg_between$mDeltaTest[avg_between$mDeltaTest<100]) # 8.442497
+
+# for eCO2 plots, the mean is (210 - 127) = 83.8 lower
+plot_CO2. <- avg_between %>% 
+  select(Plot, mDeltaTest) %>% 
+  mutate(CO2 = case_when(mDeltaTest > 100 ~ 422+(mDeltaTest-83.8),
+                         mDeltaTest < 100 ~ 422+(mDeltaTest)) ) %>% 
+  as.data.frame()
 
 # biomass2
 # jeez too many steps. get this one after Ch3_explore, it is messy but w/e
