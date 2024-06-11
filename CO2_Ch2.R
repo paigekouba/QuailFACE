@@ -128,15 +128,37 @@ oaks_i %>%
   dygraph() %>% 
   dyRangeSelector() 
 
-  mean(CO2_total$DeltaObs) 
-# [1] 109.9424
-
+  mean(CO2_total$DeltaObs) # [1] 109.9424
+  median(CO2_total$DeltaObs) # 130.8
+  mean(CO2_total$CO2ref) # 485.1931
+  median(CO2_total$CO2ref) # 436.1647
+  mean(CO2_total$CO2elev) # 593.9587 (+108.8)
+  median(CO2_total$CO2elev) # 577.118 (+ 141.0)
+  
+# raw plot of eCO2 and aCO2 distributions per month
+  CO2_total %>% 
+    group_by(month=cut(TIMESTAMP, breaks = "1 month"), drop=FALSE) %>% 
+    mutate(month=ymd(month)) %>% 
+    filter(month < "2023-02-15" | month > "2023-04-07") %>% 
+    summarise(medianCO2ref= median(CO2ref), medianCO2elev=median(CO2elev)) %>% 
+    ungroup() %>% 
+  ggplot() +
+    geom_point(aes(x=month, y=medianCO2ref), color="darkgray") +
+    geom_point(aes(x=month, y=medianCO2elev), color="black") +
+    geom_line(aes(x=month, y=medianCO2ref), color="darkgray") +
+    geom_line(aes(x=month, y=medianCO2elev), color="black") +
+    scale_x_date(date_breaks="1 month")
+  
+# next I should add back the predicted eCO2 values based on the corrected df below (and interpolate aCO2)
+  # or actually, just do the above plotting on the corrected dataset!?
+  # not quite; only modeled DeltaObs. Can do the same modeling (FlowMFC-based) for eCO2; and then use average of months on either side as aCO2
+  
 # here is where I will connect ∆Obs with FlowMFC and then back out the overall average ∆CO2
-# CO2_total %>%   
-#   select(TIMESTAMP, DeltaObs, FlowMFC, PARuE) %>% 
-#   dygraph() %>% 
-#   dyRangeSelector() %>% 
-#   dyRoller(rollPeriod=180)
+CO2_total %>%
+  select(TIMESTAMP, CO2ref, CO2elev, FlowMFC) %>%
+  dygraph() %>%
+  dyRangeSelector() %>%
+  dyRoller(rollPeriod=180)
   
 # the periods I need to fix are 2/15/23--3/2/23, and 7/1/23-7/22/23; a total of 15 + 21 = 36 days
 # I should make a relationship between DeltaObs and FlowMFC for all the days NOT counting those days
@@ -146,18 +168,29 @@ CO2_op_dailymeans <- CO2_operational %>%
   filter(DeltaObs < 1000 & DeltaObs > -200) %>% 
   filter(TurnCO2On == 1) %>% 
   group_by(TIMESTAMP = cut(TIMESTAMP, breaks = "1 day")) %>% 
-  summarise(DeltaObs = mean(DeltaObs), FlowMFC = mean(FlowMFC)) 
+  summarise(DeltaObs = mean(DeltaObs), FlowMFC = mean(FlowMFC), CO2elev=mean(CO2elev)) 
 
 CO2_op_dailymeans %>% 
 ggplot() +
   geom_point(aes(x=FlowMFC, y=DeltaObs), alpha=0.4) +
   geom_smooth(aes(x=FlowMFC, y=DeltaObs), method="lm")
 
+CO2_op_dailymeans %>% 
+  ggplot() +
+  geom_point(aes(x=FlowMFC, y=CO2elev), alpha=0.4) +
+  geom_smooth(aes(x=FlowMFC, y=CO2elev), method="lm")
+
 summary(lm(DeltaObs ~ FlowMFC, data= CO2_op_dailymeans))
 # Coefficients:
 #   Estimate Std. Error t value Pr(>|t|)    
-# (Intercept) -8.63487   18.68306  -0.462    0.645    
-# meanFlowMFC  0.10611    0.01181   8.986 1.43e-14 ***
+#   (Intercept) -8.63487   18.68306  -0.462    0.645    
+#   meanFlowMFC  0.10611    0.01181   8.986 1.43e-14 ***
+
+summary(lm(CO2elev ~ FlowMFC, data= CO2_op_dailymeans))
+# Coefficients:
+#   Estimate Std. Error t value Pr(>|t|)    
+#   (Intercept) 389.61233   45.38373   8.585 1.08e-13 ***
+#   FlowMFC       0.10249    0.02869   3.573 0.000541 ***
 
 CO2_operational %>% 
   filter(DeltaObs < 1000 & DeltaObs > -200) %>% 
@@ -171,21 +204,126 @@ summary(lm(DeltaObs ~ FlowMFC, data= CO2_operational))
 # I think, use the daily means model to establish the relationship, then use instantaneous FlowMFC for the broken pump days. Try that
 
 MFCmod <- lm(DeltaObs ~ FlowMFC, data= CO2_op_dailymeans)
+CO2elevmod <- lm(CO2elev ~ FlowMFC, data=CO2_op_dailymeans)
 
 # CO2_total_corr <- CO2_total
 # CO2_total_corr$DeltaObs_pred <- predic(MFCmod, )
   
  # biomass_nh2$predVW <- predict(lm_VW, newdata = biomass_nh2)
-  
-CO2_total_corr <- CO2_total %>% 
-  mutate(brokenpump = ifelse( ((TIMESTAMP > "2023-02-15" & TIMESTAMP < "2023-03-03") | (TIMESTAMP > "2023-07-01" & TIMESTAMP < "2023-07-23")) , 1,0)) %>% 
-  mutate(DeltaObs_pred = predict(MFCmod, newdata=CO2_total)) %>% 
-#  ggplot() + geom_point(aes(x=DeltaObs, y=DeltaObs_pred))
-  mutate(DeltaObs_corr = case_when(brokenpump==0 ~ DeltaObs,
-                                   brokenpump==1 ~ DeltaObs_pred))
 
-mean(CO2_total_corr$DeltaObs_corr)
-# [1] 118.2955
+CO2_total %>% 
+  filter((TIMESTAMP > "2023-02-15" & TIMESTAMP < "2023-04-07") | (TIMESTAMP > "2023-07-01" & TIMESTAMP < "2023-07-23")) %>% 
+  select(CO2ref) %>% 
+  colMeans() # aCO2 mean = 757.6 for broken pump periods
+
+CO2_total %>% 
+  filter(TIMESTAMP < "2023-02-15" |  (TIMESTAMP > "2023-04-07" & TIMESTAMP < "2023-07-01") | TIMESTAMP > "2023-07-23")  %>% 
+  select(CO2ref) %>% 
+  colMeans() # 432.6682 
+CO2ref_mean <- 432.6682 
+
+CO2_total_corr <- CO2_total %>% 
+  filter(CO2ref>0, CO2elev>0, FlowMFC!=0) %>% 
+  mutate(hms = lubridate::hms(format(TIMESTAMP, "%H:%M:%S"))) %>% 
+  filter(TIMESTAMP > "2022-10-11" | hms > lubridate::hms("10:00:00")) %>% 
+  mutate(brokenpump = case_when( (TIMESTAMP > "2023-02-15" & TIMESTAMP < "2023-04-07") ~ 1,  
+                                (TIMESTAMP > "2023-04-07" & TIMESTAMP < "2023-05-11") ~ 2,
+                                (TIMESTAMP > "2023-07-01" & TIMESTAMP < "2023-07-23") ~ 3,
+                                .default = 0)) %>% 
+  mutate(DeltaObs_pred = predict(MFCmod, newdata=CO2_total%>% 
+                                 filter(CO2ref>0, CO2elev>0, FlowMFC!=0) %>% 
+                                 mutate(hms = lubridate::hms(format(TIMESTAMP, "%H:%M:%S"))) %>% 
+                                 filter(TIMESTAMP>"2022-10-11" |hms>lubridate::hms("10:00:00"))))%>% 
+  #  ggplot() + geom_point(aes(x=DeltaObs, y=DeltaObs_pred))
+  mutate(DeltaObs_corr = case_when(brokenpump==0 ~ DeltaObs,
+                                   brokenpump!=0 ~ DeltaObs_pred)) %>% 
+  mutate(CO2elev_pred = predict(CO2elevmod, newdata=CO2_total%>% 
+                                  filter(CO2ref>0, CO2elev>0, FlowMFC!=0) %>% 
+                                  mutate(hms = lubridate::hms(format(TIMESTAMP, "%H:%M:%S"))) %>% 
+                                  filter(TIMESTAMP>"2022-10-11" |hms>lubridate::hms("10:00:00"))))%>% 
+  mutate(CO2elev_corr = case_when(brokenpump==0 ~ CO2elev,
+                                  brokenpump!=0 ~ CO2elev_pred)) %>% 
+  mutate(CO2ref_corr = case_when(brokenpump==0 ~ CO2ref,
+                                 brokenpump==1 ~ mean(c(419,413)),
+                                 brokenpump==2 ~ mean(c(419,413)),
+                                 brokenpump==3 ~ mean(c(405,393))))
+
+CO2_total_corr0 <- CO2_total %>% 
+  filter(CO2ref>0, CO2elev>0, FlowMFC!=0) %>% 
+  mutate(brokenpump = case_when( (TIMESTAMP > "2023-02-15" & TIMESTAMP < "2023-04-07") ~ 1,  
+                                 (TIMESTAMP > "2023-04-07" & TIMESTAMP < "2023-05-11") ~ 2,
+                                 (TIMESTAMP > "2023-07-01" & TIMESTAMP < "2023-07-23") ~ 3,
+                                 .default = 0)) %>% 
+  mutate(DeltaObs_pred = predict(MFCmod, newdata=CO2_total%>% 
+                                   filter(CO2ref>0, CO2elev>0, FlowMFC!=0))) %>% 
+  #  ggplot() + geom_point(aes(x=DeltaObs, y=DeltaObs_pred))
+  mutate(DeltaObs_corr = case_when(brokenpump==0 ~ DeltaObs,
+                                   brokenpump!=0 ~ DeltaObs_pred)) %>% 
+  mutate(CO2elev_pred = predict(CO2elevmod, newdata=CO2_total%>% 
+                                  filter(CO2ref>0, CO2elev>0, FlowMFC!=0))) %>% 
+  mutate(CO2elev_corr = case_when(brokenpump==0 ~ CO2elev,
+                                  brokenpump!=0 ~ CO2elev_pred)) %>% 
+  mutate(CO2ref_corr = case_when(brokenpump==0 ~ CO2ref,
+                                 brokenpump==1 ~ mean(c(419,413)),
+                                 brokenpump==2 ~ mean(c(419,413)),
+                                 brokenpump==3 ~ mean(c(405,393))))
+
+# pausing here; I attempted to filter out the early-morning spikes from dates before 10/11/22, but it didn't seem to change to output of the plot at all so I'm wondering if I missed something.
+
+library(hms)
+
+CO2_total_corr %>% 
+  select(TIMESTAMP, CO2ref, CO2ref_corr, CO2elev, CO2elev_corr, DeltaObs_corr, brokenpump) %>% 
+  summarise_if(is.numeric, median, na.rm = T)
+  # mutate_if(negate(is.numeric), ~ -999) %>%
+  # colMeans(na.rm = TRUE)
+
+# median
+#       CO2ref   CO2ref_corr       CO2elev  CO2elev_corr DeltaObs_corr    brokenpump 
+#         433.           416          578.          566.           155.            0
+
+# mean
+#       CO2ref   CO2ref_corr       CO2elev  CO2elev_corr DeltaObs_corr    brokenpump 
+#         489.          422.          602.          544.           127.        0.460
+
+
+mean(CO2_total_corr$DeltaObs_corr) #  126.266
+median(CO2_total_corr$DeltaObs_corr) # 154.6
+# also need a mean (corrected) for aCO2 and eCO2
+# should get these from all days EXCEPT broken pump (2/15/23--4/7/23, and 7/1/23-7/22/23)
+mean(CO2_total_corr$CO2ref_corr) # 418.197
+median(CO2_total_corr$CO2ref_corr) # 416
+mean(CO2_total_corr$CO2elev_corr) # 539.9515
+median(CO2_total_corr$CO2elev_corr) # 565.4571
+
+CO2_total_corr %>% 
+  ggplot() +
+  geom_point(aes(x=TIMESTAMP, y=CO2elev_corr), color="black") +
+  geom_point(aes(x=TIMESTAMP, y=CO2ref_corr), color="darkgray")
+
+# also need aCO2 interpolated for broken-pump days
+# then, scale 10/9 plotwise eCO2 values to overall average
+
+CO2_total_corr %>% 
+  group_by(month=cut(TIMESTAMP, breaks = "1 month")) %>% 
+  mutate(month=ymd(month)) %>% 
+  summarise(meanCO2ref_corr= mean(CO2ref_corr), meanCO2elev_corr=mean(CO2elev_corr)) %>% 
+  ungroup() %>% 
+  ggplot() +
+  geom_point(aes(x=month, y=meanCO2ref_corr), color="darkgray") +
+  geom_point(aes(x=month, y=meanCO2elev_corr), color="black") +
+  geom_line(aes(x=month, y=meanCO2ref_corr), color="darkgray") +
+  geom_line(aes(x=month, y=meanCO2elev_corr), color="black") +
+  scale_x_date(date_breaks="1 month") +
+  theme(axis.text.x = element_text(size = 12, angle = 45, hjust = 1), axis.text.y = element_text(size = 12)) +
+  labs(title = "eCO2 and aCO2: Monthly Mean Values") +
+  ylab("CO2 Concentration (ppm)")
+
+CO2_total_corr %>% 
+  select(TIMESTAMP, CO2ref_corr, CO2elev_corr) %>% 
+  dygraph() %>% 
+  dyRoller(rollPeriod = 180) %>% 
+  dyRangeSelector()
 
 
 # mean of DeltaObs all time until 11/22/23 = 155 ppm
