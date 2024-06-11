@@ -100,12 +100,12 @@ trans_df <- biomass2. %>%
   mutate(logCond.y = log(Cond.y), sqrtWUE = sqrt(WUE.350), sqrtTotmass = sqrt(totmass), logAvg_area = log(avg_area), logPerimArea = log(perim_per_A), sqrtTotArea = sqrt(tot_area), logSRL = log(SRL)) %>%
   group_by(Plot, Spp) %>% 
   dplyr::mutate(n = n()) %>% 
-#  mutate_at(c("sqrtTotmass", "rootshoot", "lwc", "logAvg_area", "logPerimArea", "sqrtTotArea", "logSRL", "d13C"), list(oov=one_over_se))  %>% 
-  mutate_at(c("sqrtTotmass", "rootshoot", "lwc", "logAvg_area", "logPerimArea", "sqrtTotArea", "SLA", "logSRL", "d13C", "Photo.y", "logCond.y", "sqrtWUE"), list(oov=one_over_se))  %>% 
+#  mutate_at(c("sqrtTotmass", "rootshoot", "lwc", "logAvg_area", "logPerimArea", "sqrtTotArea", "logSRL", "d13C"), list(oose=one_over_se))  %>% 
+  mutate_at(c("sqrtTotmass", "rootshoot", "lwc", "logAvg_area", "logPerimArea", "sqrtTotArea", "SLA", "logSRL", "d13C", "Photo.y", "logCond.y", "sqrtWUE"), list(oose=one_over_se))  %>% 
 #  ungroup() %>% 
   # left_join(lookup, by = "Plot") %>% 
   # group_by(Spp, Tmt) %>% 
-  # mutate_at(c("Photo.y", "logCond.y", "sqrtWUE"), list(oov=one_over_se))  %>% 
+  # mutate_at(c("Photo.y", "logCond.y", "sqrtWUE"), list(oose=one_over_se))  %>% 
   # ungroup() %>% 
   # group_by(Plot, Spp) %>% 
   dplyr::summarise(across(where(is.numeric), ~ mean(.x, na.rm=TRUE))) %>% 
@@ -114,7 +114,7 @@ trans_df <- biomass2. %>%
   mutate(H2OTmt = substr(Tmt,2,2), CO2Tmt = substr(Tmt,1,1)) 
 # for plot 3, L has n = 1, but measurements for all data types. Same for plot 16, V
 # assign it a weight based on the variance of all other points from its treatment group (AD):
-#write.csv(trans_df, "QuailFACE_plotmeans.csv")
+#write.csv(trans_df, "QuailFACE_plotmeans6.8.24.csv")
 
 plot3L_vars <- biomass2. %>% 
   dplyr::select(Plot, Spp, Code, totmass, rootshoot, lwc, CO2, meanSWC) %>% 
@@ -125,7 +125,7 @@ plot3L_vars <- biomass2. %>%
   mutate(logCond.y = log(Cond.y), sqrtWUE = sqrt(WUE.350), sqrtTotmass = sqrt(totmass), logAvg_area = log(avg_area), logPerimArea = log(perim_per_A), sqrtTotArea = sqrt(tot_area), logSRL = log(SRL)) %>%
   left_join(lookup, by = "Plot") %>% 
   group_by(Spp, Tmt) %>% 
-  summarise_at(c("sqrtTotmass", "rootshoot", "lwc", "logAvg_area", "logPerimArea", "sqrtTotArea", "SLA", "logSRL", "d13C", "Photo.y", "logCond.y", "sqrtWUE"), list(oov=one_over_se)) %>% 
+  summarise_at(c("sqrtTotmass", "rootshoot", "lwc", "logAvg_area", "logPerimArea", "sqrtTotArea", "SLA", "logSRL", "d13C", "Photo.y", "logCond.y", "sqrtWUE"), list(oose=one_over_se)) %>% 
   filter(Spp=="L" & Tmt == "AD") %>% 
   unlist()
 as.vector(as.numeric(unlist(plot3L_vars[3:14])))
@@ -143,7 +143,7 @@ plot16V_vars <- biomass2. %>%
   mutate(logCond.y = log(Cond.y), sqrtWUE = sqrt(WUE.350), sqrtTotmass = sqrt(totmass), logAvg_area = log(avg_area), logPerimArea = log(perim_per_A), sqrtTotArea = sqrt(tot_area), logSRL = log(SRL)) %>%
   left_join(lookup, by = "Plot") %>% 
   group_by(Spp, Tmt) %>% 
-  summarise_at(c("sqrtTotmass", "rootshoot", "lwc", "logAvg_area", "logPerimArea", "sqrtTotArea", "SLA", "logSRL", "d13C", "Photo.y", "logCond.y", "sqrtWUE"), list(oov=one_over_se)) %>% 
+  summarise_at(c("sqrtTotmass", "rootshoot", "lwc", "logAvg_area", "logPerimArea", "sqrtTotArea", "SLA", "logSRL", "d13C", "Photo.y", "logCond.y", "sqrtWUE"), list(oose=one_over_se)) %>% 
   filter(Spp=="V" & Tmt == "AD") %>% 
   unlist()
 as.vector(as.numeric(unlist(plot16V_vars[3:14])))
@@ -156,18 +156,18 @@ trans_df[trans_df$Plot=="16" & trans_df$Spp=="V",25:36] <- list(9.5139324, 2.839
 ## addendum; 1/se is better but I also want to pool Tmt groups for LiCOR variables
 trans_dfwV <- trans_df %>% 
   filter(Spp=="V") %>% 
-  mutate(sqrtTotmass_w = sqrtTotmass_oov/(sum(trans_df$sqrtTotmass_oov, na.rm = T)),
-         rootshoot_w = rootshoot_oov/(sum(trans_df$rootshoot_oov, na.rm = T)),
-         lwc_w = lwc_oov/(sum(trans_df$lwc_oov, na.rm = T)),
-         logAvg_area_w = logAvg_area_oov/(sum(trans_df$logAvg_area_oov, na.rm = T)),
-         logPerimArea_w = logPerimArea_oov/(sum(trans_df$logPerimArea_oov, na.rm = T)),
-         sqrtTotArea_w = sqrtTotArea_oov/(sum(trans_df$sqrtTotArea_oov, na.rm = T)),
-         SLA_w = SLA_oov/(sum(trans_df$SLA_oov, na.rm = T)),
-         logSRL_w = logSRL_oov/(sum(trans_df$logSRL_oov, na.rm = T)),
-         d13C_w = d13C_oov/sum(trans_df$d13C_oov, na.rm = T),
-         Photo.y_w = Photo.y_oov/(sum(trans_df$Photo.y_oov, na.rm = T)),
-         logCond.y_w = logCond.y_oov/(sum(trans_df$logCond.y_oov, na.rm = T)),
-         sqrtWUE_w = sqrtWUE_oov/(sum(trans_df$sqrtWUE_oov, na.rm =T))) %>% 
+  mutate(sqrtTotmass_w = sqrtTotmass_oose/(sum(trans_df$sqrtTotmass_oose, na.rm = T)),
+         rootshoot_w = rootshoot_oose/(sum(trans_df$rootshoot_oose, na.rm = T)),
+         lwc_w = lwc_oose/(sum(trans_df$lwc_oose, na.rm = T)),
+         logAvg_area_w = logAvg_area_oose/(sum(trans_df$logAvg_area_oose, na.rm = T)),
+         logPerimArea_w = logPerimArea_oose/(sum(trans_df$logPerimArea_oose, na.rm = T)),
+         sqrtTotArea_w = sqrtTotArea_oose/(sum(trans_df$sqrtTotArea_oose, na.rm = T)),
+         SLA_w = SLA_oose/(sum(trans_df$SLA_oose, na.rm = T)),
+         logSRL_w = logSRL_oose/(sum(trans_df$logSRL_oose, na.rm = T)),
+         d13C_w = d13C_oose/sum(trans_df$d13C_oose, na.rm = T),
+         Photo.y_w = Photo.y_oose/(sum(trans_df$Photo.y_oose, na.rm = T)),
+         logCond.y_w = logCond.y_oose/(sum(trans_df$logCond.y_oose, na.rm = T)),
+         sqrtWUE_w = sqrtWUE_oose/(sum(trans_df$sqrtWUE_oose, na.rm =T))) %>% 
     mutate(all_w = sqrtTotmass_w+rootshoot_w+lwc_w+Photo.y_w+logCond.y_w+sqrtWUE_w+logAvg_area_w+logPerimArea_w+sqrtTotArea_w+SLA_w+logSRL_w+d13C_w) %>% 
  # mutate(all_w = logAvg_area_w+logPerimArea_w+Photo.y_w+logCond.y_w) %>% 
   mutate(all_w = all_w/sum(all_w, na.rm=T)) %>% 
@@ -175,26 +175,30 @@ trans_dfwV <- trans_df %>%
   #mutate(quad_w = (Photo.y_w^2)+(logCond.y_w^2)+(logAvg_area_w^2)+(logPerimArea_w^2)) %>% 
   mutate(quad_w = quad_w/sum(quad_w, na.rm=T)) 
 
+#write.csv(trans_dfwV, "QuailFACE_Vplotmeans_withweights_6.8.24.csv")
+
 trans_dfwL <- trans_df %>% 
   filter(Spp=="L") %>% 
-  mutate(sqrtTotmass_w = sqrtTotmass_oov/(sum(trans_df$sqrtTotmass_oov, na.rm = T)),
-         rootshoot_w = rootshoot_oov/(sum(trans_df$rootshoot_oov, na.rm = T)),
-         lwc_w = lwc_oov/(sum(trans_df$lwc_oov, na.rm = T)),
-         logAvg_area_w = logAvg_area_oov/(sum(trans_df$logAvg_area_oov, na.rm = T)),
-         logPerimArea_w = logPerimArea_oov/(sum(trans_df$logPerimArea_oov, na.rm = T)),
-         sqrtTotArea_w = sqrtTotArea_oov/(sum(trans_df$sqrtTotArea_oov, na.rm = T)),
-         SLA_w = SLA_oov/(sum(trans_df$SLA_oov, na.rm = T)),
-         logSRL_w = logSRL_oov/(sum(trans_df$logSRL_oov, na.rm = T)),
-         d13C_w = d13C_oov/sum(trans_df$d13C_oov, na.rm = T),
-         Photo.y_w = Photo.y_oov/(sum(trans_df$Photo.y_oov, na.rm = T)),
-         logCond.y_w = logCond.y_oov/(sum(trans_df$logCond.y_oov, na.rm = T)),
-         sqrtWUE_w = sqrtWUE_oov/(sum(trans_df$sqrtWUE_oov, na.rm =T))) %>% 
+  mutate(sqrtTotmass_w = sqrtTotmass_oose/(sum(trans_df$sqrtTotmass_oose, na.rm = T)),
+         rootshoot_w = rootshoot_oose/(sum(trans_df$rootshoot_oose, na.rm = T)),
+         lwc_w = lwc_oose/(sum(trans_df$lwc_oose, na.rm = T)),
+         logAvg_area_w = logAvg_area_oose/(sum(trans_df$logAvg_area_oose, na.rm = T)),
+         logPerimArea_w = logPerimArea_oose/(sum(trans_df$logPerimArea_oose, na.rm = T)),
+         sqrtTotArea_w = sqrtTotArea_oose/(sum(trans_df$sqrtTotArea_oose, na.rm = T)),
+         SLA_w = SLA_oose/(sum(trans_df$SLA_oose, na.rm = T)),
+         logSRL_w = logSRL_oose/(sum(trans_df$logSRL_oose, na.rm = T)),
+         d13C_w = d13C_oose/sum(trans_df$d13C_oose, na.rm = T),
+         Photo.y_w = Photo.y_oose/(sum(trans_df$Photo.y_oose, na.rm = T)),
+         logCond.y_w = logCond.y_oose/(sum(trans_df$logCond.y_oose, na.rm = T)),
+         sqrtWUE_w = sqrtWUE_oose/(sum(trans_df$sqrtWUE_oose, na.rm =T))) %>% 
   mutate(all_w = sqrtTotmass_w+rootshoot_w+lwc_w+Photo.y_w+logCond.y_w+sqrtWUE_w+logAvg_area_w+logPerimArea_w+sqrtTotArea_w+logSRL_w+d13C_w) %>% 
   #       mutate(all_w = logAvg_area_w+logSRL_w+Photo.y_w+logCond.y_w) %>% 
   mutate(all_w = all_w/sum(all_w, na.rm=T)) %>% 
    mutate(quad_w = (sqrtTotmass_w^2)+(rootshoot_w^2)+(lwc_w^2)+(Photo.y_w^2)+(logCond.y_w^2)+(sqrtWUE_w^2)+(logAvg_area_w^2)+(logPerimArea_w^2)+(sqrtTotArea_w^2)+(SLA_w^2)+(logSRL_w^2)+(d13C_w^2)) %>% 
   #mutate(quad_w = (Photo.y_w^2)+(logCond.y_w^2)+(logAvg_area_w^2)+(logSRL_w^2)) %>% 
   mutate(quad_w = quad_w/sum(quad_w, na.rm=T)) 
+
+#write.csv(trans_dfwL, "QuailFACE_Lplotmeans_withweights_6.8.24.csv")
 
 library(ggcorrplot)
 # check correlation between variables
@@ -215,7 +219,7 @@ trans_df_full <- biomass2. %>%
   mutate(n = n()) %>% 
   left_join(lookup, by = "Plot") %>% 
   mutate(H2OTmt = substr(Tmt,2,2), CO2Tmt = substr(Tmt,1,1)) 
-#write.csv(trans_df_full, "QuailFACE_all.csv")
+#write.csv(trans_df_full, "QuailFACE_all6.8.24.csv")
 
 trans_df_full %>% filter(Spp=="V") %>% 
   ggplot() +
@@ -468,6 +472,17 @@ summary(manova(trans_dfwL.cbind[,c(4,7)] ~ CO2Tmt*H2OTmt, trans_dfwL, weights = 
 # redo above with all_w and quad_w just from logAvg_area, logSRL, Photo.y, Cond.y
 
 
+# all data points
+grid.arrange( # Photo.x
+  ggpredict(lm(Photo.x~CO2*H2OTmt , data=filter(LiCOR_df., Spp =="V")), terms=c("CO2","H2OTmt"))%>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("blue","red")),
+  ggpredict(lmer(Photo.x~CO2*H2OTmt + (1|Plot), data=filter(LiCOR_df., Spp =="V")), terms=c("CO2","H2OTmt")) %>% 
+    plot(rawdata = TRUE, ci = TRUE, colors=c("blue","red")),
+  ggplot(filter(LiCOR_df., Spp =="V"), aes(x=CO2, y=Photo.x, group = H2OTmt)) + geom_point(aes(group = H2OTmt, color = H2OTmt)) + scale_color_manual(values = c("red", "blue")) , nrow=3 )
+summary(lm(Photo.x~CO2*H2OTmt , data=filter(LiCOR_df., Spp =="V"))) 
 
+summary(lmer(Photo.y~CO2+H2OTmt + (1|Plot), data=filter(trans_df_full, Spp =="L"))) 
+library(lmerTest)
+library(lme4)
   
 
