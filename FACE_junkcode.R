@@ -3708,5 +3708,42 @@ grid.arrange( # rootshoot
   ggplot(trans_df_full, aes(x=CO2, y=rootshoot, group = H2OTmt)) + geom_point(aes(group = H2OTmt, color = H2OTmt, shape=Spp)) + scale_color_manual(values = c("red", "blue")) , nrow=3 )
 summary(lm(rootshoot~CO2*H2OTmt, data=trans_df_full))
 
+# CO2_total_corr <- CO2_total %>% 
+#   mutate(brokenpump = ifelse( ((TIMESTAMP > "2023-02-15" & TIMESTAMP < "2023-04-07") | (TIMESTAMP > "2023-07-01" & TIMESTAMP < "2023-07-23")) , 1,0)) %>% 
+#   mutate(DeltaObs_pred = predict(MFCmod, newdata=CO2_total)) %>% 
+# #  ggplot() + geom_point(aes(x=DeltaObs, y=DeltaObs_pred))
+#   mutate(DeltaObs_corr = case_when(brokenpump==0 ~ DeltaObs,
+#                                    brokenpump==1 ~ DeltaObs_pred)) %>% 
+#   mutate(CO2elev_pred = predict(CO2elevmod, newdata=CO2_total)) %>% 
+#   mutate(CO2elev_corr = case_when(brokenpump==0 ~ CO2elev,
+#                                   brokenpump==1 ~ CO2elev_pred)) %>% 
+#   mutate(CO2ref_corr = case_when(brokenpump==0 ~ CO2ref,
+#                                  brokenpump==1 ~ CO2ref_mean))
+
+# clean copy of CO2 plot over time
+CO2_total_corr %>% 
+  group_by(month=cut(TIMESTAMP, breaks = "1 month")) %>% 
+  mutate(month=ymd(month)) %>% 
+  summarise(medianCO2ref_corr= median(CO2ref_corr), medianCO2elev_corr=median(CO2elev_corr)) %>% 
+  ungroup() %>% 
+  ggplot() +
+  geom_point(aes(x=month, y=medianCO2ref_corr), color="darkgray") +
+  geom_point(aes(x=month, y=medianCO2elev_corr), color="black") +
+  geom_line(aes(x=month, y=medianCO2ref_corr), color="darkgray") +
+  geom_line(aes(x=month, y=medianCO2elev_corr), color="black") +
+  scale_x_date(date_breaks="1 month") +
+  theme(axis.text.x = element_text(size = 12, angle = 45, hjust = 1), axis.text.y = element_text(size = 12)) +
+  labs(title = "eCO2 and aCO2: Monthly Median Values") +
+  ylab("CO2 Concentration (ppm)")
+
+ggpredict(lm(Photo.x ~ CO2*SWC, data = filter(LiCOR_df., Spp=="L")), terms=c("CO2", "SWC [4,42]")) %>% 
+plot(rawdata = TRUE, ci=TRUE, colors=c("blue","red"))
+summary(lm(Photo.x ~ CO2*SWC, data = filter(LiCOR_df., Spp=="L")))
+
+ggpredict(lm(Photo.y ~ CO2*SWC, data = filter(LiCOR_df., Spp=="L")), terms=c("CO2", "SWC [4,42]")) %>% 
+  plot(rawdata = TRUE, ci=TRUE, colors=c("blue","red"))
+summary(lm(Photo.y ~ CO2*SWC, data = filter(LiCOR_df., Spp=="L")))
+
+
 # NEVER EVER GIVE UP
 # NEVER SURRENDER
