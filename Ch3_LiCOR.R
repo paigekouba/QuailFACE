@@ -212,3 +212,30 @@ LiCOR_df <- LiCOR_df %>%
   left_join(plotting_df[plotting_df$Ci == 350,], by="ID") %>% 
   mutate(WUE.350 = Photo.y/Cond.y)
 # ready!
+
+# trying package plantecophys
+install.packages("plantecophys")
+library(plantecophys)
+acidata1
+View(manyacidat)
+
+# get df_all into this format
+
+duursma <- df_all %>% 
+  select(CO2S, Ci, Tleaf, Photo, PARi, ID) %>% 
+  fitacis(group="ID")
+
+duursma2 <- df_all %>% 
+  mutate(Spp = as.factor(Spp)) %>% 
+  select(CO2S, Ci, Tleaf, Photo, PARi, ID, Tmt, Spp) %>% 
+  filter(ID %in% names(Filter(function(a) any(!is.na(a)), duursma))) %>% 
+  fitacis(group="ID", id="Spp")
+
+plot(duursma2, how="oneplot", colour_by_id = TRUE)
+
+Filter(function(a) any(!is.na(a)), duursma) %>% plantecophys::plot(how="oneplot")
+
+plot(duursma[[1:11]], how="oneplot")
+plot(duursma, how="oneplot", what="data")
+plot(duursma)
+plot(duursma, how="")
