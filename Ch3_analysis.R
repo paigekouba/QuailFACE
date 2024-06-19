@@ -3,20 +3,15 @@
 
 # load all data types
 ## load the data fresh with "." suffix; do steps from Ch3_explore and Ch3_LiCOR. Examine colnames
-
-# LiCOR_df
-# actually just load this one after running Ch3_LiCOR
-LiCOR_df. <- LiCOR_df
-LiCOR_df.[,80:92]
-#LiCOR_df.[,80:94] # has SWC, Plot, Spp, Tmt, Photo.y, Cond.y, WUE.350, CO2Tmt and H2OTmt
-# needs shortcode, CO2
-LiCOR_df. <- LiCOR_df. %>% 
-  mutate(Code = if_else(nchar(ID) == 4,substr(ID,1,3),substr(ID,1,4))) %>% 
-  left_join(plot_CO2., by = "Plot")
-LiCOR_df.[which(LiCOR_df$WUE.350 > 550),92] <- NA # filter outliers for WUE.350
+# need Ch3_LiCOR and Ch3_explore
 
 # plot_CO2, plot_SWC
-plot_SWC. <- LiCOR_df.[,c("Plot", "SWC")] %>% 
+# plot_SWC. <- LiCOR_df.[,c("Plot", "SWC")] %>% 
+#   group_by(Plot) %>% 
+#   summarise(meanSWC=mean(SWC)) %>% 
+#   as.data.frame()
+
+plot_SWC. <- LiCOR_all[,c("Plot", "SWC")] %>% 
   group_by(Plot) %>% 
   summarise(meanSWC=mean(SWC)) %>% 
   as.data.frame()
@@ -42,6 +37,24 @@ plot_CO2. <- avg_between %>%
                          mDeltaTest < 100 ~ 422+(mDeltaTest)) ) %>% 
   as.data.frame()
 
+plot_CO2. <- plot_CO2. %>% arrange(as.numeric(Plot))
+
+# LiCOR_df
+# actually just load this one after running Ch3_LiCOR
+# LiCOR_df. <- LiCOR_df
+# LiCOR_df.[,80:92]
+# #LiCOR_df.[,80:94] # has SWC, Plot, Spp, Tmt, Photo.y, Cond.y, WUE.350, CO2Tmt and H2OTmt
+# # needs shortcode, CO2
+# LiCOR_df. <- LiCOR_df. %>% 
+#   mutate(Code = if_else(nchar(ID) == 4,substr(ID,1,3),substr(ID,1,4))) %>% 
+#   left_join(plot_CO2., by = "Plot")
+# LiCOR_df.[which(LiCOR_df$WUE.350 > 550),92] <- NA # filter outliers for WUE.350
+LiCOR_df. <- LiCOR_new %>% 
+  mutate(WUE = Anet/gs) %>% 
+  mutate(CO2Tmt = substring(Tmt,1,1), H2OTmt = substring(Tmt,2,2)) %>% 
+  mutate(Code = if_else(nchar(ID) == 4,substr(ID,1,3),substr(ID,1,4))) %>% 
+  left_join(plot_CO2., by = "Plot")
+
 # biomass2
 # jeez too many steps. get this one after Ch3_explore, it is messy but w/e
 ## add leaf area columns to biomass2 in explore script ##
@@ -60,15 +73,30 @@ biomass2.[which(biomass2.$Code=="6V2"),"rootshoot"] <- NA
 # now remove lwc for seedlings from herbivory list, likely to have no leaves 
 # biomass2.[which(biomass2.$Code %in% firstherb$Code),]$lwc <- NA 
 # actually I don't think this is necessary! water content won't be affected by leaf herbivory, it's proportional
+# I will just replace the 0s with NAs
+biomass2.[which(biomass2.$lwc ==0),]$lwc <- NA 
+# and remove outlier in L
+biomass2.[which(biomass2.$Code =="10L3"),]$lwc <- NA 
 
 # leaf area
-lai. <- lai
-lai.[which(lai.$tot_area < 1000),]$tot_area <- NA
-lai.[which(lai.$tot_area < 1000),]$avg_area <- NA
-lai.[which(lai.$tot_area < 1000),]$count <- NA
+# lai. <- lai
+# lai.[which(lai.$tot_area < 1000),]$tot_area <- NA
+# lai.[which(lai.$tot_area < 1000),]$avg_area <- NA
+# lai.[which(lai.$tot_area < 1000),]$count <- NA
+# lai.[which(lai.$perim_per_A > 1),]$perim_per_A <- NA
+# lai.[which(lai.$SLA<4000),]$SLA <- NA
+# lai.[which(lai.$Spp=="L" & lai.$SLA > 12000),]$SLA <- NA
+
+lai. <- lai %>% 
+  filter(!Code %in% firstherb$Code)
+# dplyr::select(avg_area) %>% # sqrt
+# dplyr::select(perim_per_A) %>% # < 1 and log
+# dplyr::select(tot_area) %>% # 21798 for V; 52406 for L
+# dplyr::select(SLA) %>% # 12458 for L
 lai.[which(lai.$perim_per_A > 1),]$perim_per_A <- NA
-lai.[which(lai.$SLA<4000),]$SLA <- NA
-lai.[which(lai.$Spp=="L" & lai.$SLA > 12000),]$SLA <- NA
+lai.[which(lai.$tot_area == 21798.626),]$tot_area <- NA
+lai.[which(lai.$tot_area == 52406.236),]$tot_area <- NA
+lai.[which(lai.$Code == "3L2"),]$SLA <- NA
 
 # rootimage
 rootimage. <- read.csv("/Users/paigekouba/Documents/UC_Davis/2021_Winter/Quals/Proposal/Chapter 1/TinyFACE/GitHub/QuailFACE/RawData/features_4.26.24_final.csv") %>% 
