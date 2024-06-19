@@ -3744,6 +3744,244 @@ ggpredict(lm(Photo.y ~ CO2*SWC, data = filter(LiCOR_df., Spp=="L")), terms=c("CO
   plot(rawdata = TRUE, ci=TRUE, colors=c("blue","red"))
 summary(lm(Photo.y ~ CO2*SWC, data = filter(LiCOR_df., Spp=="L")))
 
+duursma <- df_all %>% 
+  select(CO2S, Ci, Tleaf, Photo, PARi, ID) %>% 
+  fitacis(group="ID")
+
+duursma2 <- df_all %>% 
+  mutate(Spp = as.factor(Spp)) %>% 
+  select(CO2S, Ci, Tleaf, Photo, PARi, ID, Tmt, Spp) %>% 
+  filter(ID %in% names(Filter(function(a) any(!is.na(a)), duursma))) %>% 
+  fitacis(group="ID", id="Spp")
+
+plot(duursma2, how="oneplot", colour_by_id = TRUE)
+
+Filter(function(a) any(!is.na(a)), duursma) %>% plantecophys::plot(how="oneplot")
+
+plot(duursma[[1:11]], how="oneplot")
+plot(duursma, how="oneplot", what="data")
+plot(duursma)
+plot(duursma, how="")
+
+
+AW_at422 <- bind_rows(lapply(acis_all3, at422), .id = "Code") %>% 
+  mutate(Plot = if_else(nchar(Code) == 4, substr(Code,1,1), substr(Code,1,2))) %>% 
+  left_join(lookup, by = "Plot") %>% 
+  filter(Tmt == "AW")
+AD_at422 <- bind_rows(lapply(acis_all3, at422), .id = "Code") %>% 
+  mutate(Plot = if_else(nchar(Code) == 4, substr(Code,1,1), substr(Code,1,2))) %>% 
+  left_join(lookup, by = "Plot") %>% 
+  filter(Tmt == "AD")
+
+EW_at544 <- bind_rows(lapply(acis_all3, at544), .id = "Code") %>% 
+  mutate(Plot = if_else(nchar(Code) == 4, substr(Code,1,1), substr(Code,1,2))) %>% 
+  left_join(lookup, by = "Plot") %>% 
+  filter(Tmt == "EW")
+ED_at544 <- bind_rows(lapply(acis_all3, at544), .id = "Code") %>% 
+  mutate(Plot = if_else(nchar(Code) == 4, substr(Code,1,1), substr(Code,1,2))) %>% 
+  left_join(lookup, by = "Plot") %>% 
+  filter(Tmt == "ED")
+
+rbind(AW_at422, AD_at422, EW_at544, ED_at544) %>% 
+  ggplot() +
+  geom_boxplot(aes(x=Tmt, y=ALEAF))
+
+rbind(AW_at422, AD_at422, EW_at544, ED_at544) %>% 
+  ggplot() +
+  geom_boxplot(aes(x=Tmt, y=log(GS)))
+
+rbind(AW_at422, AD_at422, EW_at544, ED_at544) %>% 
+  ggplot() +
+  geom_point(aes(x=Ci, y=ALEAF, color = Tmt))
+
+# plantecophys stuff
+LiCOR_V <- LiCOR_all %>% 
+  mutate(Spp = substr(ID, nchar(ID)-2,nchar(ID)-2)) %>% 
+  filter(Spp =="V")
+LiCOR_L <- LiCOR_all %>% 
+  mutate(Spp = substr(ID, nchar(ID)-2,nchar(ID)-2)) %>% 
+  filter(Spp =="L")
+
+ggplot(LiCOR_L, aes(x = Ci, y = Photo, group = ID, colour = Tmt)) + 
+  geom_point() +
+  facet_wrap( ~ Tmt) 
+
+acis_all <- fitacis(LiCOR_all, Tcorrect=F, fitmethod="bilinear", group = "ID", id="Tmt")  
+acis_V <- fitacis(LiCOR_V, Tcorrect=F, fitmethod="bilinear", group = "ID", id="Tmt")  
+acis_L <- fitacis(LiCOR_L, Tcorrect=F, fitmethod="bilinear", group = "ID", id="Tmt")  
+acis_V2 <- LiCOR_V %>% 
+  select(ID, Ci, Photo, Tleaf, PARi, Tmt) %>% 
+  filter(ID %in% names(Filter(function(a) any(!is.na(a)), acis_V))) %>% 
+  fitacis(group="ID", fitmethod="bilinear", id="Tmt")
+acis_L2 <- LiCOR_L %>% 
+  select(ID, Ci, Photo, Tleaf, PARi, Tmt) %>% 
+  filter(ID %in% names(Filter(function(a) any(!is.na(a)), acis_L))) %>% 
+  fitacis(group="ID", fitmethod="bilinear", id="Tmt")
+
+acis_all2_df <- LiCOR_all %>% 
+  select(ID, Ci, Photo, Tleaf, PARi, Tmt) %>% 
+  filter(ID %in% names(Filter(function(a) any(!is.na(a)), acis_all))) 
+
+acis_all3 <-  fitacis(acis_all2_df, Tcorrect=F, group="ID", fitmethod="bilinear", id="Tmt")
+acis_all4 <-  fitacis(acis_all2_df, group="ID", id="Tmt")
+
+plot(acis_all3, how="oneplot", what="model", xlim=c(0,1000), ylim=c(0,42), colour_by_id = TRUE, id_legend = TRUE)
+plot(acis_all4, how="oneplot", what="model", xlim=c(0,1000), ylim=c(0,42), colour_by_id = TRUE, id_legend = TRUE)
+plot(acis_V2, how="oneplot", what="model", xlim=c(0,1000), ylim=c(0,42), colour_by_id = TRUE, id_legend = TRUE)
+plot(acis_L2, how="oneplot", what="model", xlim=c(0,1000), ylim=c(0,42), colour_by_id = TRUE, id_legend = TRUE)
+
+boxplot(Vcmax ~ Tmt, data=coef(acis_all3))
+boxplot(Jmax ~ Tmt, data=coef(acis_all3), ylim=c(0,500))
+View(coef(acis_all3))
+
+acis_all3[[1]]$Photosyn(Ca=422)
+
+at422 <- function(x){
+  x$Photosyn(Ca=422)
+}
+at544 <- function(x){
+  x$Photosyn(Ca=544)
+}
+
+# subset acis_all3 to fit equations to treatment groups
+AWcodes <- AW_at422$Code
+ADcodes <- AD_at422$Code
+EWcodes <- EW_at544$Code
+EDcodes <- ED_at544$Code
+
+acis_AW <- acis_all3[names(acis_all3) %in% AWcodes]
+acis_AD <- acis_all3[names(acis_all3) %in% ADcodes]
+acis_EW <- acis_all3[names(acis_all3) %in% EWcodes]
+acis_ED <- acis_all3[names(acis_all3) %in% EDcodes]
+
+AW_at422 <- bind_rows(lapply(acis_AW, at422), .id = "Code") %>% 
+  mutate(Plot = if_else(nchar(Code) == 4, substr(Code,1,1), substr(Code,1,2))) %>% 
+  left_join(lookup, by = "Plot")
+AD_at422 <- bind_rows(lapply(acis_AD, at422), .id = "Code") %>% 
+  mutate(Plot = if_else(nchar(Code) == 4, substr(Code,1,1), substr(Code,1,2))) %>% 
+  left_join(lookup, by = "Plot")
+
+EW_at544 <- bind_rows(lapply(acis_EW, at544), .id = "Code") %>% 
+  mutate(Plot = if_else(nchar(Code) == 4, substr(Code,1,1), substr(Code,1,2))) %>% 
+  left_join(lookup, by = "Plot")
+ED_at544 <- bind_rows(lapply(acis_ED, at544), .id = "Code") %>% 
+  mutate(Plot = if_else(nchar(Code) == 4, substr(Code,1,1), substr(Code,1,2))) %>% 
+  left_join(lookup, by = "Plot") 
+
+rbind(AW_at422, AD_at422, EW_at544, ED_at544) %>% 
+  ggplot() +
+  geom_boxplot(aes(x=Tmt, y=ALEAF))
+
+rbind(AW_at422, AD_at422, EW_at544, ED_at544) %>% 
+  ggplot() +
+  geom_boxplot(aes(x=Tmt, y=log(GS)))
+
+rbind(AW_at422, AD_at422, EW_at544, ED_at544) %>% 
+  ggplot() +
+  geom_point(aes(x=Ci, y=ALEAF, color = Tmt))
+
+
+# subset acis_V2 to fit equations to treatment groups
+
+acis_AW <- acis_V2[names(acis_V2) %in% AWcodes]
+acis_AD <- acis_V2[names(acis_V2) %in% ADcodes]
+acis_EW <- acis_V2[names(acis_V2) %in% EWcodes]
+acis_ED <- acis_V2[names(acis_V2) %in% EDcodes]
+
+AW_at422 <- bind_rows(lapply(acis_AW, at422), .id = "Code") %>% 
+  mutate(Plot = if_else(nchar(Code) == 4, substr(Code,1,1), substr(Code,1,2))) %>% 
+  left_join(lookup, by = "Plot")
+AD_at422 <- bind_rows(lapply(acis_AD, at422), .id = "Code") %>% 
+  mutate(Plot = if_else(nchar(Code) == 4, substr(Code,1,1), substr(Code,1,2))) %>% 
+  left_join(lookup, by = "Plot")
+
+EW_at544 <- bind_rows(lapply(acis_EW, at544), .id = "Code") %>% 
+  mutate(Plot = if_else(nchar(Code) == 4, substr(Code,1,1), substr(Code,1,2))) %>% 
+  left_join(lookup, by = "Plot")
+ED_at544 <- bind_rows(lapply(acis_ED, at544), .id = "Code") %>% 
+  mutate(Plot = if_else(nchar(Code) == 4, substr(Code,1,1), substr(Code,1,2))) %>% 
+  left_join(lookup, by = "Plot") 
+
+rbind(AW_at422, AD_at422, EW_at544, ED_at544) %>% 
+  ggplot() +
+  geom_boxplot(aes(x=Tmt, y=ALEAF))
+
+rbind(AW_at422, AD_at422, EW_at544, ED_at544) %>% 
+  ggplot() +
+  geom_boxplot(aes(x=Tmt, y=log(GS)))
+
+rbind(AW_at422, AD_at422, EW_at544, ED_at544) %>% 
+  ggplot() +
+  geom_point(aes(x=Ci, y=ALEAF, color = Tmt))
+
+# subset acis_L2 to fit equations to treatment groups
+
+acis_AW_L <- acis_L2[names(acis_L2) %in% AWcodes]
+acis_AD_L <- acis_L2[names(acis_L2) %in% ADcodes]
+acis_EW_L <- acis_L2[names(acis_L2) %in% EWcodes]
+acis_ED_L <- acis_L2[names(acis_L2) %in% EDcodes]
+
+L_AW_at422 <- bind_rows(lapply(acis_AW_L, at422), .id = "Code") %>% 
+  mutate(Plot = if_else(nchar(Code) == 4, substr(Code,1,1), substr(Code,1,2))) %>% 
+  left_join(lookup, by = "Plot")
+L_AD_at422 <- bind_rows(lapply(acis_AD_L, at422), .id = "Code") %>% 
+  mutate(Plot = if_else(nchar(Code) == 4, substr(Code,1,1), substr(Code,1,2))) %>% 
+  left_join(lookup, by = "Plot")
+
+L_EW_at544 <- bind_rows(lapply(acis_EW_L, at544), .id = "Code") %>% 
+  mutate(Plot = if_else(nchar(Code) == 4, substr(Code,1,1), substr(Code,1,2))) %>% 
+  left_join(lookup, by = "Plot")
+L_ED_at544 <- bind_rows(lapply(acis_ED_L, at544), .id = "Code") %>% 
+  mutate(Plot = if_else(nchar(Code) == 4, substr(Code,1,1), substr(Code,1,2))) %>% 
+  left_join(lookup, by = "Plot") 
+
+rbind(L_AW_at422, L_AD_at422, L_EW_at544, L_ED_at544) %>% 
+  ggplot() +
+  geom_boxplot(aes(x=Tmt, y=ALEAF))
+
+rbind(L_AW_at422, L_AD_at422, L_EW_at544, L_ED_at544) %>% 
+  ggplot() +
+  geom_boxplot(aes(x=Tmt, y=log(GS)))
+
+rbind(L_AW_at422, L_AD_at422, L_EW_at544, L_ED_at544) %>% 
+  ggplot() +
+  geom_point(aes(x=Ci, y=ALEAF, color = Tmt))
+
+# trying package plantecophys
+install.packages("plantecophys")
+library(plantecophys)
+acidata1
+View(manyacidat)
+
+# get df_all into this format
+
+duursma <- df_all %>% 
+  select(ID, Ci, Photo, Tleaf, PARi, Tmt) %>% 
+  fitacis(Tcorrect=F,group="ID", id="Tmt")
+
+plot(duursma[[1]])
+plot(acidata1)
+
+duursma2 <- df_all %>% 
+  mutate(Tmt = as.factor(Tmt)) %>% 
+  select(ID, Ci, Photo, Tleaf, PARi, Tmt) %>% 
+  filter(ID %in% names(Filter(function(a) any(!is.na(a)), duursma))) %>% 
+  fitacis(Tcorrect=F, group="ID")
+
+Tmt_list <- df_all %>% 
+  filter(ID %in% names(Filter(function(a) any(!is.na(a)), duursma))) %>% 
+  select(Tmt) %>% 
+  as.vector()
+
+plot(duursma2, how="oneplot") #, colour_by_id = TRUE)
+
+Filter(function(a) any(!is.na(a)), duursma) %>% plantecophys::plot(how="oneplot")
+
+plot(duursma[[1:11]], how="oneplot")
+plot(duursma, how="oneplot", what="data")
+plot(duursma)
+plot(duursma, how="")
+
 
 # NEVER EVER GIVE UP
 # NEVER SURRENDER
