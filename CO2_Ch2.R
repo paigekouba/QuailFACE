@@ -504,7 +504,7 @@ CO2_20s %>% # graph of CO2ref
   dyRoller(rollPeriod = 180) %>% # hourly avg (of 20s data)
   dyRangeSelector()
 
-weather <- read.csv("/Users/paigekouba/Documents/UC_Davis/2021_Winter/Quals/Proposal/Chapter 1/TinyFACE/GitHub/QuailFACE/RawData/QuailWeather.csv")
+weather <- read.csv("/Users/paigekouba/Documents/UC_Davis/2021_Winter/Quals/Proposal/Chapter 1/TinyFACE/GitHub/QuailFACE/RawData/QuailWeather2.csv")
 head(weather)
 typeof(weather$Time)
 mdy_hm(weather[1:10,1])
@@ -524,8 +524,4 @@ quail_weather <- weather %>%
                      sec.axis=sec_axis(~.*0.05128205, name="Average Temperature (ºC)")) +
   xlab(label="Date") +
   theme_classic(base_size = 18)
-
-  dygraph() %>% 
-  dyRangeSelector() %>% 
-  dyRoller(4383)
 
