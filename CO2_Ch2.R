@@ -287,14 +287,14 @@ CO2_total_corr %>%
 #         489.          422.          602.          544.           127.        0.460
 
 
-mean(CO2_total_corr$DeltaObs_corr) #  126.266
-median(CO2_total_corr$DeltaObs_corr) # 154.6
+mean(CO2_total_corr$DeltaObs_corr) #  127.2421
+median(CO2_total_corr$DeltaObs_corr) # 155.1963
 # also need a mean (corrected) for aCO2 and eCO2
 # should get these from all days EXCEPT broken pump (2/15/23--4/7/23, and 7/1/23-7/22/23)
-mean(CO2_total_corr$CO2ref_corr) # 418.197
+mean(CO2_total_corr$CO2ref_corr) # 421.5844
 median(CO2_total_corr$CO2ref_corr) # 416
-mean(CO2_total_corr$CO2elev_corr) # 539.9515
-median(CO2_total_corr$CO2elev_corr) # 565.4571
+mean(CO2_total_corr$CO2elev_corr) # 544.2796
+median(CO2_total_corr$CO2elev_corr) # 565.7973
 
 CO2_total_corr %>% 
   ggplot() +
@@ -307,16 +307,20 @@ CO2_total_corr %>%
 CO2_total_corr %>% 
   group_by(month=cut(TIMESTAMP, breaks = "1 month")) %>% 
   mutate(month=ymd(month)) %>% 
-  summarise(meanCO2ref_corr= mean(CO2ref_corr), meanCO2elev_corr=mean(CO2elev_corr)) %>% 
+  # ggplot() +
+  # geom_boxplot(aes(x=month, y=CO2elev_corr, group = month))
+  summarise(meanCO2ref_corr= mean(CO2ref_corr), yminCO2ref = mean(CO2ref_corr)-sd(CO2ref_corr), ymaxCO2ref = mean(CO2ref_corr)+sd(CO2ref_corr), meanCO2elev_corr=mean(CO2elev_corr), yminCO2elev = mean(CO2elev_corr)-sd(CO2elev_corr), ymaxCO2elev = mean(CO2elev_corr)+sd(CO2elev_corr)) %>% 
   ungroup() %>% 
   ggplot() +
-  geom_point(aes(x=month, y=meanCO2ref_corr), color="darkgray") +
-  geom_point(aes(x=month, y=meanCO2elev_corr), color="black") +
-  geom_line(aes(x=month, y=meanCO2ref_corr), color="darkgray") +
-  geom_line(aes(x=month, y=meanCO2elev_corr), color="black") +
+  geom_pointrange(aes(x=month, y=meanCO2ref_corr, ymin=yminCO2ref, ymax=ymaxCO2ref), color="darkgray", size=1.2, linewidth=1.2, position=position_nudge(-2.5,0)) +
+  geom_pointrange(aes(x=month, y=meanCO2elev_corr, ymin=yminCO2elev, ymax=ymaxCO2elev), color="black", size=1.2, linewidth=1.2, position=position_nudge(2.5,0)) +
+  # geom_point(aes(x=month, y=meanCO2ref_corr), color="darkgray") +
+  # geom_point(aes(x=month, y=meanCO2elev_corr), color="black") +
+  geom_line(aes(x=month, y=meanCO2ref_corr), color="darkgray", linewidth=1, position=position_nudge(-2.5,0)) +
+  geom_line(aes(x=month, y=meanCO2elev_corr), color="black", linewidth=1, position=position_nudge(2.5,0)) +
   scale_x_date(date_breaks="1 month") +
   theme(axis.text.x = element_text(size = 12, angle = 45, hjust = 1), axis.text.y = element_text(size = 12)) +
-  labs(title = "eCO2 and aCO2: Monthly Mean Values") +
+  labs(title = "eCO2 and aCO2: Monthly Mean Values (sd)") +
   ylab("CO2 Concentration (ppm)")
 
 CO2_total_corr %>% 
@@ -337,8 +341,12 @@ sum(CO2_operational$DeltaObs < 157.7*1.25 & CO2_operational$DeltaObs > 157.7*0.7
 sum(CO2_operational$CO2elev < (CO2_operational$CO2ref+157.7)*1.2 & CO2_operational$CO2elev > (CO2_operational$CO2ref+157.7)*0.8)/nrow(CO2_operational)
 #[1] 0.9330214 within ∆157.7
 
+# redo this for CO2_total_corr
+sum(CO2_total_corr$CO2elev_corr < (CO2_total_corr$CO2ref_corr+127.2421)*1.2 & CO2_total_corr$CO2elev_corr > (CO2_total_corr$CO2ref_corr+127.2421)*0.8)/nrow(CO2_total_corr) # 76.3% within 20%
+sum(CO2_total_corr$CO2elev_corr < (CO2_total_corr$CO2ref_corr+127.2421)*1.25 & CO2_total_corr$CO2elev_corr > (CO2_total_corr$CO2ref_corr+127.2421)*0.75)/nrow(CO2_total_corr) # 88.1% within 25%
 
 plot(density(CO2_operational$DeltaObs))
+plot(density(CO2_total_corr$DeltaObs))
 
 mean(CO2_operational$CO2elev) # 549
 sd(CO2_operational$CO2elev) # 84
