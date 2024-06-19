@@ -8,17 +8,28 @@ library(car)
 # wait! have to do this by spp
 # try transformed data # check SWC by eCO2 to see if there's a feedback # specific root length
 # LiCOR_df.
-hist((LiCOR_df.[LiCOR_df.$Spp == "V",]$Photo.y), breaks = 2*sqrt(nrow(LiCOR_df.)))
-qqPlot(LiCOR_df.[LiCOR_df.$Spp == "V",]$Photo.y) 
-hist((LiCOR_df.[LiCOR_df.$Spp == "L",]$Photo.y), breaks = 2*sqrt(nrow(LiCOR_df.)))
-qqPlot((LiCOR_df.[LiCOR_df.$Spp == "L",]$Photo.y)) # pretty ok by spp!
+# hist((LiCOR_df.[LiCOR_df.$Spp == "V",]$Photo.y), breaks = 2*sqrt(nrow(LiCOR_df.)))
+# qqPlot(LiCOR_df.[LiCOR_df.$Spp == "V",]$Photo.y) 
+# hist((LiCOR_df.[LiCOR_df.$Spp == "L",]$Photo.y), breaks = 2*sqrt(nrow(LiCOR_df.)))
+# qqPlot((LiCOR_df.[LiCOR_df.$Spp == "L",]$Photo.y)) # pretty ok by spp!
 # Photo.y ok by species
+# LiCOR_new
+hist(log(LiCOR_new[LiCOR_new$Spp == "V",]$Anet), breaks = 2*sqrt(nrow(LiCOR_new)))
+qqPlot(log(LiCOR_new[LiCOR_new$Spp == "V",]$Anet))
+hist(log(LiCOR_new[LiCOR_new$Spp == "L",]$Anet), breaks = 2*sqrt(nrow(LiCOR_new)))
+qqPlot(log(LiCOR_new[LiCOR_new$Spp == "L",]$Anet))
+# log transform for Anet
+
+hist(sqrt(LiCOR_new[LiCOR_new$Spp=="V",]$gs))
+qqPlot(sqrt(LiCOR_new[LiCOR_new$Spp=="V",]$gs))
+hist(sqrt(LiCOR_new[LiCOR_new$Spp=="L",]$gs))
+qqPlot(sqrt(LiCOR_new[LiCOR_new$Spp=="L",]$gs))
+# sqrt gs
 
 hist(log(LiCOR_df.[LiCOR_df.$Spp=="V",]$Cond.y))
 qqPlot(log(LiCOR_df.[LiCOR_df.$Spp=="V",]$Cond.y))
 hist(log(LiCOR_df.[LiCOR_df.$Spp=="L",]$Cond.y))
 qqPlot(log(LiCOR_df.[LiCOR_df.$Spp=="L",]$Cond.y))
-# Cond.y ok if logged
 
 LiCOR_df. %>% 
   filter(WUE.350 < 550) %>% 
@@ -42,7 +53,7 @@ qqPlot((biomass2.[biomass2.$Spp=="L",]$rootshoot))
 qqPlot((biomass2.[biomass2.$Spp=="V",]$rootshoot)) 
 # rootshoot ok
 
-hist(biomass2.[biomass2.$Spp=="V",]$lwc, breaks=2*sqrt(nrow(biomass2.))) 
+hist(biomass2.[biomass2.$Spp=="L",]$lwc, breaks=2*sqrt(nrow(biomass2.))) 
 qqPlot(biomass2.[biomass2.$Spp=="V",]$lwc)
 qqPlot(biomass2.[biomass2.$Spp=="L",]$lwc)
 # lwc fine by spp
@@ -50,18 +61,17 @@ qqPlot(biomass2.[biomass2.$Spp=="L",]$lwc)
 library(caret)
 # check leaf area variables here
 lai. %>% 
-  filter(Spp=="V") %>% 
-#  dplyr::select(avg_area) %>% # log
- # dplyr::select(perim_per_A) %>% # < 1 and log
-  # filter(SLA < 12000) %>% # L has outlier > 12000 but this is normal for V; ok otherwise
-  #dplyr::select(tot_area) %>%
-  dplyr::select(SLA) %>% 
+  filter(Spp=="L") %>% 
+ # dplyr::select(avg_area) %>% # sqrt
+#  dplyr::select(perim_per_A) %>% # < 1 and log
+  dplyr::select(tot_area) %>% # 21798 for V; 52406 for L
+ # dplyr::select(SLA) %>% # 12458 for L
   unlist() %>% 
   as.numeric() %>%
 #  BoxCoxTrans(na.rm=TRUE) %>% predict(newdata=unlist(lai.[lai$Spp=="V",][,"avg_area"])) %>% 
- # log() %>% 
- #sqrt() %>% 
-#  hist(breaks = 2*sqrt(nrow(lai.)))
+#  log() %>% 
+# sqrt() %>% 
+# hist(breaks = 2*sqrt(nrow(lai.)))
 qqPlot()
 # filtered by tot_area > 1000 
 # avg_area stinks; log is best
