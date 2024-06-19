@@ -624,10 +624,87 @@ ggplot(biomass2_leaf, aes(x=Leaf.Ct..5, y = LeafWet_g)) + # plot
 # final biomass df with a column for predicted (if herb) or observed stem and leaf mass:
 biomass2 <- left_join(biomass2, biomass2_leaf[,c(3,34)], by = "Code") # combine stem and leaf predictions
 biomass2 <- biomass2 %>% 
-  mutate(StemWet_expanded = case_when(Code %in% firstherb$Code ~ pred,
+  mutate(StemWet_expanded = case_when(Code %in% firstfullherb$Code ~ pred, # changed to firstfullherb
                                       TRUE ~ StemWet_g)) %>% 
   mutate(LeafWet_expanded = case_when(Code %in% firstherb$Code ~ predleaf,
                                       TRUE ~ LeafWet_g))
+
+# here I will add a similar interpolation/backfilling for final height (Ht.mm..8) based on prior height
+
+biomass_nh2_ht <- biomass_nh %>% # training data on seedlings with no herbivory
+  left_join(inventory_thinned[,c(1,7,10,13,17,22,27,32,37)]) %>% # select Ht measurements from all inventories
+  mutate(across(c(StemWet_g, LeafWet_g, LeafDry_g, rootmass_g, Ht.mm..1, Ht.mm..2, Ht.mm..3, Ht.mm..4, Ht.mm..5, Ht.mm..6, Ht.mm..7, Ht.mm..8), na_if, -Inf))  %>% 
+  mutate(H2OTmt = substr(Tmt,2,2)) # will write separate models for W and D treatments, not for E/A CO2
+
+biomass2_ht <- biomass %>% # prediction data with full dataset and extra inventory columns
+  left_join(inventory_thinned[,c(1,7,10,13,17,22,27,32,37)]) %>% 
+  mutate(across(c(StemWet_g, LeafWet_g, LeafDry_g, rootmass_g, Ht.mm..1, Ht.mm..2, Ht.mm..3, Ht.mm..4, Ht.mm..5, Ht.mm..6, Ht.mm..7, Ht.mm..8), na_if, -Inf))  %>% 
+  mutate(H2OTmt = substr(Tmt,2,2))
+
+inv_all_nh %>% 
+  group_by(Code) %>% 
+  summarise(ht8_pred = predict(lm(ht_mm ~ poly(Date,3), data = inv_all_nh), newdata=inv_all_nh)) %>% View()
+
+inv_all_nh1 <- inv_all_nh
+
+for(i in 1:length(unique(inv_all_nh1$Code))){
+  dat <- filter(inv_all_nh1, Code == unique(inv_all_nh1$Code)[i])
+  inv_all_nh1$Ht8_pred <- predict(lm(ht_mm ~ poly(value, 3), data = dat), newdata = unique(inv_all_nh1$value)[8])
+}
+
+inv_train <- inv_all %>% 
+  filter(Code %in% biomass2$Code) %>% 
+  filter(!Code %in% firstfullherb$Code)
+
+biomass_nh2_ht$ht8_pred <- 0
+inv_all_nh1$ht8_pred <- 0
+inv_train$ht8_pred <- 0
+inv_train$ht8_pred2 <- 0
+
+# for(i in seq_along(unique(biomass_nh2_ht$Code))){
+#   code_i <- unique(biomass_nh2_ht$Code)[i]
+#   fit <- lm(ht_mm ~ poly(value, 3), data = inv_all_nh1, subset = Code == code_i)
+#   ht8_pred <- predict(fit, newdata = data.frame(value = c(unique(inv_all_nh1$value)[8])))
+#   biomass_nh2_ht[biomass_nh2_ht$Code == code_i,]$ht8_pred <- ht8_pred
+# } # works
+
+for(i in seq_along(unique(inv_train$Code))){
+  code_i <- unique(inv_train$Code)[i]
+  fit <- lm(ht_mm ~ poly(value, 3), data = inv_train, subset = Code == code_i)
+  ht8_pred <- predict(fit, newdata = data.frame(value = c(unique(inv_train$value)[8])))
+  inv_train[inv_train$Code == code_i,]$ht8_pred <- ht8_pred
+}
+
+for(i in seq_along(unique(inv_train$Code))){
+  code_i <- unique(inv_train$Code)[i]
+  fit <- lm(ht_mm ~ poly(value, 3), data = filter(inv_train, value < unique(inv_train$value)[6]), subset = Code == code_i)
+  ht8_pred2 <- predict(fit, newdata = data.frame(value = c(unique(inv_train$value)[8])))
+  inv_train[inv_train$Code == code_i,]$ht8_pred2 <- ht8_pred2
+}
+
+ggplot(inv_train, group = Code) +
+  geom_line(aes(x=value, y= ht_mm, color= Tmt, group=Code)) + 
+  geom_point(aes(x=unique(inv_train$value)[8], y=ht8_pred), color = "black") +
+  facet_grid(vars(Spp), vars(Tmt), scales = "free")
+
+# code_4 <- unique(inv_all_nh1$Code)[4]
+# fit <- lm(ht_mm ~ poly(value, 2), data = inv_all_nh1, subset = Code == "10L3")
+# ht8_pred <- predict(fit, newdata = data.frame(value = c(unique(inv_all_nh1$value))))
+
+ggplot(biomass_nh2_ht) +
+  geom_point(data=biomass_nh2_ht, aes(x=Ht.mm..8, y=ht8_pred, color=Tmt)) +
+  geom_smooth(aes(x=Ht.mm..8, y=ht8_pred), method = "lm")
+
+inv_all
+
+## model each set of points based on a 3rd-degree polynomial and however many dates it recorded heights
+# extpTest_df2 <- data.frame(unique(inv_all_nh[which(inv_all_nh$Code == "11V3"),]$value), inv_all_nh[which(inv_all_nh$Code == "11V3"),]$ht_mm) # prep df
+# colnames(extpTest_df2) <- c("Date","ht_mm")
+# extpTest_df2$pred1 <- predict(lm(ht_mm ~ poly(Date,3), data=extpTest_df2)) # add predicted values
+# 
+# pred2 <- data.frame(Date = c(unique(inv_all_nh$value)))
+# pred2$ht_mm <- predict(lm(ht_mm ~ poly(Date,3), data = extpTest_df2), newdata=pred2)
+
 
 ## Compare figures for filtered vs backfilled data
 # plot the resulting data (N = 128; 87 observed, 41 predicted)
@@ -637,14 +714,14 @@ nequals_nfh <- biomass_nfh %>%
 nequals_bm <- biomass %>% 
   group_by(Tmt, Spp) %>% 
   tally()
-grid.arrange( biomass_nfh %>% ggplot(aes(x=Tmt, y=StemWet_g)) + geom_boxplot( aes(x=Tmt, y=StemWet_g, color = Tmt)) + 
+grid.arrange( biomass_nfh %>% ggplot(aes(x=Tmt, y=StemWet_g)) + geom_point( aes(x=Tmt, y=StemWet_g, color = Tmt)) + 
   facet_grid(rows = vars(Spp), scales = "free") +
   geom_text(data = nequals_nfh, aes(x = Tmt, y = 0, label = paste0("N = ",n))) + 
   labs(y = "Stem Biomass (g)", title = "Stem Biomass (filtered)") +
   scale_color_manual(values = c("pink", "lightblue", "red", "blue")) ,
  #   geom_signif(test="wilcox.test", exact=FALSE, comparisons = combn(c("AD", "AW", "ED", "EW"),2,simplify=F),step_increase=0.2) ,
 biomass2 %>% ggplot(aes(x=Tmt, y=StemWet_g)) + 
-  geom_boxplot(aes(x=Tmt, y=StemWet_expanded, color = Tmt)) + 
+  geom_point(aes(x=Tmt, y=StemWet_expanded, color = Tmt)) + 
   facet_grid(rows = vars(Spp), scales = "free") +
   geom_text(data = nequals_bm, aes(x = Tmt, y = 0, label = paste0("N = ",n))) + 
   labs(y = "Stem Biomass (g)", title = "Stem Biomass (expanded data)") +
