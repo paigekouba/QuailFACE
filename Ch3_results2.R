@@ -1,99 +1,96 @@
 # Ch 3 Results
 # AKA Final Round Final Round, Best of Three
+
+# load all data types
+## load the data fresh with "." suffix; do steps from Ch3_explore and Ch3_LiCOR. Examine colnames
+# need Ch3_LiCOR and Ch3_explore
+
+plot_SWC. <- LiCOR_all[,c("Plot", "SWC")] %>% 
+  group_by(Plot) %>% 
+  summarise(meanSWC=mean(SWC)) %>% 
+  as.data.frame()
+
+
+LiCOR_df. <- LiCOR_new %>% 
+  mutate(WUE = Anet/gs) %>% 
+  mutate(CO2Tmt = substring(Tmt,1,1), H2OTmt = substring(Tmt,2,2)) %>% 
+  mutate(Code = if_else(nchar(ID) == 4,substr(ID,1,3),substr(ID,1,4))) %>% 
+  left_join(plot_CO2., by = "Plot")
+
+# biomass2
+# jeez too many steps. get this one after Ch3_explore, it is messy but w/e
+## add leaf area columns to biomass2 in explore script ##
+biomass2. <- biomass2
+biomass2.[1,]
+biomass2. <- biomass2. %>% 
+  mutate(rootshoot = rootmass_g/(StemWet_g + LeafWet_g), totmass = rootmass_g + StemWet_g + LeafWet_g, lwc = (LeafWet_g-LeafDry_g)*100/LeafWet_g) %>% 
+    # mutate(rootshoot = rootmass_g/(StemWet_expanded + LeafWet_expanded), totmass = rootmass_g + StemWet_expanded + LeafWet_expanded, lwc = (LeafWet_g-LeafDry_g)*100/LeafWet_g) %>% 
+  left_join(plot_CO2., by = "Plot") %>% 
+  left_join(plot_SWC., by = "Plot") 
+
+##
+biomass2.[which(biomass2.$totmass==47.05),"totmass"] <- NA # filter outlier for totmass
+
+# exclude rootshoot for 6V2, an outlier: was herbivory list but probably should've been in fullherb list
+biomass2.[which(biomass2.$Code=="6V2"),"rootshoot"] <- NA
+
+# don't need to remove lwc for seedlings from herbivory list; water content won't be affected by leaf herbivory, it's proportional
+# I will just replace the 0s with NAs
+biomass2.[which(biomass2.$lwc ==0),]$lwc <- NA 
+# and remove outlier in L
+biomass2.[which(biomass2.$Code =="10L3"),]$lwc <- NA 
+
+lai. <- lai #%>% 
+#  filter(!Code %in% firstherb$Code) # remove rows of seedlings from herbivory list
+# dplyr::select(tot_area) %>% # 21798 for V; 52406 for L
+# dplyr::select(SLA) %>% # 12458 for L
+
+##
+lai.[which(lai.$tot_area == 21798.626),]$tot_area <- NA
+lai.[which(lai.$tot_area == 52406.236),]$tot_area <- NA
+lai.[which(lai.$Code == "3L2"),]$SLA <- NA
+
+# rootimage
+rootimage. <- read.csv("/Users/paigekouba/Documents/UC_Davis/2021_Winter/Quals/Proposal/Chapter 1/TinyFACE/GitHub/QuailFACE/RawData/features_4.26.24_final.csv") %>% 
+  mutate(Plot = as.character(Plot))
+rootimage. <- left_join(lookup, rootimage., by = 'Plot')
+
+rootimage. <- rootimage. %>% 
+  mutate(Spp = substr(Code, nchar(Code)-2,nchar(Code)-2)) %>%
+  filter(Code != "4V3c") %>% # prevent duplicate codes; 4V3c was planted late and misnamed
+  filter(Code != "16V1a") %>% # thinned but grew back
+  mutate(Code = if_else(nchar(Code) == 4,substr(Code,1,3),substr(Code,1,4)), CO2Tmt = substring(Tmt,1,1), H2OTmt = substring(Tmt,2,2)) %>% 
+  left_join(biomass2.[,c("Code","rootmass_g")]) %>% 
+  mutate(SRL = Total.Root.Length.mm/rootmass_g) %>% 
+  left_join(plot_CO2., by = "Plot") %>% 
+  left_join(plot_SWC., by = "Plot") 
+rootimage.[1,]
+
+# SIF
+SIF_raw <- read.csv("/Users/paigekouba/Documents/UC_Davis/2021_Winter/Quals/Proposal/Chapter 1/TinyFACE/GitHub/QuailFACE/RawData/PVK_SIF.csv")
+SIF_raw <- SIF_raw %>% 
+  filter(!is.na(Internal.ID))
+SIF. <- SIF_raw %>% 
+  filter(Sample.ID != "4V3c") %>% 
+  mutate(Spp = substr(Sample.ID, nchar(Sample.ID)-2,nchar(Sample.ID)-2)) %>% 
+  mutate(Plot = if_else(nchar(Sample.ID) == 4, substr(Sample.ID,1,1), substr(Sample.ID,1,2))) %>% 
+  dplyr::select(Sample.ID, δ13CVPDB...., Spp, Plot) 
+colnames(SIF.) <- c("Code","d13C","Spp","Plot")
+SIF. <- left_join(SIF., lookup, by = "Plot") %>% 
+  mutate(Code=if_else(nchar(Code) == 4,substr(Code,1,3),substr(Code,1,4)), CO2Tmt = substring(Tmt,1,1), H2OTmt = substring(Tmt,2,2)) %>% 
+  left_join(plot_CO2., by = "Plot") %>% 
+  left_join(plot_SWC., by = "Plot") 
+SIF.[1,]
+
+# testing for normality of distribution 
+# this is not what you need; you need to test the distribution of residuals of the model, and their variance
 library(car)
-
-hist(sqrt(LiCOR_df.[LiCOR_df.$Spp == "V",]$Anet), breaks = 2*sqrt(nrow(LiCOR_df.)))
-qqPlot(sqrt(LiCOR_df.[LiCOR_df.$Spp == "V",]$Anet))
-hist(sqrt(LiCOR_df.[LiCOR_df.$Spp == "L",]$Anet), breaks = 2*sqrt(nrow(LiCOR_df.)))
-qqPlot(sqrt(LiCOR_df.[LiCOR_df.$Spp == "L",]$Anet))
-# log transform for Anet
-
-hist(sqrt(LiCOR_df.[LiCOR_df.$Spp=="V",]$gs))
-qqPlot(sqrt(LiCOR_df.[LiCOR_df.$Spp=="V",]$gs))
-hist(sqrt(LiCOR_df.[LiCOR_df.$Spp=="L",]$gs))
-qqPlot(sqrt(LiCOR_df.[LiCOR_df.$Spp=="L",]$gs))
-# sqrt gs
-
-hist(LiCOR_df.[LiCOR_df.$Spp=="V",]$WUE)
-qqPlot((LiCOR_df.[LiCOR_df.$Spp=="V",]$WUE))
-hist(LiCOR_df.[LiCOR_df.$Spp=="L",]$WUE)
-qqPlot(LiCOR_df.[LiCOR_df.$Spp=="L",]$WUE)
-# WUE ok
-
-# biomass2.
-hist(sqrt(biomass2.[biomass2.$Spp=="L",]$totmass), breaks=2*sqrt(nrow(biomass2.))) # outlier, ok
-qqPlot(sqrt(biomass2.[biomass2.$Spp=="V",]$totmass)) 
-qqPlot(sqrt(biomass2.[biomass2.$Spp=="L",]$totmass)) 
-
-biomass2. %>% 
-  filter(Spp=="V") %>%
-  filter(!Code %in% firstfullherb$Code) %>% 
-  select(Ht.mm..8) %>%
-  unlist() %>% 
-  as.numeric() %>%
-   log() %>% 
-  # sqrt() %>% 
-  #   hist(breaks = 2*sqrt(nrow(lai.)))
-  qqPlot()
-
-hist(sqrt(biomass2.[biomass2.$Spp=="L",]$Ht.mm..8), breaks=2*sqrt(nrow(biomass2.)))
-qqPlot(sqrt(biomass2.[biomass2.$Spp=="L",]$Ht.mm..8))
-
-hist((biomass2.[biomass2.$Spp=="L",]$rootshoot), breaks=2*sqrt(nrow(biomass2.))) 
-qqPlot((biomass2.[biomass2.$Spp=="L",]$rootshoot)) 
-qqPlot((biomass2.[biomass2.$Spp=="V",]$rootshoot)) 
-# rootshoot ok
-
-hist(biomass2.[biomass2.$Spp=="L",]$lwc, breaks=2*sqrt(nrow(biomass2.))) 
-qqPlot(biomass2.[biomass2.$Spp=="V",]$lwc)
-qqPlot(biomass2.[biomass2.$Spp=="L",]$lwc)
-# lwc fine by spp
-
-# since aboveground biomass is unreliable, what about root mass?
-hist(sqrt(biomass2.[biomass2.$Spp=="L",]$rootmass_g), breaks=2*sqrt(nrow(biomass2.))) 
-qqPlot(sqrt(biomass2.[biomass2.$Spp=="L",]$rootmass_g))
-hist(sqrt(biomass2.[biomass2.$Spp=="V",]$rootmass_g), breaks=2*sqrt(nrow(biomass2.))) 
-qqPlot(sqrt(biomass2.[biomass2.$Spp=="V",]$rootmass_g))
-
-library(caret)
-# check leaf area variables here
-lai. %>% 
-  filter(Spp=="L") %>% 
-  #  dplyr::select(avg_area) %>% # sqrt
-  # dplyr::select(perim_per_A) %>% # < 1 and log
-  # dplyr::select(tot_area) %>%
-   dplyr::select(SLA) %>% 
-  unlist() %>% 
-  as.numeric() %>%
-  #  BoxCoxTrans(na.rm=TRUE) %>% predict(newdata=unlist(lai.[lai$Spp=="V",][,"avg_area"])) %>% 
-  # log() %>% 
-  #sqrt() %>% 
-#   hist(breaks = 2*sqrt(nrow(lai.)))
-  qqPlot()
-# filtered by tot_area > 1000 
-# avg_area stinks; log is best
-# perim_per_A: < 1 and log
-# tot_area okay with sqrt
-# SLA just fine if you filter < 4000 and the L > 12000
-
-# rootimage.
-hist(log(rootimage.[rootimage.$Spp=="V",]$SRL), breaks=sqrt(nrow(rootimage.)))
-qqPlot(log(rootimage.[rootimage.$Spp=="V",]$SRL))
-hist(log(rootimage.[rootimage.$Spp=="L",]$SRL), breaks=sqrt(nrow(rootimage.)))
-qqPlot(log(rootimage.[rootimage.$Spp=="L",]$SRL))
-# logSRL is great
-
-# SIF.
-hist(SIF.[SIF.$Spp=="V",]$d13C)
-qqPlot(SIF.[SIF.$Spp=="V",]$d13C) # cute
-hist(SIF.[SIF.$Spp=="L",]$d13C)
-qqPlot(SIF.[SIF.$Spp=="L",]$d13C) # cute!
 
 
 ### combine into one giant, all-inclusive dataset
 
  final_df <- biomass2. %>% 
-  dplyr::select(Plot, Spp, Code, totmass, rootshoot, Ht.mm..8, lwc, CO2, meanSWC) %>% 
+  dplyr::select(Plot, Spp, Code, totmass, rootshoot, rootmass_g, Ht.mm..8, lwc, CO2, meanSWC) %>% 
   left_join(LiCOR_df.[,c("Code","Anet","gs", "WUE")], by = "Code") %>% 
   left_join(lai.[,c("Code","avg_area","perim_per_A","tot_area", "SLA")], by = "Code") %>% 
   left_join(rootimage.[,c("Code","SRL")], by = "Code") %>% 
@@ -102,310 +99,331 @@ qqPlot(SIF.[SIF.$Spp=="L",]$d13C) # cute!
   group_by(Plot, Spp) %>% 
   mutate(n = n()) %>% 
   left_join(lookup, by = "Plot") %>% 
-  mutate(H2OTmt = substr(Tmt,2,2), CO2Tmt = substr(Tmt,1,1)) 
+  mutate(H2OTmt = substr(Tmt,2,2), CO2Tmt = substr(Tmt,1,1)) %>% 
+   ungroup()
 
 # response variables
 names(final_df)
 # "totmass"     "rootshoot"   "Ht.mm..8"   "lwc"    "Anet"        "gs"          "WUE"         "avg_area"    "perim_per_A" "tot_area"    "SLA"         "SRL"        "d13C"
 
+# want to compare full data with filtered(for herbivory)
+
+final_df_nh <- final_df %>% 
+  select(Code, totmass, rootshoot, Ht.mm..8) %>% 
+  filter(!Code %in% firstfullherb$Code) %>% 
+  right_join(select(final_df, !c(totmass, rootshoot, Ht.mm..8)), by="Code") 
+
+final_df_nh[final_df_nh$Code %in% firstherb$Code,]$tot_area <- NA
+# now final_df_nh has NAs for stem-dominant variables in *full* herbivory list, and NAs for leaf area in *any* herbivory list
+
 # univariate models for each response variable, with plot as a random effect
+# I have taken out the plots where I modeled H2OTmt (vs meanSWC)
 library(ggeffects)
 library(lme4)
 library(lmerTest)
 library(scales)
+library(lattice)
+
 # totmass -- sqrt
 grid.arrange( 
 ggpredict(lmer(sqrt(totmass)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="V",])), 
            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
-+ labs(title = "Totmass, V"),
++ labs(title = "Totmass, V (all)"),
+ggpredict(lmer(sqrt(totmass)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",])), 
+          terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
++ labs(title = "Totmass, V (filtered)"),
  ggpredict(lmer(sqrt(totmass)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="L",])), 
            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
-+ labs(title = "Totmass, L"),
-ggpredict(lmer(sqrt(totmass)~CO2+H2OTmt + (1|Plot), data=filter(final_df[final_df$Spp=="V",])), 
-          terms=c("CO2","H2OTmt"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
-+ labs(title = "Totmass, V"),
-ggpredict(lmer(sqrt(totmass)~CO2+H2OTmt + (1|Plot), data=filter(final_df[final_df$Spp=="L",])), 
-          terms=c("CO2","H2OTmt"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
-+ labs(title = "Totmass, L"))
++ labs(title = "Totmass, L (all)"),
+ggpredict(lmer(sqrt(totmass)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])), 
+          terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
++ labs(title = "Totmass, L (filtered)"))
 summary(lmer(sqrt(totmass)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="V",]))) 
-#summary(lmer(sqrt(totmass)~CO2+H2OTmt + (1|Plot), data=filter(final_df[final_df$Spp=="V",]))) 
+ plot(lmer(sqrt(totmass)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="V",])))
+qqmath(lmer(sqrt(totmass)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="V",])), id=.05)
+shapiro.test(resid(lmer(sqrt(totmass)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="V",])))) 
+# W = 0.97284, p-value = 0.2779
+
+summary(lmer(totmass~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",])))
+plot(lmer(totmass~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",])))
+qqmath(lmer(totmass~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",])), id=.05)
+shapiro.test(resid(lmer(totmass~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",])))) # OK
+# W = 0.97535, p-value = 0.8302
         
+summary(lmer(sqrt(totmass)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])))
+plot(lmer(sqrt(totmass)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])))
+qqmath(lmer(sqrt(totmass)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])), id=.05)
+shapiro.test(resid(lmer(sqrt(totmass)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",]))))
+# W = 0.98955, p-value = 0.8833
+
 summary(lmer(sqrt(totmass)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="L",])))
-#summary(lmer(sqrt(totmass)~CO2+H2OTmt + (1|Plot), data=filter(final_df[final_df$Spp=="L",]))) 
 
-# rootshoot
+# rootshoot -- inverse sqrt
 grid.arrange( 
-  ggpredict(lmer(rootshoot~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="V",])), 
+  ggpredict(lmer(1/sqrt(rootshoot)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="V",])), 
             terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
-  + labs(title = "rootshoot, V"),
-  ggpredict(lmer(rootshoot~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="L",])), 
+  + labs(title = "rootshoot, V (all)"),
+  ggpredict(lmer(1/sqrt(rootshoot)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",])), 
             terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
-  + labs(title = "rootshoot, L"),
-  ggpredict(lmer(rootshoot~CO2+H2OTmt + (1|Plot), data=filter(final_df[final_df$Spp=="V",])), 
-            terms=c("CO2","H2OTmt"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
-  + labs(title = "rootshoot, V"),
-  ggpredict(lmer(rootshoot~CO2+H2OTmt + (1|Plot), data=filter(final_df[final_df$Spp=="L",])), 
-            terms=c("CO2","H2OTmt"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
-  + labs(title = "rootshoot, L"))
-#summary(lmer(rootshoot~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="V",]))) 
-#summary(lmer(rootshoot~CO2+H2OTmt + (1|Plot), data=filter(final_df[final_df$Spp=="V",]))) 
+  + labs(title = "rootshoot, V (filtered)"),  
+  ggpredict(lmer(1/sqrt(rootshoot)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="L",])), 
+            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
+  + labs(title = "rootshoot, L (all)"),
+  ggpredict(lmer(1/sqrt(rootshoot)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])), 
+            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
+  + labs(title = "rootshoot, L (filtered)"))
 
-summary(lmer(rootshoot~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="L",])))
-#summary(lmer(rootshoot~CO2+H2OTmt + (1|Plot), data=filter(final_df[final_df$Spp=="L",]))) 
+library(caret)
+summary(lmer((1/sqrt(rootshoot))~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",])))
+plot(lmer((1/sqrt(rootshoot))~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",])))
+qqmath(lmer((1/sqrt(rootshoot))~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",])), id=.05)
+shapiro.test(resid(lmer((1/sqrt(rootshoot))~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",]))))
+# W = 0.96434, p-value = 0.6074
 
-# lwc
+summary(lmer((1/sqrt(rootshoot))~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])))
+plot(lmer((1/sqrt(rootshoot))~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])))
+qqmath(lmer((1/sqrt(rootshoot))~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])), id=.05)
+shapiro.test(resid(lmer((1/sqrt(rootshoot))~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",]))))
+# W = 0.96253, p-value = 0.05901
+
+# lwc -- none
 grid.arrange( 
   ggpredict(lmer(lwc~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="V",])), 
             terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
-  + labs(title = "lwc, V"),
+  + labs(title = "lwc, V (all)"),
+  ggpredict(lmer(lwc~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",])), 
+            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
+  + labs(title = "lwc, V (filtered)"),  
   ggpredict(lmer(lwc~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="L",])), 
             terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
-  + labs(title = "lwc, L"),
-  ggpredict(lmer(lwc~CO2+H2OTmt + (1|Plot), data=filter(final_df[final_df$Spp=="V",])), 
-            terms=c("CO2","H2OTmt"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
-  + labs(title = "lwc, V"),
-  ggpredict(lmer(lwc~CO2+H2OTmt + (1|Plot), data=filter(final_df[final_df$Spp=="L",])), 
-            terms=c("CO2","H2OTmt"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
-  + labs(title = "lwc, L"))
-summary(lmer(lwc~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="V",]))) 
-#summary(lmer(lwc~CO2+H2OTmt + (1|Plot), data=filter(final_df[final_df$Spp=="V",]))) 
-
+  + labs(title = "lwc, L (all)"),
+  ggpredict(lmer(lwc~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])), 
+            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
+  + labs(title = "lwc, L (filtered)"))
+summary(lmer(lwc~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",]))) 
+plot(lmer(lwc~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",])))
+qqmath(lmer(lwc~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",])), id=.05)
+shapiro.test(resid(lmer(lwc~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",]))))
+# W = 0.96947, p-value = 0.2007
 summary(lmer(lwc~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="L",])))
-#summary(lmer(lwc~CO2*H2OTmt + (1|Plot), data=filter(final_df[final_df$Spp=="L",]))) 
+plot(lmer(lwc~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])))
+qqmath(lmer(lwc~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])), id=.05)
+shapiro.test(resid(lmer(lwc~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",]))))
+# W = 0.99198, p-value = 0.954
 
-# Anet -- sqrt
+# Anet -- none
 grid.arrange( 
-  ggpredict(lmer(sqrt(Anet)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="V",])), 
+  ggpredict(lmer(Anet~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="V",])), 
             terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
-  + labs(title = "sqrt(Anet), V"),
-  ggpredict(lmer(sqrt(Anet)~rescale(CO2)*rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="L",])), 
+  + labs(title = "Anet, V (all)"),
+  ggpredict(lmer(Anet~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",])), 
             terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
-  + labs(title = "sqrt(Anet), L"),
-  ggpredict(lmer(sqrt(Anet)~CO2+H2OTmt + (1|Plot), data=filter(final_df[final_df$Spp=="V",])), 
-            terms=c("CO2","H2OTmt"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
-  + labs(title = "sqrt(Anet), V"),
-  ggpredict(lmer(sqrt(Anet)~CO2+H2OTmt + (1|Plot), data=filter(final_df[final_df$Spp=="L",])), 
-            terms=c("CO2","H2OTmt"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
-  + labs(title = "sqrt(Anet), L"))
-summary(lmer((sqrt(Anet))~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="V",]))) 
-#summary(lmer(sqrt(Anet)~CO2+H2OTmt + (1|Plot), data=filter(final_df[final_df$Spp=="V",]))) 
-
-summary(lmer((sqrt(Anet))~rescale(CO2)*rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="L",])))
-#summary(lmer(sqrt(Anet)~CO2+H2OTmt + (1|Plot), data=filter(final_df[final_df$Spp=="L",]))) 
+  + labs(title = "Anet, V (filtered)"),  
+  ggpredict(lmer(Anet~rescale(CO2)*rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="L",])), 
+            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
+  + labs(title = "Anet, L (all)"),
+  ggpredict(lmer(Anet~rescale(CO2)*rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])), 
+            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
+  + labs(title = "Anet, L (filtered)"))
+summary(lmer(Anet~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",]))) 
+plot(lmer(Anet~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",])))
+qqmath(lmer(Anet~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",])), id=.05)
+shapiro.test(resid(lmer(Anet~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",]))))
+# W = 0.95161, p-value = 0.1372
+summary(lmer(Anet~rescale(CO2)*rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])))
+plot(lmer(Anet~rescale(CO2)*rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])))
+qqmath(lmer(Anet~rescale(CO2)*rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])), id=.05)
+shapiro.test(resid(lmer(Anet~rescale(CO2)*rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",]))))
+# W = 0.97784, p-value = 0.5793
 
 ggpredict(lmer(sqrt(Anet)~rescale(CO2)*rescale(meanSWC) + (1|Plot), data=final_df), 
           terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
-+ labs(title = "log(sqrt(Anet)), both")
++ labs(title = "Anet, both")
 # summary(lmer(sqrt(Anet)~rescale(CO2)*rescale(meanSWC) + (1|Plot), data=final_df))
 # summary(lmer(sqrt(Anet)~CO2*H2OTmt + (1|Plot), data=final_df))
         
 
-# gs -- sqrt
+# gs -- none
 grid.arrange( 
-  ggpredict(lmer(sqrt(gs)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="V",])), 
+  ggpredict(lmer(gs~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="V",])), 
             terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
-  + labs(title = "sqrt(gs), V"),
-  ggpredict(lmer(sqrt(gs)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="L",])), 
+  + labs(title = "gs, V (all)"),
+  ggpredict(lmer(gs~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",])), 
             terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
-  + labs(title = "sqrt(gs), L"),
-  ggpredict(lmer(sqrt(gs)~CO2+H2OTmt + (1|Plot), data=filter(final_df[final_df$Spp=="V",])), 
-            terms=c("CO2","H2OTmt"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
-  + labs(title = "sqrt(gs), V"),
-  ggpredict(lmer(sqrt(gs)~CO2+H2OTmt + (1|Plot), data=filter(final_df[final_df$Spp=="L",])), 
-            terms=c("CO2","H2OTmt"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
-  + labs(title = "sqrt(gs), L"))
-summary(lmer(sqrt(gs)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="V",]))) 
-#summary(lmer(sqrt(gs)~CO2+H2OTmt + (1|Plot), data=filter(final_df[final_df$Spp=="V",]))) 
+  + labs(title = "gs, V (filtered)"),  
+  ggpredict(lmer(gs~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="L",])), 
+            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
+  + labs(title = "gs, L (all)"),
+  ggpredict(lmer(gs~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])), 
+            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
+  + labs(title = "gs, L (filtered)"))
+summary(lmer(gs~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",]))) 
+plot(lmer(gs~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",])))
+qqmath(lmer(gs~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",])), id=.05)
+shapiro.test(resid(lmer(gs~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",]))))
+# W = 0.97325, p-value = 0.5566
+summary(lmer(gs~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])))
+plot(lmer(gs~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])))
+qqmath(lmer(gs~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])), id=.05)
+shapiro.test(resid(lmer(gs~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",]))))
+# W = 0.95598, p-value = 0.1059
 
-summary(lmer(sqrt(gs)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="L",])))
-#summary(lmer(sqrt(gs)~CO2+H2OTmt + (1|Plot), data=filter(final_df[final_df$Spp=="L",]))) 
+# ggpredict(lmer(gs~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=final_df), 
+#           terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
+# + labs(title = "gs, both")
+# summary(lmer(sqrt(gs)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=final_df))
+# summary(lmer(sqrt(gs)~CO2+H2OTmt + (1|Plot), data=final_df))
 
-ggpredict(lmer(sqrt(gs)~rescale(CO2)*rescale(meanSWC) + (1|Plot), data=final_df), 
-          terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
-+ labs(title = "gs, both")
-summary(lmer(sqrt(gs)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=final_df))
-summary(lmer(sqrt(gs)~CO2+H2OTmt + (1|Plot), data=final_df))
-
-# WUE
+# WUE -- none
 grid.arrange( 
   ggpredict(lmer(WUE~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="V",])), 
-            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) + labs(title = "WUE, V"),
+            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
+  + labs(title = "WUE, V (all)"),
+  ggpredict(lmer(WUE~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",])), 
+            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
+  + labs(title = "WUE, V (filtered)"),  
   ggpredict(lmer(WUE~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="L",])), 
             terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
-  + labs(title = "WUE, L"),
-  ggpredict(lmer(WUE~CO2+H2OTmt + (1|Plot), data=filter(final_df[final_df$Spp=="V",])), 
-            terms=c("CO2","H2OTmt"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
-  + labs(title = "WUE, V"),
-  ggpredict(lmer(WUE~CO2+H2OTmt + (1|Plot), data=filter(final_df[final_df$Spp=="L",])), 
-            terms=c("CO2","H2OTmt"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
-  + labs(title = "WUE, L"))
-summary(lmer(WUE~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="V",]))) 
-summary(lmer(WUE~CO2+H2OTmt + (1|Plot), data=filter(final_df[final_df$Spp=="V",]))) 
-
-summary(lmer(WUE~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="L",])))
-summary(lmer(WUE~CO2+H2OTmt + (1|Plot), data=filter(final_df[final_df$Spp=="L",]))) 
-
-ggpredict(lmer(WUE~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=final_df), 
-          terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) + labs(title = "WUE, both")
-summary(lmer(WUE~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=final_df))
-summary(lmer(WUE~CO2+H2OTmt + (1|Plot), data=final_df))
-
-
-# avg_area -- sqrt
-grid.arrange( 
-  ggpredict(lmer(sqrt(avg_area)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="V",])), 
-            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) + labs(title = "sqrt(avg_area), V"),
-  ggpredict(lmer(sqrt(avg_area)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="L",])), 
+  + labs(title = "WUE, L (all)"),
+  ggpredict(lmer(WUE~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])), 
             terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
-  + labs(title = "sqrt(avg_area), L"),
-  ggpredict(lmer(sqrt(avg_area)~CO2+H2OTmt + (1|Plot), data=filter(final_df[final_df$Spp=="V",])), 
-            terms=c("CO2","H2OTmt"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
-  + labs(title = "sqrt(avg_area), V"),
-  ggpredict(lmer(sqrt(avg_area)~CO2+H2OTmt + (1|Plot), data=filter(final_df[final_df$Spp=="L",])), 
-            terms=c("CO2","H2OTmt"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
-  + labs(title = "sqrt(avg_area), L"))
-summary(lmer(sqrt(avg_area)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="V",]))) 
-summary(lmer(sqrt(avg_area)~CO2+H2OTmt + (1|Plot), data=filter(final_df[final_df$Spp=="V",]))) 
+  + labs(title = "WUE, L (filtered)"))
+summary(lmer(WUE~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",]))) 
+plot(lmer(WUE~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",])))
+qqmath(lmer(WUE~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",])), id=.05)
+shapiro.test(resid(lmer(WUE~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",]))))
+# W = 0.95747, p-value = 0.2049
+summary(lmer(WUE~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])))
+plot(lmer(WUE~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])))
+qqmath(lmer(WUE~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])), id=.05)
+shapiro.test(resid(lmer(WUE~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",]))))
+# W = 0.97766, p-value = 0.5726
 
-summary(lmer(sqrt(avg_area)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="L",])))
-summary(lmer(sqrt(avg_area)~CO2+H2OTmt + (1|Plot), data=filter(final_df[final_df$Spp=="L",]))) 
 
-# perim_per_A -- log
+# tot_area -- sqrt
 grid.arrange( 
-  ggpredict(lmer(log(perim_per_A)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="V",])), 
-            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) + labs(title = "log(perim_per_A), V"),
-  ggpredict(lmer(log(perim_per_A)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="L",])), 
+  ggpredict(lmer(sqrt(tot_area)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="V",])), 
             terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
-  + labs(title = "log(perim_per_A), L"),
-  ggpredict(lmer(log(perim_per_A)~CO2+H2OTmt + (1|Plot), data=filter(final_df[final_df$Spp=="V",])), 
-            terms=c("CO2","H2OTmt"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
-  + labs(title = "log(perim_per_A), V"),
-  ggpredict(lmer(log(perim_per_A)~CO2+H2OTmt + (1|Plot), data=filter(final_df[final_df$Spp=="L",])), 
-            terms=c("CO2","H2OTmt"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
-  + labs(title = "log(perim_per_A), L"))
-summary(lmer(log(perim_per_A)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="V",]))) 
-summary(lmer(log(perim_per_A)~CO2+H2OTmt + (1|Plot), data=filter(final_df[final_df$Spp=="V",]))) 
-
-summary(lmer(log(perim_per_A)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="L",])))
-summary(lmer(log(perim_per_A)~CO2+H2OTmt + (1|Plot), data=filter(final_df[final_df$Spp=="L",]))) 
-
-
-# tot_area 
-grid.arrange( 
-  ggpredict(lmer(tot_area~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="V",])), 
-            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) + labs(title = "tot_area, V"),
-  ggpredict(lmer(tot_area~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="L",])), 
+  + labs(title = "sqrt(tot_area), V (all)"),
+  ggpredict(lmer(sqrt(tot_area)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",])), 
             terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
-  + labs(title = "tot_area, L"),
-  ggpredict(lmer(tot_area~CO2+H2OTmt + (1|Plot), data=filter(final_df[final_df$Spp=="V",])), 
-            terms=c("CO2","H2OTmt"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
-  + labs(title = "tot_area, V"),
-  ggpredict(lmer(tot_area~CO2+H2OTmt + (1|Plot), data=filter(final_df[final_df$Spp=="L",])), 
-            terms=c("CO2","H2OTmt"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
-  + labs(title = "tot_area, L"))
-summary(lmer(tot_area~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="V",]))) 
-summary(lmer(tot_area~CO2+H2OTmt + (1|Plot), data=filter(final_df[final_df$Spp=="V",]))) 
-
-summary(lmer(tot_area~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="L",])))
-summary(lmer(tot_area~CO2+H2OTmt + (1|Plot), data=filter(final_df[final_df$Spp=="L",]))) 
-
-# SLA
-grid.arrange( 
-  ggpredict(lmer(SLA~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="V",])), 
-            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) + labs(title = "SLA, V"),
-  ggpredict(lmer(SLA~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="L",])), 
+  + labs(title = "sqrt(tot_area), V (filtered)"),  
+  ggpredict(lmer(sqrt(tot_area)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="L",])), 
             terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
-  + labs(title = "SLA, L"),
-  ggpredict(lmer(SLA~CO2+H2OTmt + (1|Plot), data=filter(final_df[final_df$Spp=="V",])), 
-            terms=c("CO2","H2OTmt"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
-  + labs(title = "SLA, V"),
-  ggpredict(lmer(SLA~CO2+H2OTmt + (1|Plot), data=filter(final_df[final_df$Spp=="L",])), 
-            terms=c("CO2","H2OTmt"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
-  + labs(title = "SLA, L"))
-summary(lmer(SLA~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="V",]))) 
-summary(lmer(SLA~CO2+H2OTmt + (1|Plot), data=filter(final_df[final_df$Spp=="V",]))) 
-
-summary(lmer(SLA~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="L",])))
-summary(lmer(SLA~CO2+H2OTmt + (1|Plot), data=filter(final_df[final_df$Spp=="L",]))) 
+  + labs(title = "sqrt(tot_area), L (all)"),
+  ggpredict(lmer(sqrt(tot_area)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])), 
+            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
+  + labs(title = "sqrt(tot_area), L (filtered)"))
+summary(lmer(sqrt(tot_area)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",]))) 
+plot(lmer(sqrt(tot_area)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",])))
+qqmath(lmer(sqrt(tot_area)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",])), id=.05)
+shapiro.test(resid(lmer(sqrt(tot_area)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",]))))
+# W = 0.97489, p-value = 0.883
+summary(lmer(sqrt(tot_area)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])))
+plot(lmer(sqrt(tot_area)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])))
+qqmath(lmer(sqrt(tot_area)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])), id=.05)
+shapiro.test(resid(lmer(sqrt(tot_area)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",]))))
+# W = 0.97725, p-value = 0.3563
 
 # SRL -- log
 grid.arrange( 
   ggpredict(lmer(log(SRL)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="V",])), 
-            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) + labs(title = "log(SRL), V"),
+            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
+  + labs(title = "log(SRL), V (all)"),
+  ggpredict(lmer(log(SRL)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",])), 
+            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
+  + labs(title = "log(SRL), V (filtered)"),  
   ggpredict(lmer(log(SRL)~rescale(CO2)*rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="L",])), 
             terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
-  + labs(title = "log(SRL), L"),
-  ggpredict(lmer(log(SRL)~CO2+H2OTmt + (1|Plot), data=filter(final_df[final_df$Spp=="V",])), 
-            terms=c("CO2","H2OTmt"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
-  + labs(title = "log(SRL), V"),
-  ggpredict(lmer(log(SRL)~CO2+H2OTmt + (1|Plot), data=filter(final_df[final_df$Spp=="L",])), 
-            terms=c("CO2","H2OTmt"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
-  + labs(title = "log(SRL), L"))
-summary(lmer(log(SRL)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="V",]))) 
-summary(lmer(log(SRL)~CO2+H2OTmt + (1|Plot), data=filter(final_df[final_df$Spp=="V",]))) 
+  + labs(title = "log(SRL), L (all)"),
+  ggpredict(lmer(log(SRL)~rescale(CO2)*rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])), 
+            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
+  + labs(title = "log(SRL), L (filtered)"))
+summary(lmer(log(SRL)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",]))) 
+plot(lmer(log(SRL)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",])))
+qqmath(lmer(log(SRL)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",])), id=.05)
+shapiro.test(resid(lmer(log(SRL)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",]))))
+# W = 0.99179, p-value = 0.9566
+summary(lmer(log(SRL)~rescale(CO2)*rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])))
+plot(lmer(log(SRL)~rescale(CO2)*rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])))
+qqmath(lmer(log(SRL)~rescale(CO2)*rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])), id=.05)
+shapiro.test(resid(lmer(log(SRL)~rescale(CO2)*rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",]))))
+# W = 0.98945, p-value = 0.8508
 
-summary(lmer(log(SRL)~rescale(CO2)*rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="L",])))
-summary(lmer(log(SRL)~CO2+H2OTmt + (1|Plot), data=filter(final_df[final_df$Spp=="L",]))) 
-
-# d13
+# d13 -- none
 grid.arrange( 
   ggpredict(lmer(d13C~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="V",])), 
-            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) + labs(title = "d13, V"),
+            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
+  + labs(title = "d13C, V (all)"),
+  ggpredict(lmer(d13C~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",])), 
+            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
+  + labs(title = "d13C, V (filtered)"),  
   ggpredict(lmer(d13C~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="L",])), 
             terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
-  + labs(title = "d13C, L"),
-  ggpredict(lmer(d13C~CO2+H2OTmt + (1|Plot), data=filter(final_df[final_df$Spp=="V",])), 
-            terms=c("CO2","H2OTmt"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
-  + labs(title = "d13C, V"),
-  ggpredict(lmer(d13C~CO2+H2OTmt + (1|Plot), data=filter(final_df[final_df$Spp=="L",])), 
-            terms=c("CO2","H2OTmt"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
-  + labs(title = "d13C, L"))
-summary(lmer(d13C~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="V",]))) 
-summary(lmer(d13C~CO2+H2OTmt + (1|Plot), data=filter(final_df[final_df$Spp=="V",]))) 
-
-summary(lmer(d13C~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="L",])))
-summary(lmer(d13C~CO2+H2OTmt + (1|Plot), data=filter(final_df[final_df$Spp=="L",]))) 
-
-# Ht.mm..8
-grid.arrange( 
-  ggpredict(lmer(log(Ht.mm..8)~rescale(CO2)*rescale(meanSWC) + (1|Plot), data=biomass2.[biomass2.$Spp=="V",]), 
-            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) + labs(title = "log(Ht.mm..8), V"),
-  ggpredict(lmer(log(Ht.mm..8)~rescale(CO2)*rescale(meanSWC) + (1|Plot), data=biomass2.[biomass2.$Spp=="L",]), 
+  + labs(title = "d13C, L (all)"),
+  ggpredict(lmer(d13C~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])), 
             terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
-  + labs(title = "log(Ht.mm..8), L"),
-  ggpredict(lmer(log(Ht.mm..8)~CO2*H2OTmt + (1|Plot), data=biomass2.[biomass2.$Spp=="V",]), 
-            terms=c("CO2","H2OTmt"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
-  + labs(title = "log(Ht.mm..8), V"),
-  ggpredict(lmer(log(Ht.mm..8)~CO2*H2OTmt + (1|Plot), data=biomass2.[biomass2.$Spp=="L",]), 
-            terms=c("CO2","H2OTmt"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
-  + labs(title = "log(Ht.mm..8), L"))
-summary(lmer(log(Ht.mm..8)~rescale(CO2)*rescale(meanSWC) + (1|Plot), data=biomass2.[biomass2.$Spp=="V",])) 
-summary(lmer(log(Ht.mm..8)~CO2*H2OTmt + (1|Plot), data=biomass2.[biomass2.$Spp=="V",])) 
+  + labs(title = "d13C, L (filtered)"))
+summary(lmer(d13C~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",]))) 
+plot(lmer(d13C~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",])))
+qqmath(lmer(d13C~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",])), id=.05)
+shapiro.test(resid(lmer(d13C~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",]))))
+# W = 0.97802, p-value = 0.5562
+summary(lmer(d13C~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])))
+plot(lmer(d13C~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])))
+qqmath(lmer(d13C~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])), id=.05)
+shapiro.test(resid(lmer(d13C~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",]))))
+# W = 0.96813, p-value = 0.214
 
-summary(lmer(log(Ht.mm..8)~rescale(CO2)*rescale(meanSWC) + (1|Plot), data=biomass2.[biomass2.$Spp=="L",]))
-summary(lmer(log(Ht.mm..8)~rescale(CO2)*rescale(meanSWC) + (1|Plot), data=biomass2.[biomass2.$Spp=="L",]))
-
-summary(lmer(log(Ht.mm..8)~CO2*H2OTmt + (1|Plot), data=biomass2.[biomass2.$Spp=="L",])) 
+# Ht.mm..8 -- sqrt
+grid.arrange( 
+  ggpredict(lmer(sqrt(Ht.mm..8)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="V",])), 
+            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
+  + labs(title = "sqrt(Ht.mm..8), V (all)"),
+  ggpredict(lmer(sqrt(Ht.mm..8)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",])), 
+            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
+  + labs(title = "sqrt(Ht.mm..8), V (filtered)"),  
+  ggpredict(lmer(sqrt(Ht.mm..8)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="L",])), 
+            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
+  + labs(title = "sqrt(Ht.mm..8), L (all)"),
+  ggpredict(lmer(sqrt(Ht.mm..8)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])), 
+            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
+  + labs(title = "sqrt(Ht.mm..8), L (filtered)"))
+summary(lmer(sqrt(Ht.mm..8)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",]))) 
+plot(lmer(sqrt(Ht.mm..8)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",])))
+qqmath(lmer(sqrt(Ht.mm..8)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",])), id=.05)
+shapiro.test(resid(lmer(sqrt(Ht.mm..8)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",]))))
+# W = 0.96285, p-value = 0.5489
+summary(lmer(sqrt(Ht.mm..8)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])))
+plot(lmer(sqrt(Ht.mm..8)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])))
+qqmath(lmer(sqrt(Ht.mm..8)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])), id=.05)
+shapiro.test(resid(lmer(sqrt(Ht.mm..8)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",]))))
+# W = 0.98934, p-value = 0.8801
 
 # rootmass_g
 grid.arrange( 
-  ggpredict(lmer(sqrt(rootmass_g)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=biomass2.), 
-            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) + labs(title = "sqrt(rootmass_g), V"),
-  ggpredict(lmer(sqrt(rootmass_g)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=biomass2.), 
+  ggpredict(lmer(sqrt(rootmass_g)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="V",])), 
             terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
-  + labs(title = "sqrt(rootmass_g), L"),
-  ggpredict(lmer(sqrt(rootmass_g)~CO2+H2OTmt + (1|Plot), data=biomass2.), 
-            terms=c("CO2","H2OTmt"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
-  + labs(title = "sqrt(rootmass_g), V"),
-  ggpredict(lmer(sqrt(rootmass_g)~CO2+H2OTmt + (1|Plot), data=biomass2.), 
-            terms=c("CO2","H2OTmt"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
-  + labs(title = "sqrt(rootmass_g), L"))
-summary(lmer(sqrt(rootmass_g)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=biomass2.)) 
-summary(lmer(sqrt(rootmass_g)~CO2+H2OTmt + (1|Plot), data=biomass2.)) 
-
-summary(lmer(sqrt(rootmass_g)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=biomass2.[biomass2.$Spp=="L",]))
-summary(lmer(sqrt(rootmass_g)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=biomass2.[biomass2.$Spp=="L",]))
-
+  + labs(title = "sqrt(rootmass_g), V (all)"),
+  ggpredict(lmer(sqrt(rootmass_g)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",])), 
+            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
+  + labs(title = "sqrt(rootmass_g), V (filtered)"),  
+  ggpredict(lmer(sqrt(rootmass_g)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="L",])), 
+            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
+  + labs(title = "sqrt(rootmass_g), L (all)"),
+  ggpredict(lmer(sqrt(rootmass_g)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])), 
+            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
+  + labs(title = "sqrt(rootmass_g), L (filtered)"))
+summary(lmer(sqrt(rootmass_g)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",]))) 
+plot(lmer(sqrt(rootmass_g)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",])))
+qqmath(lmer(sqrt(rootmass_g)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",])), id=.05)
+shapiro.test(resid(lmer(sqrt(rootmass_g)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",]))))
+# W = 0.98112, p-value = 0.4664
+summary(lmer(sqrt(rootmass_g)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])))
+plot(lmer(sqrt(rootmass_g)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])))
+qqmath(lmer(sqrt(rootmass_g)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])), id=.05)
+shapiro.test(resid(lmer(sqrt(rootmass_g)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",]))))
+# W = 0.98765, p-value = 0.7575
 
 # Fig 2 from Raubenheimer and Ripley
 # need a df where x = variable name, y, ymin, ymax are mean, mean-se, and mean+se of %∆ with CO2; group by H2OTmt
