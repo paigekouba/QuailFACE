@@ -20,12 +20,12 @@ nequals_licor <- LiCOR_df %>% # here I want a count per Spp per Tmt
 # LiCOR_df is a combination of the mini ACi curves from two sampling efforts, collapsed to include one predicted Anet (@350ppm  Ci) and one predicted gs (@350ppm  Ci) per plant, with averages of other numeric variables. Conductance and the interpolated value of Anet are used to calculate WUE. SWC was measured with a TDR probe immediately before LiCOR samples were taken for each plot. HHMMSS is probably necessary because photosynthetic rates may change throughout the day. Plot as a blocking variable; separate models for Spp?
 
 # how does time affect Anet? 
-ggplot(LiCOR_df) +
-  geom_point(aes(x=HHMMSS, y=Photo.y, color=Tmt)) + geom_line(aes(x=HHMMSS, y=Photo.y, group=Tmt, color = Tmt)) + scale_color_manual(values = c("pink", "lightblue", "red", "blue")) + facet_grid(rows = vars(Tmt))
+ggplot(LiCOR_df.) +
+  geom_point(aes(x=HHMMSS, y=Anet, color=Tmt)) + geom_line(aes(x=HHMMSS, y=Anet, group=Tmt, color = Tmt)) + scale_color_manual(values = c("pink", "lightblue", "red", "blue")) + facet_grid(rows = vars(Tmt))
 # no evident effect of time of day
 
-ggplot(LiCOR_df) +
-  geom_point(aes(x=HHMMSS, y=Cond.y, color=Tmt)) + geom_line(aes(x=HHMMSS, y=Cond.y, group=Tmt, color = Tmt)) + scale_color_manual(values = c("pink", "lightblue", "red", "blue")) + facet_grid(rows = vars(Tmt))
+ggplot(LiCOR_df.) +
+  geom_point(aes(x=HHMMSS, y=gs, color=Tmt)) + geom_line(aes(x=HHMMSS, y=gs, group=Tmt, color = Tmt)) + scale_color_manual(values = c("pink", "lightblue", "red", "blue")) + facet_grid(rows = vars(Tmt))
 
 # see how they associate by plot (with per-plot eCO2 ?)
 plot_order <- c("3","8","12","16","1","5","10","14","2","6","9","13","4","7","11","15")
@@ -381,12 +381,13 @@ inv_nequals <- inv_all_nfh %>%
 
 inv_all_nfh %>% # for seedlings without *full* herbivory, how did height change over the course of the study?
   group_by(Spp, Tmt, value) %>% 
-  summarise(mean_ht = mean(ht_mm, na.rm = TRUE),sd_ht = sd(ht_mm, na.rm = TRUE)) %>% 
+  # summarise(mean_ht = mean(ht_mm, na.rm = TRUE),sd_ht = sd(ht_mm, na.rm = TRUE)) %>% 
+  summarise(mean_ht = mean(ht_mm, na.rm = TRUE),se_ht = sd(ht_mm, na.rm = TRUE)/sqrt(n())) %>% 
  # summarise(mean_dia = mean(dia, na.rm = TRUE),sd_dia = sd(dia, na.rm = TRUE)) %>% 
  # summarise(mean_cond = mean(cond, na.rm = TRUE),sd_cond = sd(cond, na.rm = TRUE)) %>% 
   ggplot(aes(x=value, y = mean_ht, group = Tmt)) + 
   geom_line(aes(color = Tmt), position = position_dodge(20, preserve = "total"), linewidth = 1.2) +
-  geom_pointrange(aes(ymin = mean_ht - sd_ht, ymax = mean_ht + sd_ht, color = Tmt, shape = Tmt), position = position_dodge(20, preserve = "total"), size = 1.5, alpha = 0.75) + 
+  geom_pointrange(aes(ymin = mean_ht - se_ht, ymax = mean_ht + se_ht, color = Tmt, shape = Tmt), position = position_dodge(20, preserve = "total"), size = 1.5, linewidth=1, alpha = 0.75) + 
   # geom_pointrange(aes(ymin = mean_dia - sd_dia, ymax = mean_dia + sd_dia, color = Tmt, shape = Tmt), position = position_dodge(20, preserve = "total"), size = 1.5, alpha = 0.75) + 
   # geom_pointrange(aes(ymin = mean_cond - sd_cond, ymax = mean_cond + sd_cond, color = Tmt, shape = Tmt), position = position_dodge(20, preserve = "total"), size = 1.5, alpha = 0.75) + 
   scale_color_manual(values = c("#e8665d", "#828cfa", "#850a01", "#010c85")) +
@@ -495,22 +496,22 @@ biomass_nh2$predVD <- predict(lm_VD, newdata = biomass_nh2)
 biomass_nh2$predLW <- predict(lm_LW, newdata = biomass_nh2)
 biomass_nh2$predLD <- predict(lm_LD, newdata = biomass_nh2)
 
-biomass_nh2 <- biomass_nh2 %>% # make each row choose its species-tmt-combo related stem mass prediction
-  mutate(pred = abs(case_when(Spp == "V" & H2OTmt == "W" ~ predVW, # adding abs( to avoid 1-2 negative values
-                          Spp == "V" & H2OTmt == "D" ~ predVD,
-                          Spp == "L" & H2OTmt == "W" ~ predLW,
-                          Spp == "L" & H2OTmt == "D" ~ predLD)))
+# biomass_nh2 <- biomass_nh2 %>% # make each row choose its species-tmt-combo related stem mass prediction
+#   mutate(pred = abs(case_when(Spp == "V" & H2OTmt == "W" ~ predVW, # adding abs( to avoid 1-2 negative values
+#                           Spp == "V" & H2OTmt == "D" ~ predVD,
+#                           Spp == "L" & H2OTmt == "W" ~ predLW,
+#                           Spp == "L" & H2OTmt == "D" ~ predLD)))
 
 # extrapolate predicted stem masses for *all* data, including herbivory seedlings
 biomass2$predVW <- predict(lm_VW, newdata = biomass2)
 biomass2$predVD <- predict(lm_VD, newdata = biomass2)
 biomass2$predLW <- predict(lm_LW, newdata = biomass2)
 biomass2$predLD <- predict(lm_LD, newdata = biomass2)
-biomass2 <- biomass2 %>% 
-  mutate(pred = abs(case_when(Spp == "V" & H2OTmt == "W" ~ predVW, # adding abs( to avoid 1-2 negative values
-                          Spp == "V" & H2OTmt == "D" ~ predVD,
-                          Spp == "L" & H2OTmt == "W" ~ predLW,
-                          Spp == "L" & H2OTmt == "D" ~ predLD)))
+# biomass2 <- biomass2 %>% 
+#   mutate(pred = abs(case_when(Spp == "V" & H2OTmt == "W" ~ predVW, # adding abs( to avoid 1-2 negative values
+#                           Spp == "V" & H2OTmt == "D" ~ predVD,
+#                           Spp == "L" & H2OTmt == "W" ~ predLW,
+#                           Spp == "L" & H2OTmt == "D" ~ predLD)))
 
 ggplot(biomass2, aes(x=Ht.mm..5, y = StemWet_g)) + # plot real values (dots) vs predicted (crosses)
   geom_point(biomass2, mapping= aes(x=Ht.mm..5, y=pred, color = H2OTmt), shape = 3) +
@@ -622,12 +623,12 @@ ggplot(biomass2_leaf, aes(x=Leaf.Ct..5, y = LeafWet_g)) + # plot
   geom_point(biomass2_leaf, mapping=aes(x=Leaf.Ct..5, y=LeafWet_g, group = H2OTmt, color = H2OTmt)) + facet_grid( ~ Spp)
 
 # final biomass df with a column for predicted (if herb) or observed stem and leaf mass:
-biomass2 <- left_join(biomass2, biomass2_leaf[,c(3,34)], by = "Code") # combine stem and leaf predictions
-biomass2 <- biomass2 %>% 
-  mutate(StemWet_expanded = case_when(Code %in% firstfullherb$Code ~ pred, # changed to firstfullherb
-                                      TRUE ~ StemWet_g)) %>% 
-  mutate(LeafWet_expanded = case_when(Code %in% firstherb$Code ~ predleaf,
-                                      TRUE ~ LeafWet_g))
+# biomass2 <- left_join(biomass2, biomass2_leaf[,c(3,34)], by = "Code") # combine stem and leaf predictions
+# biomass2 <- biomass2 %>% 
+#   mutate(StemWet_expanded = case_when(Code %in% firstfullherb$Code ~ pred, # changed to firstfullherb
+#                                       TRUE ~ StemWet_g)) %>% 
+#   mutate(LeafWet_expanded = case_when(Code %in% firstherb$Code ~ predleaf,
+#                                       TRUE ~ LeafWet_g))
 
 # here I will add a similar interpolation/backfilling for final height (Ht.mm..8) based on prior height
 
