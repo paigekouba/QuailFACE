@@ -1,6 +1,22 @@
 # Sat 5/11/24
 # LiCOR Data Processing for Ch 3
 
+# will need per-plot CO2 levels:
+# get the per-plot ∆CO2 from the 10/9 test (from CO2_Ch2), scale it to the requisite fraction of the mean elevation (127 ppm) added to the mean ambient value (422)
+min(avg_between$mDeltaTest) # -6.114156
+max(avg_between$mDeltaTest) # 256.731
+mean(avg_between$mDeltaTest[avg_between$mDeltaTest>100]) # 210.8419
+mean(avg_between$mDeltaTest[avg_between$mDeltaTest<100]) # 8.442497
+
+# for eCO2 plots, the mean is (210 - 127) = 83.8 lower
+plot_CO2. <- avg_between %>% 
+  select(Plot, mDeltaTest) %>% 
+  mutate(CO2 = case_when(mDeltaTest > 100 ~ 422+(mDeltaTest-83.8),
+                         mDeltaTest < 100 ~ 422+(mDeltaTest)) ) %>% 
+  as.data.frame()
+
+plot_CO2. <- plot_CO2. %>% arrange(as.numeric(Plot))
+
 setwd("~/Documents/UC_Davis/2021_Winter/Quals/Proposal/Chapter 1/TinyFACE/GitHub/QuailFACE")
 LiCOR_3 <- read.csv("RawData/LiCOR_8.26.23.csv") # LiCOR datafile
 crosswalk3 <- read.csv("RawData/Survey3.csv") # data sheet with observation and plant codes
@@ -147,10 +163,10 @@ df_all <- rbind(df3, df4)
 # Tleaf, PARo, h2o.i, h20diff, Ci.Ca   vs. Photo
 
 # interpolation: want to compare treatment groups on apples-to-apples basis. Find the midpoint of all the curves and extrapolate to that value, for Photo and Cond (and other variables deemed necessary)
-midpoints <- df_all %>%
-  dplyr::select(HHMMSS, Photo, Cond, Ci, CO2R, SWC, Date, Log, X., Time, ID, Plot, Tmt) %>%
-  group_by(ID) %>%
-  summarize(Ci.midpoint = (min(Ci)+max(Ci))/2) 
+# midpoints <- df_all %>%
+#   dplyr::select(HHMMSS, Photo, Cond, Ci, CO2R, SWC, Date, Log, X., Time, ID, Plot, Tmt) %>%
+#   group_by(ID) %>%
+#   summarize(Ci.midpoint = (min(Ci)+max(Ci))/2) 
 #mean(midpoints$Ci.midpoint) # 351.6937
 #median(midpoints$Ci.midpoint) # 348.1874
 # go with 350
@@ -160,10 +176,10 @@ midpoints <- df_all %>%
 #   facet_wrap( ~ ID) +
 #   geom_vline(xintercept = 350, colour="blue")
 
-ggplot(LiCOR_L, aes(x = Ci, y = Photo, colour = Tmt)) + # this one will show the A/Ci mini curves + midpoint
-  geom_point() +
-  facet_wrap( ~ ID) +
-  geom_vline(xintercept = 322, colour="blue")
+# ggplot(LiCOR_L, aes(x = Ci, y = Photo, colour = Tmt)) + # this one will show the A/Ci mini curves + midpoint
+#   geom_point() +
+#   facet_wrap( ~ ID) +
+#   geom_vline(xintercept = 322, colour="blue")
 
 ## get linear model predictions for each curve
 # LiCOR_IDs <- unique(df_all$ID) # get plant codes in LiCOR sample
@@ -278,10 +294,31 @@ seedling_CO2 <- function(ID){
 }
 seedling_CO2(ID = "10L3b")
 
+# need to know how good the following function is; how well does CO2S predict Ci for existing data?
+summary(lm(Ci ~ CO2S, data=LiCOR_all))
+# it anyway should be different for different treatment groups
+summary(lm(Ci ~ CO2S + Tmt, data=LiCOR_all))$adj.r.squared
+# don't panic, you are fitting the model to each plant specifically each time
 
 for(i in 1:length(LiCOR_IDs)){ # calculate linear interpolation for each ID's datapoints, at plot-level CO2S
   LiCOR_Ci[i] <- predict(lm(Ci ~ CO2S, data = LiCOR_all %>%
                                 filter(ID == LiCOR_IDs[i])), newdata=data.frame(CO2S = seedling_CO2(ID = LiCOR_IDs[i]))) }
+# 22 warnings:  In predict.lm(lm(Ci ~ CO2S, data = LiCOR_all %>% filter(ID ==  ... :
+# prediction from rank-deficient fit; attr(*, "non-estim") has doubtful cases
+# ok because I'll filter out curves with < 3 points later on
+
+# see how well this does; extract R^2 values
+adj.r.sq <- vector(length = length(LiCOR_IDs))
+nobs <- vector(length = length(LiCOR_IDs))
+for(i in 1:length(LiCOR_IDs)){ # calculate linear interpolation for each ID's datapoints, at plot-level CO2S
+  adj.r.sq[i] <- summary(lm(Ci ~ CO2S, data = LiCOR_all %>%
+                              filter(ID == LiCOR_IDs[i])))$adj.r.squared
+  nobs[i] <- nobs(lm(Ci ~ CO2S, data = LiCOR_all %>%
+                       filter(ID == LiCOR_IDs[i])))
+}
+adj.r.sq_df <- data.frame(cbind(adj.r.sq, nobs)) %>% 
+  filter(nobs > 2)
+mean(adj.r.sq_df$adj.r.sq) # 0.6669607
 
 LiCOR_Ci_df <- data.frame(cbind(LiCOR_IDs, LiCOR_Ci)) # pairs ID/code with predicted Ci at Ca
 colnames(LiCOR_Ci_df) <- c("ID","Ci")
@@ -317,7 +354,7 @@ newLiCOR <- left_join(LiCOR_Ci_df, LiCOR_gs_df, by="ID") %>% left_join(LiCOR_Ane
 
 # plotting_df <- data.frame(ID = c(df_all$ID, LiCOR_extp_df$ID), Ci = c(df_all$Ci, rep(350,length(unique(df_all$ID)))), Photo = c(df_all$Photo, LiCOR_extp_df$LiCOR_extp), Cond = c(df_all$Cond, LiCOR_gs_df$LiCOR_gs))
 
-left_join(LiCOR_all, newLiCOR, by = "ID")
+#left_join(LiCOR_all, newLiCOR, by = "ID")
 
 LiCOR_new <- left_join(LiCOR_all, newLiCOR, by = "ID") %>% 
   group_by(ID) %>% 
