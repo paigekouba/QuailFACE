@@ -21,11 +21,20 @@ nequals_licor <- LiCOR_df %>% # here I want a count per Spp per Tmt
 
 # how does time affect Anet? 
 ggplot(LiCOR_df.) +
-  geom_point(aes(x=HHMMSS, y=Anet, color=Tmt)) + geom_line(aes(x=HHMMSS, y=Anet, group=Tmt, color = Tmt)) + scale_color_manual(values = c("pink", "lightblue", "red", "blue")) + facet_grid(rows = vars(Tmt))
-# no evident effect of time of day
-
+  geom_point(aes(x=rescale(HHMMSS), y=Anet, color=Tmt)) + geom_smooth(aes(x=rescale(HHMMSS), y=Anet, color=Tmt), method="lm") + scale_color_manual(values = c("pink", "lightblue", "red", "blue")) + facet_grid(~Spp)
 ggplot(LiCOR_df.) +
-  geom_point(aes(x=HHMMSS, y=gs, color=Tmt)) + geom_line(aes(x=HHMMSS, y=gs, group=Tmt, color = Tmt)) + scale_color_manual(values = c("pink", "lightblue", "red", "blue")) + facet_grid(rows = vars(Tmt))
+  geom_point(aes(x=rescale(HHMMSS), y=Anet)) + geom_smooth(aes(x=rescale(HHMMSS), y=Anet), method="lm") + facet_grid(~Spp)
+summary(lm(Anet ~ rescale(HHMMSS), LiCOR_df.)) # -8.229, p=0.00848
+summary(lm(Anet ~ rescale(HHMMSS)+Spp, LiCOR_df.))
+
+ggplot(LiCOR_df.) + # what is the effect of time on gs?
+  geom_point(aes(x=rescale(HHMMSS), y=gs, color=Tmt)) + geom_smooth(aes(x=rescale(HHMMSS), y=gs, color=Tmt), method="lm") + scale_color_manual(values = c("pink", "lightblue", "red", "blue")) + facet_grid(~Spp)
+ggplot(LiCOR_df.) +
+  geom_point(aes(x=rescale(HHMMSS), y=gs)) + geom_smooth(aes(x=rescale(HHMMSS), y=gs), method="lm") + facet_grid(~Spp)
+summary(lm(gs ~ rescale(HHMMSS), LiCOR_df.)) # -0.10057, p=0.00483
+summary(lm(gs ~ rescale(HHMMSS)+Tmt, LiCOR_df.))
+
+
 
 # see how they associate by plot (with per-plot eCO2 ?)
 plot_order <- c("3","8","12","16","1","5","10","14","2","6","9","13","4","7","11","15")
