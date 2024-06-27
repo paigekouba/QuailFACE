@@ -103,7 +103,12 @@ df4$HHMMSS <- parse_date_time(df4$HHMMSS, orders = c("HMS"), tz = "America/Los_A
 # ready!
 
 # combine dataframes, explore relationships between variables
-df_all <- rbind(df3, df4)
+# df_all <- rbind(df3, df4)
+
+df3_nonoverlapping <- df3 %>% 
+  filter(!ID %in% df4$ID)
+
+df_all <- rbind(df4, df3_nonoverlapping)
 
 # df_all %>% 
 #   group_by(ID) %>% 
@@ -255,19 +260,21 @@ survey2_SWC <- LiCOR_2 %>%
 LiCOR_1 <- LiCOR_1 %>% # add SWC values from survey 2
   mutate(Plot = as.character(Plot)) %>% 
   left_join(survey2_SWC, by = "Plot") %>% 
-  mutate(Spp = str_sub(ID, - 3, - 3)) 
+  mutate(Spp = str_sub(ID, - 3, - 3)) %>% 
+  mutate(CO2R = signif(CO2S, 1))
 
 LiCOR_2 <- LiCOR_2 %>% # add Spp
-  mutate(Spp = str_sub(ID, - 3, - 3)) 
+  mutate(Spp = str_sub(ID, - 3, - 3)) %>% 
+  mutate(CO2R = signif(CO2S, 1))
 
 LiCOR_1$HHMMSS<- parse_date_time(LiCOR_1$HHMMSS, orders = c("HMS"), tz = "America/Los_Angeles")
 LiCOR_2$HHMMSS <- parse_date_time(LiCOR_2$HHMMSS, orders = c("HMS"), tz = "America/Los_Angeles")
 
 
 LiCOR_all <- df_all %>% 
-  select(ID, Plot, HHMMSS, Ci, Photo, Cond, Tleaf, PARi, VpdL, CO2S, RH_R, RH_S, SWC, Spp) %>% 
-  rbind(select(LiCOR_1, ID, Plot, HHMMSS, Ci, Photo, Cond, Tleaf, PARi, VpdL, CO2S, RH_R, RH_S, SWC, Spp)) %>% 
-  rbind(select(LiCOR_2, ID, Plot, HHMMSS, Ci, Photo, Cond, Tleaf, PARi, VpdL, CO2S, RH_R, RH_S, SWC, Spp)) %>% 
+  select(ID, Plot, Date, HHMMSS, Ci, Photo, Cond, Tleaf, PARi, VpdL, CO2R, RH_R, RH_S, SWC, Spp) %>% 
+  rbind(filter(select(LiCOR_1, ID, Plot, Date, HHMMSS, Ci, Photo, Cond, Tleaf, PARi, VpdL, CO2R, RH_R, RH_S, SWC, Spp), ID %in% c("12L6a","16L1b", "7V1b"))) %>% 
+  rbind(filter(select(LiCOR_2, ID, Plot, Date, HHMMSS, Ci, Photo, Cond, Tleaf, PARi, VpdL, CO2R, RH_R, RH_S, SWC, Spp), ID %in% c("12L6a","16L1b", "7V1b"))) %>% 
   left_join(lookup, by = "Plot") %>% 
   mutate(Tmt = as.factor(Tmt)) %>% 
   filter(!is.na(Tmt)) %>% 
@@ -277,7 +284,7 @@ LiCOR_all <- df_all %>%
 ## get linear model predictions for each curve
 # start by extracting CO2S and Ci from LiCOR_all
 ggplot(LiCOR_all) +
-  geom_point(aes(x=CO2S, y=Ci, color=Tmt)) + facet_grid(~Spp)
+  geom_point(aes(x=CO2R, y=Ci, color=Tmt)) + facet_grid(~Spp)
 
 # need to group by ID and then find the Ci predicted at CO2S = 422 and 544 (OR CO2S = plotwise CO2 means from plot_CO2.)
 # so like... a function that works on the data (x,y points for CO2S, Ci) 
@@ -289,36 +296,35 @@ LiCOR_Ci <- vector(length = length(LiCOR_IDs)) # initialize results vector
 seedling_CO2 <- function(ID){
   plot <- if_else(nchar(ID) == 4, substr(ID,1,1), substr(ID,1,2))
   plotCO2 <- select(filter(plot_CO2., Plot==plot),CO2)
-  names(plotCO2) <- "CO2S"
+  names(plotCO2) <- "CO2R"
   return(plotCO2)
 }
 seedling_CO2(ID = "10L3b")
 
-# need to know how good the following function is; how well does CO2S predict Ci for existing data?
-summary(lm(Ci ~ CO2S, data=LiCOR_all))
-# it anyway should be different for different treatment groups
-summary(lm(Ci ~ CO2S + Tmt, data=LiCOR_all))$adj.r.squared
-# don't panic, you are fitting the model to each plant specifically each time
+# # need to know how good the following function is; how well does CO2S predict Ci for existing data?
+# summary(lm(Ci ~ CO2R, data=LiCOR_all))
+# # it anyway should be different for different treatment groups
+# summary(lm(Ci ~ CO2R + Tmt, data=LiCOR_all))$adj.r.squared
+# # don't panic, you are fitting the model to each plant specifically each time
 
 for(i in 1:length(LiCOR_IDs)){ # calculate linear interpolation for each ID's datapoints, at plot-level CO2S
-  LiCOR_Ci[i] <- predict(lm(Ci ~ CO2S, data = LiCOR_all %>%
+  LiCOR_Ci[i] <- predict(lm(Ci ~ CO2R, data = LiCOR_all %>%
                                 filter(ID == LiCOR_IDs[i])), newdata=data.frame(CO2S = seedling_CO2(ID = LiCOR_IDs[i]))) }
-# 22 warnings:  In predict.lm(lm(Ci ~ CO2S, data = LiCOR_all %>% filter(ID ==  ... :
-# prediction from rank-deficient fit; attr(*, "non-estim") has doubtful cases
-# ok because I'll filter out curves with < 3 points later on
 
 # see how well this does; extract R^2 values
-adj.r.sq <- vector(length = length(LiCOR_IDs))
+r.sq <- vector(length = length(LiCOR_IDs))
 nobs <- vector(length = length(LiCOR_IDs))
 for(i in 1:length(LiCOR_IDs)){ # calculate linear interpolation for each ID's datapoints, at plot-level CO2S
-  adj.r.sq[i] <- summary(lm(Ci ~ CO2S, data = LiCOR_all %>%
-                              filter(ID == LiCOR_IDs[i])))$adj.r.squared
-  nobs[i] <- nobs(lm(Ci ~ CO2S, data = LiCOR_all %>%
+  r.sq[i] <- summary(lm(Ci ~ CO2R, data = LiCOR_all %>%
+                              filter(ID == LiCOR_IDs[i])))$r.squared
+  nobs[i] <- nobs(lm(Ci ~ CO2R, data = LiCOR_all %>%
                        filter(ID == LiCOR_IDs[i])))
 }
-adj.r.sq_df <- data.frame(cbind(adj.r.sq, nobs)) %>% 
+r.sq_df <- data.frame(cbind(r.sq, nobs)) %>% 
   filter(nobs > 2)
-mean(adj.r.sq_df$adj.r.sq) # 0.6669607
+mean(r.sq_df$r.sq) # 0.9212305
+r.sq_df$r.sq
+
 
 LiCOR_Ci_df <- data.frame(cbind(LiCOR_IDs, LiCOR_Ci)) # pairs ID/code with predicted Ci at Ca
 colnames(LiCOR_Ci_df) <- c("ID","Ci")
@@ -336,18 +342,41 @@ LiCOR_Anet_df <- data.frame(cbind(LiCOR_IDs2, LiCOR_Anet)) # pairs ID/code with 
 colnames(LiCOR_Anet_df) <- c("ID","Anet")
 LiCOR_Anet_df$Anet <- as.numeric(LiCOR_Anet_df$Anet)
 
+Anet_r.sq <- vector(length = length(LiCOR_IDs))
+Anet_nobs <- vector(length = length(LiCOR_IDs))
+for(i in 1:length(LiCOR_IDs)){ # calculate linear interpolation for each ID's datapoints, at plot-level CO2S
+  Anet_r.sq[i] <- summary(lm(Photo ~ Ci, data = LiCOR_all %>%
+                              filter(ID == LiCOR_IDs[i])))$r.squared
+  Anet_nobs[i] <- nobs(lm(Photo ~ Ci, data = LiCOR_all %>%
+                       filter(ID == LiCOR_IDs[i])))
+}
+Anet_r.sq_df <- data.frame(cbind(Anet_r.sq, Anet_nobs)) %>% 
+  filter(Anet_nobs > 2)
+mean(Anet_r.sq_df$Anet_r.sq) # 0.7963953
 
 
-# do the same for WUE
+# do the same for gs
 LiCOR_gs <- vector(length = length(LiCOR_IDs2))# initialize results vector
 
 for(i in 1:length(LiCOR_IDs2)){ # calculate linear interpolation *of Cond* for each ID's datapoints, at Ca
   LiCOR_gs[i] <- predict(lm(Cond ~ Ci, data = LiCOR_all %>%
                               filter(ID == LiCOR_IDs2[i])), newdata=data.frame(Ci = LiCOR_Ci_df[i,2])) }
 
-LiCOR_gs_df <- data.frame(cbind(LiCOR_IDs2, LiCOR_gs)) # pairs ID/code with predicted gs at 350
+LiCOR_gs_df <- data.frame(cbind(LiCOR_IDs2, LiCOR_gs)) # pairs ID/code with predicted gs 
 colnames(LiCOR_gs_df) <- c("ID","gs")
 LiCOR_gs_df$gs <- as.numeric(LiCOR_gs_df$gs)
+
+gs_r.sq <- vector(length = length(LiCOR_IDs))
+gs_nobs <- vector(length = length(LiCOR_IDs))
+for(i in 1:length(LiCOR_IDs)){ # calculate linear interpolation for each ID's datapoints, at plot-level CO2S
+  gs_r.sq[i] <- summary(lm(Cond ~ Ci, data = LiCOR_all %>%
+                                   filter(ID == LiCOR_IDs[i])))$r.squared
+  gs_nobs[i] <- nobs(lm(Cond ~ Ci, data = LiCOR_all %>%
+                            filter(ID == LiCOR_IDs[i])))
+}
+gs_r.sq_df <- data.frame(cbind(gs_r.sq, gs_nobs)) %>% 
+  filter(gs_nobs > 2)
+mean(gs_r.sq_df$gs_r.sq) # 0.6098981
 
 
 newLiCOR <- left_join(LiCOR_Ci_df, LiCOR_gs_df, by="ID") %>% left_join(LiCOR_Anet_df, by="ID")
@@ -367,9 +396,15 @@ LiCOR_new <- left_join(LiCOR_all, newLiCOR, by = "ID") %>%
 
 
 ggplot() + # this one will show how well predicted Anet value tracks the A/Ci mini curve
-  geom_point(data=LiCOR_all, mapping=aes(x = Ci, y = Photo)) +
+  geom_point(data=LiCOR_all, mapping=aes(x = Ci, y = Photo, color=Date)) +
   geom_smooth(data=LiCOR_all, aes(x=Ci, y=Photo), color="forestgreen",method="lm", se=F) +
   geom_point(LiCOR_new, mapping=aes(x = Ci.y, y = Anet), color="red") +
+  facet_wrap( ~ ID)
+
+ggplot() + # this one will show how well predicted gs value tracks the gs vs Ci for each plant
+  geom_point(data=LiCOR_all, mapping=aes(x = Ci, y = Cond, color=Date)) +
+  geom_smooth(data=LiCOR_all, aes(x=Ci, y=Cond), color="goldenrod",method="lm", se=F) +
+  geom_point(LiCOR_new, mapping=aes(x = Ci.y, y = gs), color="blue") +
   facet_wrap( ~ ID)
 
 ggplot(LiCOR_new) + # this shows WUE (as the slope of Anet ~ gs, per Spp*Tmt)
@@ -381,7 +416,7 @@ LiCOR_new %>%
 
 LiCOR_new %>% 
   ggplot() +
-  geom_boxplot(aes(x=Tmt, y=gs, color=Tmt))  + scale_color_manual(values = c("pink", "lightblue", "red", "blue"))
+  geom_boxplot(aes(x=Tmt, y=gs, color=Tmt)) + facet_grid(~Spp) + scale_color_manual(values = c("pink", "lightblue", "red", "blue"))
 
 LiCOR_new %>% 
   ggplot() +
