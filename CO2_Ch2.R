@@ -274,7 +274,8 @@ library(hms)
 
 CO2_total_corr %>% 
   select(TIMESTAMP, CO2ref, CO2ref_corr, CO2elev, CO2elev_corr, DeltaObs_corr, brokenpump) %>% 
-  summarise_if(is.numeric, median, na.rm = T)
+  #summarise_if(is.numeric, median, na.rm = T)
+  summarise_if(is.numeric, sd, na.rm = T)
   # mutate_if(negate(is.numeric), ~ -999) %>%
   # colMeans(na.rm = TRUE)
 
@@ -525,3 +526,4 @@ quail_weather <- weather %>%
   xlab(label="Date") +
   theme_classic(base_size = 18)
 
+## here is where I will make a plot comparing avg or max wind speed at the TinyFACE array vs weather station
