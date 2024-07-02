@@ -17,15 +17,20 @@ nequals_licor <- LiCOR_df %>% # here I want a count per Spp per Tmt
   group_by(Tmt, Spp) %>% 
   tally()
 
-# LiCOR_df is a combination of the mini ACi curves from two sampling efforts, collapsed to include one predicted Anet (@350ppm  Ci) and one predicted gs (@350ppm  Ci) per plant, with averages of other numeric variables. Conductance and the interpolated value of Anet are used to calculate WUE. SWC was measured with a TDR probe immediately before LiCOR samples were taken for each plot. HHMMSS is probably necessary because photosynthetic rates may change throughout the day. Plot as a blocking variable; separate models for Spp?
+# LiCOR_df is a combination of the mini ACi curves from two sampling efforts, collapsed to include one predicted Anet and one predicted gs per plant, with averages of other numeric variables. Conductance and the interpolated value of Anet are used to calculate WUE. SWC was measured with a TDR probe immediately before LiCOR samples were taken for each plot. HHMMSS is probably necessary because photosynthetic rates may change throughout the day. Plot as a blocking variable; separate models for Spp?
 
 # how does time affect Anet? 
 ggplot(LiCOR_df.) +
   geom_point(aes(x=rescale(HHMMSS), y=Anet, color=Tmt)) + geom_smooth(aes(x=rescale(HHMMSS), y=Anet, color=Tmt), method="lm") + scale_color_manual(values = c("pink", "lightblue", "red", "blue")) + facet_grid(~Spp)
 ggplot(LiCOR_df.) +
   geom_point(aes(x=rescale(HHMMSS), y=Anet)) + geom_smooth(aes(x=rescale(HHMMSS), y=Anet), method="lm") + facet_grid(~Spp)
-summary(lm(Anet ~ rescale(HHMMSS), LiCOR_df.)) # -8.229, p=0.00848
-summary(lm(Anet ~ rescale(HHMMSS)+Spp, LiCOR_df.))
+summary(lm(Anet ~ rescale(HHMMSS)+Tmt, filter(LiCOR_df., Spp =="V"))) # -10.852, p = 0.000730 ***
+summary(lm(Anet ~ rescale(HHMMSS)+Tmt, filter(LiCOR_df., Spp=="L"))) # -4.6311, p = 0.043238 *
+
+summary(lm(Anet ~ rescale(CO2)+rescale(meanSWC)+time_scaled, plotmeans.V)) #
+summary(lmer(Anet ~ rescale(CO2)+rescale(meanSWC)+time_scaled +(1|Plot), filter(final_df, Spp=="V"))) 
+summary(lm(Anet ~ rescale(CO2)*rescale(meanSWC)+time_scaled, plotmeans.L)) 
+summary(lmer(Anet ~ rescale(CO2)*rescale(meanSWC)+time_scaled +(1|Plot), filter(final_df, Spp=="L"))) 
 
 ggplot(LiCOR_df.) + # what is the effect of time on gs?
   geom_point(aes(x=rescale(HHMMSS), y=gs, color=Tmt)) + geom_smooth(aes(x=rescale(HHMMSS), y=gs, color=Tmt), method="lm") + scale_color_manual(values = c("pink", "lightblue", "red", "blue")) + facet_grid(~Spp)
@@ -34,7 +39,8 @@ ggplot(LiCOR_df.) +
 summary(lm(gs ~ rescale(HHMMSS), LiCOR_df.)) # -0.10057, p=0.00483
 summary(lm(gs ~ rescale(HHMMSS)+Tmt, LiCOR_df.))
 
-
+summary(lm(Anet ~ rescale(HHMMSS)+Tmt+Tleaf, filter(LiCOR_df., Spp =="V"))) 
+summary(lm(Anet ~ rescale(HHMMSS)+Tmt+Tleaf, filter(LiCOR_df., Spp=="L"))) 
 
 # see how they associate by plot (with per-plot eCO2 ?)
 plot_order <- c("3","8","12","16","1","5","10","14","2","6","9","13","4","7","11","15")
@@ -42,7 +48,7 @@ ggplot(LiCOR_df) +
   geom_boxplot(aes(x=factor(Plot, level=plot_order), y=Photo.y, color=Tmt)) + facet_grid(rows = vars(Spp), scales = "free") + scale_color_manual(values = c("pink", "lightblue", "red", "blue")) 
 
 # how does SWC look across different plots/treatments? first, average SWC measurements by Plot
-LiCOR_df %>% 
+LiCOR_df. %>% 
   group_by(Plot, Tmt) %>% mutate(meanSWC = mean(SWC)) %>% 
   distinct(Plot, .keep_all = TRUE) %>% 
 ggplot() +
@@ -404,8 +410,6 @@ inv_all_nfh %>% # for seedlings without *full* herbivory, how did height change 
   geom_text(data = inv_nequals, aes(x = value, y = as.numeric(as.factor(Tmt))*12-50, color = Tmt, label = paste0("N=",n))) +
    facet_grid(~ Spp) + theme_classic(base_size = 19)
 
-
-## Back-filling biomass data
 # let's look at the growth curves for this subset of seedlings
 
 # view the growth curves (actual) for all seedlings with herbivory
@@ -425,352 +429,6 @@ inv_all[which(inv_all$Code %in% firstherb$Code),] %>% # (add ! after which( to g
 
 # after reviewing the initial plots, I found 12 instances of data entry errors and 12 seedlings in the "herbivory" subset that didn't lose enough height to matter. Made those edits above (after loading inventory data and adding dates). **I reversed this bc better safe than sorry
 # I checked this against leaf herbivory: compare ht.8 vs leaf mass and look for outliers. 1V6 was funky, added to herbivory list to be safe
-
-
-
-# I will write a model to see whether height on or before inventory 5 predict final biomass for the non-herbivory plants
-# need to join inventory hts and biomass columns with biomass data, keeping all/only rows in the biomass dataset
-
-biomass_nh2 <- biomass_nh %>% # training data on seedlings with no herbivory
-  left_join(inventory_thinned[,c(1,7,10,13,17,22,27,32,37)]) %>% # select Ht measurements from all inventories
-  mutate(across(c(StemWet_g, LeafWet_g, LeafDry_g, rootmass_g, Ht.mm..1, Ht.mm..2, Ht.mm..3, Ht.mm..4, Ht.mm..5, Ht.mm..6, Ht.mm..7, Ht.mm..8), na_if, -Inf))  %>% 
-  mutate(H2OTmt = substr(Tmt,2,2)) # will write separate models for W and D treatments, not for E/A CO2
-
-# checking this: are any outliers for Ht.8 vs. leaf_g?
-ggplot(biomass_nh2, aes(x=Ht.mm..8, y = LeafWet_g, group = Tmt)) +
-  geom_text(biomass_nh2, mapping =aes(x=Ht.mm..8, y=LeafWet_g, label = Code, color = Tmt))
-# keep 1V6 in the herbivory list; maybe 5V5 too ?
-
-biomass2 <- biomass %>% # prediction data with full dataset and extra inventory columns
-  left_join(inventory_thinned[,c(1,7,10,13,17,22,27,32,37)]) %>% 
-  mutate(across(c(StemWet_g, LeafWet_g, LeafDry_g, rootmass_g, Ht.mm..1, Ht.mm..2, Ht.mm..3, Ht.mm..4, Ht.mm..5, Ht.mm..6, Ht.mm..7, Ht.mm..8), na_if, -Inf))  %>% 
-  mutate(H2OTmt = substr(Tmt,2,2))
-
-
-## model selection
-# VW
-# VW_145 <- lm(StemWet_g ~ polym(Ht.mm..1,Ht.mm..4,Ht.mm..5, degree = 2, raw = TRUE), data = filter(biomass_nh2, Spp == "V" & H2OTmt == "W"))
-# VW_135  <- lm(StemWet_g ~ polym(Ht.mm..1,Ht.mm..3,Ht.mm..5, degree = 2, raw = TRUE), data = filter(biomass_nh2, Spp == "V" & H2OTmt == "W"))
-# VW_125 <- lm(StemWet_g ~ polym(Ht.mm..1,Ht.mm..2,Ht.mm..5, degree = 2, raw = TRUE), data = filter(biomass_nh2, Spp == "V" & H2OTmt == "W"))
-# VW_235 <- lm(StemWet_g ~ polym(Ht.mm..2,Ht.mm..3,Ht.mm..5, degree = 2, raw = TRUE), data = filter(biomass_nh2, Spp == "V" & H2OTmt == "W"))
-# VW_245 <- lm(StemWet_g ~ polym(Ht.mm..2,Ht.mm..4,Ht.mm..5, degree = 2, raw = TRUE), data = filter(biomass_nh2, Spp == "V" & H2OTmt == "W"))
-# VW_345 <- lm(StemWet_g ~ polym(Ht.mm..3,Ht.mm..4,Ht.mm..5, degree = 2, raw = TRUE), data = filter(biomass_nh2, Spp == "V" & H2OTmt == "W"))
-# AIC(VW_145, VW_135, VW_125, VW_235, VW_245, VW_345)
-# AIC(VW_235, VW_125) # winner is VW_235; also against reduced models of VW_235
-# # a simple y ~ x was better after examining the data
-
-# VD
-# VD_145 <- lm(StemWet_g ~ polym(Ht.mm..1,Ht.mm..4,Ht.mm..5, degree = 2, raw = TRUE), data = filter(biomass_nh2, Spp == "V" & H2OTmt == "D"))
-# VD_135  <- lm(StemWet_g ~ polym(Ht.mm..1,Ht.mm..3,Ht.mm..5, degree = 2, raw = TRUE), data = filter(biomass_nh2, Spp == "V" & H2OTmt == "D"))
-# VD_125 <- lm(StemWet_g ~ polym(Ht.mm..1,Ht.mm..2,Ht.mm..5, degree = 2, raw = TRUE), data = filter(biomass_nh2, Spp == "V" & H2OTmt == "D"))
-# VD_235 <- lm(StemWet_g ~ polym(Ht.mm..2,Ht.mm..3,Ht.mm..5, degree = 2, raw = TRUE), data = filter(biomass_nh2, Spp == "V" & H2OTmt == "D"))
-# VD_245 <- lm(StemWet_g ~ polym(Ht.mm..2,Ht.mm..4,Ht.mm..5, degree = 2, raw = TRUE), data = filter(biomass_nh2, Spp == "V" & H2OTmt == "D"))
-# VD_345 <- lm(StemWet_g ~ polym(Ht.mm..3,Ht.mm..4,Ht.mm..5, degree = 2, raw = TRUE), data = filter(biomass_nh2, Spp == "V" & H2OTmt == "D"))
-# AIC(VD_145, VD_135, VD_125, VD_235, VD_245, VD_345)
-# VD_5 <- lm(StemWet_g ~ polym(Ht.mm..5, degree = 2, raw = TRUE), data = filter(biomass_nh2, Spp == "V" & H2OTmt == "D"))
-# AIC(VD_145, VD_5) # winner is VD_5
-
-# LW
-# LW_145 <- lm(StemWet_g ~ polym(Ht.mm..1,Ht.mm..4,Ht.mm..5, degree = 2, raw = TRUE), data = filter(biomass_nh2, Spp == "L" & H2OTmt == "W"))
-# LW_135  <- lm(StemWet_g ~ polym(Ht.mm..1,Ht.mm..3,Ht.mm..5, degree = 2, raw = TRUE), data = filter(biomass_nh2, Spp == "L" & H2OTmt == "W"))
-# LW_125 <- lm(StemWet_g ~ polym(Ht.mm..1,Ht.mm..2,Ht.mm..5, degree = 2, raw = TRUE), data = filter(biomass_nh2, Spp == "L" & H2OTmt == "W"))
-# LW_235 <- lm(StemWet_g ~ polym(Ht.mm..2,Ht.mm..3,Ht.mm..5, degree = 2, raw = TRUE), data = filter(biomass_nh2, Spp == "L" & H2OTmt == "W"))
-# LW_245 <- lm(StemWet_g ~ polym(Ht.mm..2,Ht.mm..4,Ht.mm..5, degree = 2, raw = TRUE), data = filter(biomass_nh2, Spp == "L" & H2OTmt == "W"))
-# LW_345 <- lm(StemWet_g ~ polym(Ht.mm..3,Ht.mm..4,Ht.mm..5, degree = 2, raw = TRUE), data = filter(biomass_nh2, Spp == "L" & H2OTmt == "W"))
-# AIC(LW_145, LW_135, LW_125, LW_235, LW_245, LW_345)
-# AIC(LW_235, LW_135) # winner is LW_135; also against reduced models of LW_135
-# # trying LW_5.1
-# LW_5.1 <- lm(StemWet_g ~ Ht.mm..5, data = filter(biomass_nh2, Spp == "L" & H2OTmt == "W"))
-
-# LD
-# LD_145 <- lm(StemWet_g ~ polym(Ht.mm..1,Ht.mm..4,Ht.mm..5, degree = 2, raw = TRUE), data = filter(biomass_nh2, Spp == "L" & H2OTmt == "D"))
-# LD_135  <- lm(StemWet_g ~ polym(Ht.mm..1,Ht.mm..3,Ht.mm..5, degree = 2, raw = TRUE), data = filter(biomass_nh2, Spp == "L" & H2OTmt == "D"))
-# LD_125 <- lm(StemWet_g ~ polym(Ht.mm..1,Ht.mm..2,Ht.mm..5, degree = 2, raw = TRUE), data = filter(biomass_nh2, Spp == "L" & H2OTmt == "D"))
-# LD_235 <- lm(StemWet_g ~ polym(Ht.mm..2,Ht.mm..3,Ht.mm..5, degree = 2, raw = TRUE), data = filter(biomass_nh2, Spp == "L" & H2OTmt == "D"))
-# LD_245 <- lm(StemWet_g ~ polym(Ht.mm..2,Ht.mm..4,Ht.mm..5, degree = 2, raw = TRUE), data = filter(biomass_nh2, Spp == "L" & H2OTmt == "D"))
-# LD_345 <- lm(StemWet_g ~ polym(Ht.mm..3,Ht.mm..4,Ht.mm..5, degree = 2, raw = TRUE), data = filter(biomass_nh2, Spp == "L" & H2OTmt == "D"))
-# AIC(LD_145, LD_135, LD_125, LD_235, LD_245, LD_345)
-# AIC(LD_345, LD_125) # winner is LD_345 
-# # against reduced models of LD_345, degree 1 of _345 wins
-# LD_345.1 <- lm(StemWet_g ~ polym(Ht.mm..3, Ht.mm..4, Ht.mm..5, degree = 1, raw = TRUE), data = filter(biomass_nh2, Spp == "L" & H2OTmt == "D")) # winner is LD_345.1
-
-# winning models go here:
-lm_VW <- lm(StemWet_g ~ Ht.mm..5, data = filter(biomass_nh2, Spp == "V" & H2OTmt == "W"))
-lm_VD <- lm(StemWet_g ~ polym(Ht.mm..5, degree = 2, raw = TRUE), data = filter(biomass_nh2, Spp == "V" & H2OTmt == "D"))
-lm_LW <-  lm(StemWet_g ~ polym(Ht.mm..5, degree = 2, raw = TRUE), data = filter(biomass_nh2, Spp == "L" & H2OTmt == "W"))
-lm_LD <- lm(StemWet_g ~ polym(Ht.mm..3, Ht.mm..4, Ht.mm..5, degree = 1, raw = TRUE), data = filter(biomass_nh2, Spp == "L" & H2OTmt == "D")) 
-# now I need to use these to predict the final StemWet_g in the non-herbivory training data:
-biomass_nh2$predVW <- predict(lm_VW, newdata = biomass_nh2)
-biomass_nh2$predVD <- predict(lm_VD, newdata = biomass_nh2)
-biomass_nh2$predLW <- predict(lm_LW, newdata = biomass_nh2)
-biomass_nh2$predLD <- predict(lm_LD, newdata = biomass_nh2)
-
-# biomass_nh2 <- biomass_nh2 %>% # make each row choose its species-tmt-combo related stem mass prediction
-#   mutate(pred = abs(case_when(Spp == "V" & H2OTmt == "W" ~ predVW, # adding abs( to avoid 1-2 negative values
-#                           Spp == "V" & H2OTmt == "D" ~ predVD,
-#                           Spp == "L" & H2OTmt == "W" ~ predLW,
-#                           Spp == "L" & H2OTmt == "D" ~ predLD)))
-
-# extrapolate predicted stem masses for *all* data, including herbivory seedlings
-biomass2$predVW <- predict(lm_VW, newdata = biomass2)
-biomass2$predVD <- predict(lm_VD, newdata = biomass2)
-biomass2$predLW <- predict(lm_LW, newdata = biomass2)
-biomass2$predLD <- predict(lm_LD, newdata = biomass2)
-# biomass2 <- biomass2 %>% 
-#   mutate(pred = abs(case_when(Spp == "V" & H2OTmt == "W" ~ predVW, # adding abs( to avoid 1-2 negative values
-#                           Spp == "V" & H2OTmt == "D" ~ predVD,
-#                           Spp == "L" & H2OTmt == "W" ~ predLW,
-#                           Spp == "L" & H2OTmt == "D" ~ predLD)))
-
-ggplot(biomass2, aes(x=Ht.mm..5, y = StemWet_g)) + # plot real values (dots) vs predicted (crosses)
-  geom_point(biomass2, mapping= aes(x=Ht.mm..5, y=pred, color = H2OTmt), shape = 3) +
-  geom_point(biomass2, mapping=aes(x=Ht.mm..5, y=StemWet_g, group = H2OTmt, color = H2OTmt)) + facet_grid( ~ Spp)
-
-# how far off are the pred values
-ggplot(biomass2, aes(x=Ht.mm..8, y=StemWet_g - pred, color = H2OTmt)) +
-         geom_point() + facet_grid( ~Spp)
-# pretty good except VW skew too low; then again that makes sense because those all got eaten?
-ggplot(biomass_nh2, aes(x=Ht.mm..8, y=StemWet_g - pred, color = H2OTmt)) +
-  geom_point() + facet_grid( ~Spp) # that's what I wanted! within the non-eaten subset, this is a fairly reliable predictor
-
-## Do it again but for LeafWet_g. Hunch is that leaf count might want to be involved
-biomass_nh2_leaf <- biomass_nh %>% # training data on seedlings with no herbivory
-  left_join(inventory_thinned[,c(1,7,10,13,17,22,27,32,37,15,19,24,30,35,20,25,29,34,39)]) %>% 
-  mutate(across(c(StemWet_g, LeafWet_g, LeafDry_g, rootmass_g, Ht.mm..1, Ht.mm..2, Ht.mm..3, Ht.mm..4, Ht.mm..5, Ht.mm..6, Ht.mm..7, Ht.mm..8, 
-                  c("Leaf.Ct.",paste0("Leaf.Ct..",c(1,5,6,7))), c("Max.Leaf.Length.1",paste0("Max.Leaf.",c(5,6,7,8)))), na_if, -Inf))  %>% 
-  mutate(H2OTmt = substr(Tmt,2,2))
-
-biomass2_leaf <- biomass %>% # prediction data with full dataset and extra inventory columns
-  left_join(inventory_thinned[,c(1,7,10,13,17,22,27,32,37,15,19,24,30,35,20,25,29,34,39)]) %>% 
-  mutate(across(c(StemWet_g, LeafWet_g, LeafDry_g, rootmass_g, Ht.mm..1, Ht.mm..2, Ht.mm..3, Ht.mm..4, Ht.mm..5, Ht.mm..6, Ht.mm..7, Ht.mm..8, 
-                  c("Leaf.Ct.",paste0("Leaf.Ct..",c(1,5,6,7))), c("Max.Leaf.Length.1",paste0("Max.Leaf.",c(5,6,7,8)))), na_if, -Inf))  %>% 
-  mutate(H2OTmt = substr(Tmt,2,2))
-
-ggplot(biomass_nh2_leaf) +
-  geom_point(aes(x=Leaf.Ct..5, y=LeafWet_g, color = H2OTmt)) + facet_grid(~Spp) # not a strong pattern :\
-# even more missing data than for stems, due to leaf loss
-ggplot(biomass_nh2_leaf) +
-  geom_point(aes(x=Ht.mm..5, y=LeafWet_g, color = H2OTmt)) + facet_grid(~Spp) # Ht.mm..5 looks better
-
-## model selection 
-# VW
-# VW_a <- lm(LeafWet_g ~ Ht.mm..5, data = filter(biomass_nh2_leaf, Spp == "V" & H2OTmt == "W"))
-# VW_b <- lm(LeafWet_g ~ polym(Ht.mm..5, degree = 2, raw = TRUE),data = filter(biomass_nh2_leaf, Spp == "V" & H2OTmt == "W"))
- VW_c <- lm(LeafWet_g ~ Ht.mm..5, data = filter(biomass_nh2_leaf, Spp == "V" & H2OTmt == "W"))
-# AIC(VW_b, VW_c) # winner is VW_b, but seems like one point is exerting too much influence; go with VW_c
-
-# VD
- VD_a <- lm(LeafWet_g ~ Ht.mm..5, data = filter(biomass_nh2_leaf, Spp == "V" & H2OTmt == "D"))
-# VD_b <- lm(LeafWet_g ~ polym(Leaf.Ct..5,Ht.mm..5, degree = 2, raw = TRUE),data = filter(biomass_nh2_leaf, Spp == "V" & H2OTmt == "D"))
-# VD_c <- lm(LeafWet_g ~ polym(Leaf.Ct..5, degree = 2, raw = TRUE),data = filter(biomass_nh2_leaf, Spp == "L" & H2OTmt == "W"))
-# AIC(VD_a, VD_b, VD_c) # winner is VD_a
-
-# LW
-# LW_a <- lm(LeafWet_g ~ Ht.mm..5, data = filter(biomass_nh2_leaf, Spp == "L" & H2OTmt == "W"))
-# LW_b <- lm(LeafWet_g ~ polym(Ht.mm..5, degree = 2, raw = TRUE),data = filter(biomass_nh2_leaf, Spp == "L" & H2OTmt == "W"))
-# LW_c <- lm(LeafWet_g ~ polym(Leaf.Ct..5, degree = 2, raw = TRUE),data = filter(biomass_nh2_leaf, Spp == "L" & H2OTmt == "W"))
- LW_d <- lm(LeafWet_g ~ Leaf.Ct..5,data = filter(biomass_nh2_leaf, Spp == "L" & H2OTmt == "W"))
-# AIC(LW_c, LW_d) # winner is LW_c but not by much, and d is simpler
-
-# LD
-# LD_a <- lm(LeafWet_g ~ Ht.mm..5, data = filter(biomass_nh2_leaf, Spp == "L" & H2OTmt == "D"))
-# LD_b <- lm(LeafWet_g ~ polym(Ht.mm..5, degree = 2, raw = TRUE),data = filter(biomass_nh2_leaf, Spp == "L" & H2OTmt == "D"))
- LD_c <- lm(LeafWet_g ~ Leaf.Ct..5, data = filter(biomass_nh2_leaf, Spp == "L" & H2OTmt == "D"))
-# AIC(LD_a, LD_b, LD_c) # winner is LD_c
-
-# now I need to use these to predict the final LeafWet_g in the no-herbivory training data:
-biomass_nh2_leaf$predVW <- predict(VW_c, newdata = biomass_nh2_leaf)
-biomass_nh2_leaf$predVD <- predict(VD_a, newdata = biomass_nh2_leaf)
-biomass_nh2_leaf$predLW <- predict(LW_d, newdata = biomass_nh2_leaf)
-biomass_nh2_leaf$predLD <- predict(LD_c, newdata = biomass_nh2_leaf)
-
-biomass_nh2_leaf <- biomass_nh2_leaf %>% 
-  mutate(pred = abs(case_when(Spp == "V" & H2OTmt == "W" ~ predVW,
-                              Spp == "V" & H2OTmt == "D" ~ predVD,
-                              Spp == "L" & H2OTmt == "W" ~ predLW,
-                              Spp == "L" & H2OTmt == "D" ~ predLD)))
-
-biomass2_leaf$predVW <- predict(VW_c, newdata = biomass2_leaf)
-biomass2_leaf$predVD <- predict(VD_a, newdata = biomass2_leaf)
-biomass2_leaf$predLW <- predict(LW_d, newdata = biomass2_leaf)
-biomass2_leaf$predLD <- predict(LD_c, newdata = biomass2_leaf)
-
-biomass2_leaf <- biomass2_leaf %>% 
-  mutate(predleaf = abs(case_when(Spp == "V" & H2OTmt == "W" ~ predVW,
-                              Spp == "V" & H2OTmt == "D" ~ predVD,
-                              Spp == "L" & H2OTmt == "W" ~ predLW,
-                              Spp == "L" & H2OTmt == "D" ~ predLD)))
-
-# how far off are the pred values 
-ggplot(biomass2_leaf, aes(x=Ht.mm..5, y=LeafWet_g - predleaf, color = H2OTmt)) +
-  geom_point() + facet_grid( ~Spp)
-ggplot(biomass2_leaf, aes(x=Leaf.Ct..5, y=LeafWet_g - predleaf, color = H2OTmt)) +
-  geom_point() + facet_grid( ~Spp)
-
-ggplot(biomass_nh2_leaf, aes(x=Ht.mm..5, y=LeafWet_g - pred, color = H2OTmt)) +
-  geom_point() + facet_grid( ~Spp)
-ggplot(biomass_nh2_leaf, aes(x=Leaf.Ct..5, y=LeafWet_g - pred, color = H2OTmt)) +
-  geom_point() + facet_grid( ~Spp)
-
-# It's not very good; plot model line with real and fake data to be sure 
-ggplot(biomass_nh2_leaf, aes(x = Ht.mm..5, y=LeafWet_g, color = H2OTmt)) + # plot against Ht.mm..5
-  geom_point() + facet_grid(~Spp) +
-  geom_hline(aes(yintercept=0)) +
-  geom_smooth(data = biomass_nh2_leaf, aes(x=Ht.mm..5, y=pred, group = H2OTmt), color = c("red")) +
-  geom_point(data = biomass_nh2_leaf, aes(x=Ht.mm..5, y=pred, group = H2OTmt, color = "darkgreen"))
-ggplot(biomass_nh2_leaf, aes(x = Leaf.Ct..5, y=LeafWet_g, color = H2OTmt)) + # plot against Leaf.Ct..5
-  geom_point() + facet_grid(~Spp) +
-  geom_hline(aes(yintercept=0)) +
-  geom_smooth(data = biomass_nh2_leaf, aes(x=Leaf.Ct..5, y=pred, group = H2OTmt), color = c("red")) +
-  geom_point(data = biomass_nh2_leaf, aes(x=Leaf.Ct..5, y=pred, group = H2OTmt, color = "darkgreen"))
-
-ggplot(biomass2_leaf, aes(x=Ht.mm..5, y = LeafWet_g)) + # plot
-  geom_point(biomass2_leaf, mapping= aes(x=Ht.mm..5, y=predleaf, color = H2OTmt), shape = 3) +
-  geom_point(biomass2_leaf, mapping=aes(x=Ht.mm..5, y=LeafWet_g, group = H2OTmt, color = H2OTmt)) + facet_grid( ~ Spp)
-ggplot(biomass2_leaf, aes(x=Leaf.Ct..5, y = LeafWet_g)) + # plot
-  geom_point(biomass2_leaf, mapping= aes(x=Leaf.Ct..5, y=predleaf, color = H2OTmt), shape = 3) +
-  geom_point(biomass2_leaf, mapping=aes(x=Leaf.Ct..5, y=LeafWet_g, group = H2OTmt, color = H2OTmt)) + facet_grid( ~ Spp)
-
-# final biomass df with a column for predicted (if herb) or observed stem and leaf mass:
-# biomass2 <- left_join(biomass2, biomass2_leaf[,c(3,34)], by = "Code") # combine stem and leaf predictions
-# biomass2 <- biomass2 %>% 
-#   mutate(StemWet_expanded = case_when(Code %in% firstfullherb$Code ~ pred, # changed to firstfullherb
-#                                       TRUE ~ StemWet_g)) %>% 
-#   mutate(LeafWet_expanded = case_when(Code %in% firstherb$Code ~ predleaf,
-#                                       TRUE ~ LeafWet_g))
-
-# here I will add a similar interpolation/backfilling for final height (Ht.mm..8) based on prior height
-
-biomass_nh2_ht <- biomass_nh %>% # training data on seedlings with no herbivory
-  left_join(inventory_thinned[,c(1,7,10,13,17,22,27,32,37)]) %>% # select Ht measurements from all inventories
-  mutate(across(c(StemWet_g, LeafWet_g, LeafDry_g, rootmass_g, Ht.mm..1, Ht.mm..2, Ht.mm..3, Ht.mm..4, Ht.mm..5, Ht.mm..6, Ht.mm..7, Ht.mm..8), na_if, -Inf))  %>% 
-  mutate(H2OTmt = substr(Tmt,2,2)) # will write separate models for W and D treatments, not for E/A CO2
-
-biomass2_ht <- biomass %>% # prediction data with full dataset and extra inventory columns
-  left_join(inventory_thinned[,c(1,7,10,13,17,22,27,32,37)]) %>% 
-  mutate(across(c(StemWet_g, LeafWet_g, LeafDry_g, rootmass_g, Ht.mm..1, Ht.mm..2, Ht.mm..3, Ht.mm..4, Ht.mm..5, Ht.mm..6, Ht.mm..7, Ht.mm..8), na_if, -Inf))  %>% 
-  mutate(H2OTmt = substr(Tmt,2,2))
-
-inv_all_nh %>% 
-  group_by(Code) %>% 
-  summarise(ht8_pred = predict(lm(ht_mm ~ poly(Date,3), data = inv_all_nh), newdata=inv_all_nh)) %>% View()
-
-inv_all_nh1 <- inv_all_nh
-
-for(i in 1:length(unique(inv_all_nh1$Code))){
-  dat <- filter(inv_all_nh1, Code == unique(inv_all_nh1$Code)[i])
-  inv_all_nh1$Ht8_pred <- predict(lm(ht_mm ~ poly(value, 3), data = dat), newdata = unique(inv_all_nh1$value)[8])
-}
-
-inv_train <- inv_all %>% 
-  filter(Code %in% biomass2$Code) %>% 
-  filter(!Code %in% firstfullherb$Code)
-
-biomass_nh2_ht$ht8_pred <- 0
-inv_all_nh1$ht8_pred <- 0
-inv_train$ht8_pred <- 0
-inv_train$ht8_pred2 <- 0
-
-# for(i in seq_along(unique(biomass_nh2_ht$Code))){
-#   code_i <- unique(biomass_nh2_ht$Code)[i]
-#   fit <- lm(ht_mm ~ poly(value, 3), data = inv_all_nh1, subset = Code == code_i)
-#   ht8_pred <- predict(fit, newdata = data.frame(value = c(unique(inv_all_nh1$value)[8])))
-#   biomass_nh2_ht[biomass_nh2_ht$Code == code_i,]$ht8_pred <- ht8_pred
-# } # works
-
-for(i in seq_along(unique(inv_train$Code))){
-  code_i <- unique(inv_train$Code)[i]
-  fit <- lm(ht_mm ~ poly(value, 3), data = inv_train, subset = Code == code_i)
-  ht8_pred <- predict(fit, newdata = data.frame(value = c(unique(inv_train$value)[8])))
-  inv_train[inv_train$Code == code_i,]$ht8_pred <- ht8_pred
-}
-
-for(i in seq_along(unique(inv_train$Code))){
-  code_i <- unique(inv_train$Code)[i]
-  fit <- lm(ht_mm ~ poly(value, 3), data = filter(inv_train, value < unique(inv_train$value)[6]), subset = Code == code_i)
-  ht8_pred2 <- predict(fit, newdata = data.frame(value = c(unique(inv_train$value)[8])))
-  inv_train[inv_train$Code == code_i,]$ht8_pred2 <- ht8_pred2
-}
-
-ggplot(inv_train, group = Code) +
-  geom_line(aes(x=value, y= ht_mm, color= Tmt, group=Code)) + 
-  geom_point(aes(x=unique(inv_train$value)[8], y=ht8_pred), color = "black") +
-  facet_grid(vars(Spp), vars(Tmt), scales = "free")
-
-# code_4 <- unique(inv_all_nh1$Code)[4]
-# fit <- lm(ht_mm ~ poly(value, 2), data = inv_all_nh1, subset = Code == "10L3")
-# ht8_pred <- predict(fit, newdata = data.frame(value = c(unique(inv_all_nh1$value))))
-
-ggplot(biomass_nh2_ht) +
-  geom_point(data=biomass_nh2_ht, aes(x=Ht.mm..8, y=ht8_pred, color=Tmt)) +
-  geom_smooth(aes(x=Ht.mm..8, y=ht8_pred), method = "lm")
-
-inv_all
-
-## model each set of points based on a 3rd-degree polynomial and however many dates it recorded heights
-# extpTest_df2 <- data.frame(unique(inv_all_nh[which(inv_all_nh$Code == "11V3"),]$value), inv_all_nh[which(inv_all_nh$Code == "11V3"),]$ht_mm) # prep df
-# colnames(extpTest_df2) <- c("Date","ht_mm")
-# extpTest_df2$pred1 <- predict(lm(ht_mm ~ poly(Date,3), data=extpTest_df2)) # add predicted values
-# 
-# pred2 <- data.frame(Date = c(unique(inv_all_nh$value)))
-# pred2$ht_mm <- predict(lm(ht_mm ~ poly(Date,3), data = extpTest_df2), newdata=pred2)
-
-
-## Compare figures for filtered vs backfilled data
-# plot the resulting data (N = 128; 87 observed, 41 predicted)
-nequals_nfh <- biomass_nfh %>% 
-  group_by(Tmt, Spp) %>% 
-  tally()
-nequals_bm <- biomass %>% 
-  group_by(Tmt, Spp) %>% 
-  tally()
-grid.arrange( biomass_nfh %>% ggplot(aes(x=Tmt, y=StemWet_g)) + geom_point( aes(x=Tmt, y=StemWet_g, color = Tmt)) + 
-  facet_grid(rows = vars(Spp), scales = "free") +
-  geom_text(data = nequals_nfh, aes(x = Tmt, y = 0, label = paste0("N = ",n))) + 
-  labs(y = "Stem Biomass (g)", title = "Stem Biomass (filtered)") +
-  scale_color_manual(values = c("pink", "lightblue", "red", "blue")) ,
- #   geom_signif(test="wilcox.test", exact=FALSE, comparisons = combn(c("AD", "AW", "ED", "EW"),2,simplify=F),step_increase=0.2) ,
-biomass2 %>% ggplot(aes(x=Tmt, y=StemWet_g)) + 
-  geom_point(aes(x=Tmt, y=StemWet_expanded, color = Tmt)) + 
-  facet_grid(rows = vars(Spp), scales = "free") +
-  geom_text(data = nequals_bm, aes(x = Tmt, y = 0, label = paste0("N = ",n))) + 
-  labs(y = "Stem Biomass (g)", title = "Stem Biomass (expanded data)") +
-  scale_color_manual(values = c("pink", "lightblue", "red", "blue")), nrow = 1) 
- # geom_signif(test="wilcox.test", exact=FALSE, comparisons = combn(c("AD", "AW", "ED", "EW"),2,simplify=F),step_increase=0.2), nrow = 1 )
-
-# total biomass grouped by Tmt, for all seedlings without FULL herbivory
-grid.arrange( biomass_nfh %>% ggplot(aes(x=Tmt, y=StemWet_g)) + geom_boxplot( aes(x=Tmt, y= log(StemWet_g+LeafWet_g+rootmass_g), color = Tmt)) + facet_grid(rows = vars(Spp), scales = "free") +
-  geom_text(data = nequals_nfh, aes(x = Tmt, y = 0.2, label = paste0("N = ",n))) + labs(y = "log Total Biomass (g)", title = "Total Biomass (filtered)") +
-  scale_color_manual(values = c("pink", "lightblue", "red", "blue")) ,
-biomass2 %>% # combined stem and leaf predictions
-  ggplot(aes(x=Tmt, y=StemWet_g)) +
-  geom_boxplot(mapping=aes(x=Tmt, y=log(rootmass_g+StemWet_expanded+LeafWet_expanded), color = Tmt)) + 
-  facet_grid(rows = vars(Spp), scales = "free") +
-  geom_text(data = nequals_bm, aes(x = Tmt, y = 0.2, label = paste0("N = ",n))) + 
-  labs(y = "log Total Biomass (g)", title = "Total Biomass (expanded data)") +
-  scale_color_manual(values = c("pink", "lightblue", "red", "blue")) , nrow = 1)
-
-nequals_nh <- biomass_nh %>% 
-  group_by(Tmt, Spp) %>% 
-  tally()
-biomass_nh %>% # Leaf Water Content grouped by Tmt, for all seedlings without ANY herbivory
-  ggplot() + geom_boxplot(aes(x = Tmt, y = (LeafWet_g - LeafDry_g)*100/LeafWet_g, color=Tmt)) + facet_grid(rows = vars(Spp), scales = "free") + geom_text(data = nequals_nh, aes(x = Tmt, y = 40, label = paste0("N = ",n))) + labs(y = "Leaf Water Content (% by mass)", title="Leaf Water Content (filtered)") +
-  scale_color_manual(values = c("pink", "lightblue", "red", "blue")) 
-# seems too far a stretch to do LWC on modeled LeafWet vs LeafDry ...
-
-grid.arrange( biomass_nh %>% # root:shoot ratio for seedlings without any herbivory
-  ggplot() + geom_boxplot(aes(x=Tmt, y= (rootmass_g/(StemWet_g+LeafWet_g)), color = Tmt)) + facet_grid(rows =  vars(Spp), scales = "free") +
-  geom_text(data = nequals_nh, aes(x = Tmt, y = 0.2, label = paste0("N = ",n))) + labs(y = "Root:Shoot", title = "Root:Shoot (filtered)") +
-  scale_color_manual(values = c("pink", "lightblue", "red", "blue")) ,
-
-biomass2 %>% 
-    ggplot() +
-  geom_boxplot(mapping=aes(x=Tmt, y=(rootmass_g/(StemWet_expanded+LeafWet_expanded)), color = Tmt)) + 
-  facet_grid(rows = vars(Spp), scales = "free") +
-  geom_text(data = nequals_bm, aes(x = Tmt, y = 0.2, label = paste0("N = ",n))) + 
-  labs(y = "Root:Shoot", title = "Root:Shoot (expanded data)") +
-  scale_color_manual(values = c("pink", "lightblue", "red", "blue")), nrow = 1)
-
 
 
 # Test to see if herbivory is significantly associated with Spp
@@ -823,6 +481,31 @@ select(herb_list %>% group_by(Tmt) %>% tally(resprout), n)/table(herb_list$Tmt)
 # AW 0.6000000
 # ED 0.5714286
 # EW 0.7777778
+
+# is resprouting associated with treatments? is it associated with root mass?
+herb_list <- herb_list %>% 
+  left_join(plot_CO2., by = "Plot") %>% 
+  left_join(plot_SWC., by = "Plot") %>% 
+  left_join(select(biomass2., Code, rootmass_g), by = "Code")
+  
+summary(glm(as.numeric(resprout) ~ rescale(CO2)*rescale(meanSWC), family = "binomial", data = filter(herb_list, Spp=="V"))) # for Vs, marginally significant intx effect on resprouting!!
+
+ggpredict(glm(as.numeric(resprout) ~ rescale(CO2)*rescale(meanSWC), family = "binomial", data = filter(herb_list, Spp=="V")), 
+          terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue"), jitter=0.07) + labs(title="resprouting, V") # what does this mean
+
+ggpredict(glmer(as.numeric(resprout) ~ rescale(CO2)*rescale(meanSWC) +(1|Plot), family = "binomial", data = filter(herb_list, Spp=="V")), 
+          terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue"), jitter=0.07) + labs(title="resprouting, V")
+
+ggplot(filter(herb_list, Spp=="V")) +
+  geom_point(aes(x=rootmass_g, y=as.numeric(resprout), color=meanSWC)) +
+  geom_smooth(mapping = aes(x=rootmass_g, y=as.numeric(resprout)), method = "glm", formula = "y ~ x")
+
+summary(glm(as.numeric(resprout) ~ rescale(CO2)*rescale(meanSWC), family = "binomial", data = filter(herb_list, Spp=="L"))) # very few datapoints
+
+
+ggpredict(glm(as.numeric(resprout) ~ rootmass_g*CO2, family = "binomial", data = filter(herb_list, Spp=="V")),
+          terms=c("rootmass_g [all]","CO2 [400, 600]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue"), jitter=0.07) + labs(title="resprouting, V") 
+# eck
 
 # can you get mortality rate, or longitudinal data?
 
