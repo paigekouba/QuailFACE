@@ -3983,5 +3983,1496 @@ plot(duursma)
 plot(duursma, how="")
 
 
+# clean copy of all-time CO2 graph for Ch 3
+CO2_total_corr %>% 
+  group_by(month=cut(TIMESTAMP, breaks = "1 month")) %>% 
+  mutate(month=ymd(month)) %>% 
+  summarise(meanCO2ref_corr= mean(CO2ref_corr), meanCO2elev_corr=mean(CO2elev_corr)) %>% 
+  ungroup() %>% 
+  ggplot() +
+  geom_point(aes(x=month, y=meanCO2ref_corr), color="darkgray") +
+  geom_point(aes(x=month, y=meanCO2elev_corr), color="black") +
+  geom_line(aes(x=month, y=meanCO2ref_corr), color="darkgray") +
+  geom_line(aes(x=month, y=meanCO2elev_corr), color="black") +
+  scale_x_date(date_breaks="1 month") +
+  theme(axis.text.x = element_text(size = 12, angle = 45, hjust = 1), axis.text.y = element_text(size = 12)) +
+  labs(title = "eCO2 and aCO2: Monthly Mean Values") +
+  ylab("CO2 Concentration (ppm)")
+
+# from scaling CO2 per-plot
+scale((avg_between$mDeltaTest + 422), center = F, scale = T)*544
+
+# copy of leaf data before I take out everything except totarea
+lai. <- lai #%>% 
+#  filter(!Code %in% firstherb$Code) # remove rows of seedlings from herbivory list
+# dplyr::select(avg_area) %>% # sqrt
+# dplyr::select(perim_per_A) %>% # < 1 and log
+# dplyr::select(tot_area) %>% # 21798 for V; 52406 for L
+# dplyr::select(SLA) %>% # 12458 for L
+lai.[which(lai.$perim_per_A > 1),]$perim_per_A <- NA
+lai.[which(lai.$tot_area == 21798.626),]$tot_area <- NA
+lai.[which(lai.$tot_area == 52406.236),]$tot_area <- NA
+lai.[which(lai.$Code == "3L2"),]$SLA <- NA
+
+grid.arrange( 
+  ggpredict(lmer(rootshoot~rescale(CO2)*rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",])), 
+            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
+  + labs(title = "rootshoot, V (all)"),
+  ggpredict(lmer(rootshoot~rescale(CO2)*rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",])), 
+            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
+  + labs(title = "rootshoot, V (filtered)"),  
+  ggpredict(lmer(rootshoot~rescale(CO2)*rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])), 
+            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
+  + labs(title = "rootshoot, L (all)"),
+  ggpredict(lmer(rootshoot~rescale(CO2)*rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])), 
+            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
+  + labs(title = "rootshoot, L (filtered)"))
+
+hist((LiCOR_df.[LiCOR_df.$Spp == "V",]$Anet), breaks = 2*sqrt(nrow(LiCOR_df.))) # n = 33
+qqPlot((LiCOR_df.[LiCOR_df.$Spp == "V",]$Anet))
+shapiro.test((LiCOR_df.[LiCOR_df.$Spp == "V",]$Anet))
+hist(sqrt(LiCOR_df.[LiCOR_df.$Spp == "L",]$Anet), breaks = 2*sqrt(nrow(LiCOR_df.))) # n = 42
+qqPlot(sqrt(LiCOR_df.[LiCOR_df.$Spp == "L",]$Anet))
+shapiro.test(log(LiCOR_df.[LiCOR_df.$Spp == "L",]$Anet))
+# sqrt transform for Anet
+
+hist(sqrt(LiCOR_df.[LiCOR_df.$Spp=="V",]$gs))
+qqPlot(sqrt(LiCOR_df.[LiCOR_df.$Spp=="V",]$gs))
+hist(sqrt(LiCOR_df.[LiCOR_df.$Spp=="L",]$gs))
+qqPlot(sqrt(LiCOR_df.[LiCOR_df.$Spp=="L",]$gs))
+# sqrt gs
+
+hist(LiCOR_df.[LiCOR_df.$Spp=="V",]$WUE)
+qqPlot((LiCOR_df.[LiCOR_df.$Spp=="V",]$WUE))
+hist(LiCOR_df.[LiCOR_df.$Spp=="L",]$WUE)
+qqPlot(LiCOR_df.[LiCOR_df.$Spp=="L",]$WUE)
+# WUE ok
+
+# biomass2.
+hist(sqrt(biomass2.[biomass2.$Spp=="V",]$totmass), breaks=2*sqrt(nrow(biomass2.))) 
+hist(sqrt(biomass2.[biomass2.$Spp=="L",]$totmass), breaks=2*sqrt(nrow(biomass2.))) # outlier, ok
+qqPlot(sqrt(biomass2.[biomass2.$Spp=="V",]$totmass)) 
+qqPlot(sqrt(biomass2.[biomass2.$Spp=="L",]$totmass)) 
+
+biomass2. %>% 
+  filter(Spp=="V") %>%
+  filter(!Code %in% firstfullherb$Code) %>% 
+  select(rootshoot) %>%
+  unlist() %>% 
+  as.numeric() %>%
+  # log() %>% 
+  sqrt() %>% 
+  #   hist(breaks = 2*sqrt(nrow(biomass2.)))
+  qqPlot()
+
+hist(sqrt(biomass2.[biomass2.$Spp=="L",]$Ht.mm..8), breaks=2*sqrt(nrow(biomass2.)))
+qqPlot(sqrt(biomass2.[biomass2.$Spp=="L",]$Ht.mm..8))
+
+hist((biomass2.[biomass2.$Spp=="L",]$rootshoot), breaks=2*sqrt(nrow(biomass2.))) 
+qqPlot((biomass2.[biomass2.$Spp=="L",]$rootshoot)) 
+qqPlot((biomass2.[biomass2.$Spp=="V",]$rootshoot)) 
+# rootshoot ok
+
+hist(biomass2.[biomass2.$Spp=="L",]$lwc, breaks=2*sqrt(nrow(biomass2.))) 
+qqPlot(biomass2.[biomass2.$Spp=="V",]$lwc)
+qqPlot(biomass2.[biomass2.$Spp=="L",]$lwc)
+# lwc fine by spp
+
+# since aboveground biomass is unreliable, what about root mass?
+hist(sqrt(biomass2.[biomass2.$Spp=="L",]$rootmass_g), breaks=2*sqrt(nrow(biomass2.))) 
+qqPlot(sqrt(biomass2.[biomass2.$Spp=="L",]$rootmass_g))
+hist(sqrt(biomass2.[biomass2.$Spp=="V",]$rootmass_g), breaks=2*sqrt(nrow(biomass2.))) 
+qqPlot(sqrt(biomass2.[biomass2.$Spp=="V",]$rootmass_g))
+
+library(caret)
+# check leaf area variables here
+lai. %>% 
+  filter(Spp=="L") %>% 
+  filter(!Code %in% firstherb$Code) %>%  # remove rows of seedlings from herbivory list
+  #  dplyr::select(avg_area) %>% # sqrt
+  # dplyr::select(perim_per_A) %>% # < 1 and log
+  dplyr::select(tot_area) %>%
+  # dplyr::select(SLA) %>% 
+  unlist() %>% 
+  as.numeric() %>%
+  #  BoxCoxTrans(na.rm=TRUE) %>% predict(newdata=unlist(lai.[lai$Spp=="V",][,"avg_area"])) %>% 
+  # log() %>% 
+  #sqrt() %>% 
+  #   hist(breaks = 2*sqrt(nrow(lai.)))
+  qqPlot()
+# filtered by tot_area > 1000 
+# avg_area stinks; log is best
+# perim_per_A: < 1 and log
+# tot_area okay with sqrt
+# SLA just fine if you filter < 4000 and the L > 12000
+
+# rootimage.
+hist(log(rootimage.[rootimage.$Spp=="V",]$SRL), breaks=sqrt(nrow(rootimage.)))
+qqPlot(log(rootimage.[rootimage.$Spp=="V",]$SRL))
+hist(log(rootimage.[rootimage.$Spp=="L",]$SRL), breaks=sqrt(nrow(rootimage.)))
+qqPlot(log(rootimage.[rootimage.$Spp=="L",]$SRL))
+# logSRL is great
+
+# SIF.
+hist(SIF.[SIF.$Spp=="V",]$d13C)
+qqPlot(SIF.[SIF.$Spp=="V",]$d13C) # cute
+hist(SIF.[SIF.$Spp=="L",]$d13C)
+qqPlot(SIF.[SIF.$Spp=="L",]$d13C) # cute!
+
+# perim_per_A -- log
+grid.arrange( 
+  ggpredict(lmer(perim_per_A~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="V",])), 
+            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) + labs(title = "perim_per_A, V"),
+  ggpredict(lmer(perim_per_A~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="L",])), 
+            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
+  + labs(title = "perim_per_A, L"),
+  ggpredict(lmer(perim_per_A~CO2+H2OTmt + (1|Plot), data=filter(final_df[final_df$Spp=="V",])), 
+            terms=c("CO2","H2OTmt"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
+  + labs(title = "perim_per_A, V"),
+  ggpredict(lmer(perim_per_A~CO2+H2OTmt + (1|Plot), data=filter(final_df[final_df$Spp=="L",])), 
+            terms=c("CO2","H2OTmt"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
+  + labs(title = "perim_per_A, L"))
+summary(lmer(perim_per_A~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="V",]))) 
+summary(lmer(log(perim_per_A)~CO2+H2OTmt + (1|Plot), data=filter(final_df[final_df$Spp=="V",]))) 
+
+summary(lmer(log(perim_per_A)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="L",])))
+summary(lmer(log(perim_per_A)~CO2+H2OTmt + (1|Plot), data=filter(final_df[final_df$Spp=="L",]))) 
+
+# avg_area -- sqrt
+grid.arrange( 
+  ggpredict(lmer(sqrt(avg_area)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",])), 
+            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) + labs(title = "sqrt(avg_area), V"),
+  ggpredict(lmer(sqrt(avg_area)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])), 
+            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
+  + labs(title = "sqrt(avg_area), L"),
+  ggpredict(lmer(sqrt(avg_area)~CO2+H2OTmt + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",])), 
+            terms=c("CO2","H2OTmt"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
+  + labs(title = "sqrt(avg_area), V"),
+  ggpredict(lmer(sqrt(avg_area)~CO2+H2OTmt + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])), 
+            terms=c("CO2","H2OTmt"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
+  + labs(title = "sqrt(avg_area), L"))
+summary(lmer(sqrt(avg_area)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",]))) 
+summary(lmer(sqrt(avg_area)~CO2+H2OTmt + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",]))) 
+
+summary(lmer(sqrt(avg_area)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])))
+summary(lmer(sqrt(avg_area)~CO2+H2OTmt + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])))
+
+# SLA
+grid.arrange( 
+  ggpredict(lmer(SLA~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="V",])), 
+            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) + labs(title = "SLA, V"),
+  ggpredict(lmer(SLA~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="L",])), 
+            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
+  + labs(title = "SLA, L"),
+  ggpredict(lmer(SLA~CO2+H2OTmt + (1|Plot), data=filter(final_df[final_df$Spp=="V",])), 
+            terms=c("CO2","H2OTmt"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
+  + labs(title = "SLA, V"),
+  ggpredict(lmer(SLA~CO2+H2OTmt + (1|Plot), data=filter(final_df[final_df$Spp=="L",])), 
+            terms=c("CO2","H2OTmt"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
+  + labs(title = "SLA, L"))
+summary(lmer(SLA~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="V",]))) 
+summary(lmer(SLA~CO2+H2OTmt + (1|Plot), data=filter(final_df[final_df$Spp=="V",]))) 
+
+summary(lmer(SLA~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="L",])))
+summary(lmer(SLA~CO2+H2OTmt + (1|Plot), data=filter(final_df[final_df$Spp=="L",]))) 
+
+final_df_nh[final_df_nh$Spp=="V",] %>%
+  add_residual_draws(totmassV_red, allow_new_levels = TRUE) %>%
+  ggplot(aes(x = .row, y = .residual)) +
+  stat_pointinterval()
+final_df_nh[final_df_nh$Spp=="V",] %>%
+  add_residual_draws(totmassV_red, allow_new_levels = TRUE) %>%
+  median_qi() %>%
+  ggplot(aes(sample = .residual)) +
+  geom_qq() +
+  geom_qq_line()
+
+# gs -- log10
+grid.arrange( 
+  ggpredict(lmer(log10(gs)~rescale(CO2)*rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="V",])), 
+            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
+  + labs(title = "log10(gs), V (all)"),
+  ggpredict(lmer(log10(gs)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="L",])), 
+            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
+  + labs(title = "log10(gs), L (all)"))
+grid.arrange( 
+  ggpredict(lmer(log10(gs)~rescale(CO2)*rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="V",])), 
+            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
+  + labs(title = "log10(gs), V (all)"),
+  ggpredict(lmer(log10(gs)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="L",])), 
+            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
+  + labs(title = "log10(gs), L (all)"))
+summary(lmer(log10(gs)~rescale(CO2)*rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",])))
+summary(lmer(log10(gs)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",])))
+summary(lmer(gs~rescale(CO2)*rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",])))
+summary(lmer(gs~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",])))
+plot(lmer(log10(gs)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",])))
+qqmath(lmer(log10(gs)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",])), id=.05)
+shapiro.test(resid(lmer(log10(gs)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",]))))
+# W = 0.97116, p-value = 0.4943
+gsV_full1 <- brm(log10(gs)~rescale(CO2)*rescale(meanSWC) + (1|Plot), data = final_df_nh[final_df_nh$Spp=="V",], iter = 3000, prior = prior1, control = list(adapt_delta =0.99, max_treedepth = 12))
+gsV_full2 <- brm(gs~rescale(CO2)*rescale(meanSWC) + (1|Plot), data = final_df_nh[final_df_nh$Spp=="V",], iter = 3000, prior = prior1, control = list(adapt_delta =0.99, max_treedepth = 12))
+summary(gsV_full1) # CO2 +0.31 (0.00-0.62), SWC +0.55, (0.28-0.81) ***
+summary(gsV_full2) # SWC +0.14 (0.06-0.21)
+plot(gsV_full1)
+pp_check(gsV_full1)
+
+gsV_red1 <- brm(log10(gs)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data = final_df_nh[final_df_nh$Spp=="V",], iter = 3000, prior = prior1, control = list(adapt_delta =0.99, max_treedepth = 12))
+gsV_red2 <- brm(gs~rescale(CO2)+rescale(meanSWC) + (1|Plot), data = final_df_nh[final_df_nh$Spp=="V",], iter = 3000, prior = prior1, control = list(adapt_delta =0.99, max_treedepth = 12))
+summary(gsV_red1) # CO2 +0.18 (0.01-0.36), SWC 0.46 (0.30-0.62) *** use this, the reduced model with log10
+summary(gsV_red2) # SWC +0.13 (0.08-0.17)
+plot(gsV_red1)
+pp_check(gsV_red)
+
+summary(lmer(log10(gs)~rescale(CO2)*rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])))
+summary(lmer(log10(gs)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])))
+summary(lmer(gs~rescale(CO2)*rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])))
+summary(lmer(gs~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])))
+plot(lmer(log10(gs)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])))
+qqmath(lmer(log10(gs)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])), id=.05)
+shapiro.test(resid(lmer(log10(gs)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",]))))
+# W = 0.94732, p-value = 0.05181
+gsL_full1 <- brm(log10(gs)~rescale(CO2)*rescale(meanSWC) + (1|Plot), data = final_df_nh[final_df_nh$Spp=="L",], iter = 3000, prior = prior1, control = list(adapt_delta =0.99, max_treedepth = 12))
+gsL_full2 <- brm(gs~rescale(CO2)*rescale(meanSWC) + (1|Plot), data = final_df_nh[final_df_nh$Spp=="L",], iter = 3000, prior = prior1, control = list(adapt_delta =0.99, max_treedepth = 12))
+summary(gsL_full1) # SWC +0.49 (0.21-0.81)
+summary(gsL_full2) # SWC +0.06 (0.02-0.09)
+plot(gsL_full1)
+pp_check(gsL_full1)
+
+gsL_red1 <- brm(log10(gs)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data = final_df_nh[final_df_nh$Spp=="L",], iter = 3000, prior = prior1, control = list(adapt_delta =0.99, max_treedepth = 12))
+gsL_red2 <- brm(gs~rescale(CO2)+rescale(meanSWC) + (1|Plot), data = final_df_nh[final_df_nh$Spp=="L",], iter = 3000, prior = prior1, control = list(adapt_delta =0.99, max_treedepth = 12))
+summary(gsL_red1) # SWC +0.52 (0.32-0.79)
+summary(gsL_red2) # CO2 +0.03 (.00-0.06), SWC +0.07 (.05-0.10)
+plot(gsL_red1)
+pp_check(gsL_red)
+
+# lmers
+# totmass -- log10
+grid.arrange( 
+  ggpredict(lmer(log10(totmass)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="V",])), 
+            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
+  + labs(title = "Totmass, V (all) (log10)"),
+  ggpredict(lmer(log10(totmass)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",])), 
+            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
+  + labs(title = "Totmass, V (filtered) (log10)"),
+  ggpredict(lmer(log10(totmass)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="L",])), 
+            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
+  + labs(title = "Totmass, L (all) (log10)"),
+  ggpredict(lmer(log10(totmass)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])), 
+            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
+  + labs(title = "Totmass, L (filtered) (log10)"))
+summary(lmer(log10(totmass)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",]))) # main effects, +0.6245 SWC (p=.016)
+plot(lmer(log10(totmass)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",])))
+qqmath(lmer(log10(totmass)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",])), id=.05)
+shapiro.test(resid(lmer(log10(totmass)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",])))) 
+# W = 0.96963, p-value = 0.7248
+
+prior1 <- prior(normal(0,1),class = b)
+totmassV_full1 <- ##brm(log10(totmass)~rescale(CO2)*rescale(meanSWC) + (1|Plot), data = final_df_nh[final_df_nh$Spp=="V",], iter = 3000, prior = prior1, control = list(adapt_delta =0.99, max_treedepth = 12))
+  summary(totmassV_full1) # all CIs overlap 0
+plot(totmassV_full1)
+pp_check(totmassV_full1)
+
+totmassV_red1 <- ##brm(log10(totmass)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data = final_df_nh[final_df_nh$Spp=="V",], iter = 3000, prior = prior1, control = list(adapt_delta =0.99, max_treedepth = 12))
+  summary(totmassV_red1) # meanSWC est = 0.59, 95% CI = 0.11-1.04
+plot(totmassV_red1)
+pp_check(totmassV_red)
+AIC(totmassV_full1, totmassV_red1)
+
+summary(lmer(log10(totmass)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])))
+plot(lmer(log10(totmass)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])))
+qqmath(lmer(log10(totmass)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])), id=.05)
+shapiro.test(resid(lmer(log10(totmass)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",]))))
+# W = 0.96391, p-value = 0.0732
+
+summary(lmer(log10(totmass)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=final_df_nh)) # SWC +0.4265 (p=.0134)
+ggpredict(lmer(log10(totmass)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=final_df_nh), 
+          terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) + labs(title = "Totmass, both (filtered)")
+
+# rootshoot -- log10
+grid.arrange( 
+  ggpredict(lmer(log10(rootshoot)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="V",])), 
+            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
+  + labs(title = "log10(rootshoot), V (all)"),
+  ggpredict(lmer(log10(rootshoot)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",])), 
+            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
+  + labs(title = "log10(rootshoot), V (filtered)"),  
+  ggpredict(lmer(log10(rootshoot)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="L",])), 
+            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
+  + labs(title = "log10(rootshoot), L (all)"),
+  ggpredict(lmer(log10(rootshoot)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])), 
+            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
+  + labs(title = "log10(rootshoot), L (filtered)"))
+
+library(caret)
+summary(lmer(log10(rootshoot)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",])))
+plot(lmer(log10(rootshoot)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",])))
+qqmath(lmer(log10(rootshoot)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",])), id=.05)
+shapiro.test(resid(lmer(log10(rootshoot)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",]))))
+# W = 0.97202, p-value = 0.7772
+prior1 <- prior(normal(0,1),class = b)
+rootshootV_full1 <- ##brm(log10(rootshoot)~rescale(CO2)*rescale(meanSWC) + (1|Plot), data = final_df_nh[final_df_nh$Spp=="V",], iter = 3000, prior = prior1, control = list(adapt_delta =0.99, max_treedepth = 12))
+  summary(rootshootV_full1) # all CIs contain 0
+plot(rootshootV_full1)
+pp_check(rootshootV_full1)
+
+rootshootV_red1 <- #brm(log10(rootshoot)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data = final_df_nh[final_df_nh$Spp=="V",], iter = 3000, prior = prior1, control = list(adapt_delta =0.99, max_treedepth = 12))
+  summary(rootshootV_red1) # 
+plot(rootshootV_red1)
+pp_check(rootshootV_red)
+AIC(rootshootV_full1, rootshootV_red1)
+
+summary(lmer(log10(rootshoot)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])))
+plot(lmer(log10(rootshoot)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])))
+qqmath(lmer(log10(rootshoot)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])), id=.05)
+shapiro.test(resid(lmer(log10(rootshoot)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",]))))
+# W = 0.96739, p-value = 0.1087
+hist(log(final_df_nh[final_df_nh$Spp=="V",]$rootshoot))
+hist(log(final_df_nh[final_df_nh$Spp=="L",]$rootshoot))
+
+summary(lmer(log10(rootshoot)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=final_df_nh)) # SWC -0.2762, p=0.0103
+ggpredict(lmer(log10(rootshoot)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=final_df_nh), 
+          terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) + labs(title = "log10(rootshoot), both (filtered)")
+
+# lwc -- none
+grid.arrange( 
+  ggpredict(lmer(lwc~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="V",])), 
+            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
+  + labs(title = "lwc, V (all)"),
+  ggpredict(lmer(lwc~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",])), 
+            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
+  + labs(title = "lwc, V (filtered)"),  
+  ggpredict(lmer(lwc~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="L",])), 
+            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
+  + labs(title = "lwc, L (all)"),
+  ggpredict(lmer(lwc~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])), 
+            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
+  + labs(title = "lwc, L (filtered)"))
+summary(lmer(lwc~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",]))) 
+plot(lmer(lwc~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",])))
+qqmath(lmer(lwc~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",])), id=.05)
+shapiro.test(resid(lmer(lwc~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",]))))
+# W = 0.98208, p-value = 0.6422
+library(rsq)
+rsq.lmm(lmer(lwc~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=final_df_nh[final_df_nh$Spp=="V",]), adj = T)
+rsq.lmm(lmer(lwc~rescale(CO2)*rescale(meanSWC) + (1|Plot), data=final_df_nh[final_df_nh$Spp=="V",]), adj = T)
+
+summary(lmer(lwc~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="L",])))
+plot(lmer(lwc~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])))
+qqmath(lmer(lwc~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])), id=.05)
+shapiro.test(resid(lmer(lwc~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",]))))
+# W = 0.99198, p-value = 0.954 (if filter 10L3)
+plot(cooks.distance(lmer(lwc~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",]))))
+abline(h = 4/nobs(lmer(lwc~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",]))), col="red") # agh!
+hist(final_df_nh[final_df_nh$Spp=="V",]$lwc)
+hist(final_df_nh[final_df_nh$Spp=="L",]$lwc)
+
+summary(lmer(lwc~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=final_df_nh)) # n.s. 
+ggpredict(lmer(log10(totmass)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=final_df_nh), 
+          terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) + labs(title = "lwc, both (filtered)")
+
+# Anet -- none
+grid.arrange( 
+  ggpredict(lmer(Anet~rescale(CO2)*rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="V",])), 
+            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
+  + labs(title = "Anet, V (all)"),
+  ggpredict(lmer(Anet~rescale(CO2)*rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="L",])), 
+            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
+  + labs(title = "Anet, L (all)"))
+summary(lmer(Anet~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",]))) 
+plot(lmer(Anet~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",])))
+qqmath(lmer(Anet~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",])), id=.05)
+shapiro.test(resid(lmer(Anet~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",]))))
+# W = 0.95161, p-value = 0.1372
+summary(lmer(Anet~rescale(CO2)*rescale(meanSWC) + (1|Plot), data=final_df_nh[final_df_nh$Spp=="L",]))
+plot(lmer(Anet~rescale(CO2)*rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])))
+qqmath(lmer(Anet~rescale(CO2)*rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])), id=.05)
+shapiro.test(resid(lmer(Anet~rescale(CO2)*rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",]))))
+# W = 0.97784, p-value = 0.5793
+prior2 <- prior(normal(0,15),class = b)
+AnetL_full1 <- ##brm(Anet~rescale(CO2)*rescale(meanSWC) + (1|Plot), data = final_df_nh[final_df_nh$Spp=="L",], iter = 3000, prior = prior2, control = list(adapt_delta =0.99, max_treedepth = 12))
+  summary(AnetL_full1) # CO2xSWC +9.80 (0.61-18.73)
+plot(AnetL_full1)
+pp_check(AnetL_full1)
+
+AnetL_red1 <- ##brm(Anet~rescale(CO2)+rescale(meanSWC) + (1|Plot), data = final_df_nh[final_df_nh$Spp=="L",], iter = 3000, prior = prior2, control = list(adapt_delta =0.99, max_treedepth = 12))
+  summary(AnetL_red1) # CO2 +4.38 (0.84-7.89), SWC +7.43 (4.12-10.85)
+
+ggpredict(lmer(Anet~rescale(CO2)*rescale(meanSWC) + (1|Plot), data=final_df), 
+          terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
++ labs(title = "Anet, both")
+# summary(lmer(Anet~rescale(CO2)*rescale(meanSWC) + (1|Plot), data=final_df))
+# summary(lmer(sqrt(Anet)~CO2*H2OTmt + (1|Plot), data=final_df))
+
+
+# gs -- log10
+grid.arrange( 
+  ggpredict(lmer(gs~rescale(CO2)*rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="V",])), 
+            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
+  + labs(title = "gs, V (all)"),
+  ggpredict(lmer(gs~rescale(CO2)*rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="L",])), 
+            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
+  + labs(title = "gs, L (all)"),
+  ggpredict(lmer(gs~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="V",])), 
+            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
+  + labs(title = "gs, V (all)"),
+  ggpredict(lmer(gs~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="L",])), 
+            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
+  + labs(title = "gs, L (all)"))
+summary(lmer(gs~rescale(CO2)*rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",])))
+summary(lmer(gs~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",])))
+plot(lmer(gs~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",])))
+qqmath(lmer(gs~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",])), id=.05)
+shapiro.test(resid(lmer(gs~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",]))))
+# W = 0.97116, p-value = 0.4943
+prior3 <- prior(normal(0,0.2),class = b)
+#gsV_full1 <- #brm(log10(gs)~rescale(CO2)*rescale(meanSWC) + (1|Plot), data = final_df_nh[final_df_nh$Spp=="V",], iter = 3000, prior = prior3, control = list(adapt_delta =0.99, max_treedepth = 12))
+gsV_full2 <- ##brm(gs~rescale(CO2)*rescale(meanSWC) + (1|Plot), data = final_df_nh[final_df_nh$Spp=="V",], iter = 3000, prior = prior3, control = list(adapt_delta =0.99, max_treedepth = 12))
+  summary(gsV_full1) # CO2 +0.31 (0.00-0.62), SWC +0.55, (0.28-0.81) ***
+summary(gsV_full2) # SWC +0.13 (0.05-0.20)
+plot(gsV_full1)
+pp_check(gsV_full1)
+
+#gsV_red1 <- #brm(log10(gs)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data = final_df_nh[final_df_nh$Spp=="V",], iter = 3000, prior = prior3, control = list(adapt_delta =0.99, max_treedepth = 12))
+gsV_red2 <- ##brm(gs~rescale(CO2)+rescale(meanSWC) + (1|Plot), data = final_df_nh[final_df_nh$Spp=="V",], iter = 3000, prior = prior3, control = list(adapt_delta =0.99, max_treedepth = 12))
+  summary(gsV_red1) # CO2 +0.18 (0.01-0.36), SWC 0.46 (0.30-0.62) *** use this, the reduced model with log10
+summary(gsV_red2) # SWC +0.12 (0.08-0.17); CO2 +.04 but -.01-0.09
+plot(gsV_red1)
+pp_check(gsV_red)
+
+summary(lmer(gs~rescale(CO2)*rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])))
+summary(lmer(gs~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])))
+plot(lmer(gs~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])))
+qqmath(lmer(gs~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])), id=.05)
+shapiro.test(resid(lmer(gs~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",]))))
+# W = 0.94732, p-value = 0.05181
+#gsL_full1 <- #brm(log10(gs)~rescale(CO2)*rescale(meanSWC) + (1|Plot), data = final_df_nh[final_df_nh$Spp=="L",], iter = 3000, prior = prior3, control = list(adapt_delta =0.99, max_treedepth = 12))
+gsL_full2 <- ##brm(gs~rescale(CO2)*rescale(meanSWC) + (1|Plot), data = final_df_nh[final_df_nh$Spp=="L",], iter = 3000, prior = prior3, control = list(adapt_delta =0.99, max_treedepth = 12))
+  summary(gsL_full1) # SWC +0.49 (0.21-0.81)
+summary(gsL_full2) # SWC +0.06 (0.02-0.09); CO2xSWC +0.05 but (-.02-0.14)
+plot(gsL_full1)
+pp_check(gsL_full1)
+
+#gsL_red1 <- #brm(log10(gs)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data = final_df_nh[final_df_nh$Spp=="L",], iter = 3000, prior = prior3, control = list(adapt_delta =0.99, max_treedepth = 12))
+gsL_red2 <- ##brm(gs~rescale(CO2)+rescale(meanSWC) + (1|Plot), data = final_df_nh[final_df_nh$Spp=="L",], iter = 3000, prior = prior3, control = list(adapt_delta =0.99, max_treedepth = 12))
+  summary(gsL_red1) # SWC +0.52 (0.32-0.79)
+summary(gsL_red2) # CO2 +0.03 (.00-0.05), SWC +0.07 (.05-0.10)
+plot(gsL_red1)
+pp_check(gsL_red)
+
+# ggpredict(lmer(gs~rescale(CO2)*rescale(meanSWC) + (1|Plot), data=final_df),
+#           terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue"))
+# + labs(title = "gs, both")
+# summary(lmer(gs~rescale(CO2)*rescale(meanSWC) + (1|Plot), data=final_df))
+
+# WUE -- none
+grid.arrange( 
+  ggpredict(lmer(WUE~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="V",])), 
+            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
+  + labs(title = "WUE, V (all)"),
+  ggpredict(lmer(WUE~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",])), 
+            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
+  + labs(title = "WUE, V (filtered)"),  
+  ggpredict(lmer(WUE~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="L",])), 
+            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
+  + labs(title = "WUE, L (all)"),
+  ggpredict(lmer(WUE~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])), 
+            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
+  + labs(title = "WUE, L (filtered)"))
+summary(lmer(WUE~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",]))) 
+plot(lmer(WUE~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",])))
+qqmath(lmer(WUE~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",])), id=.05)
+shapiro.test(resid(lmer(WUE~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",]))))
+# W = 0.95747, p-value = 0.2049
+summary(lmer(WUE~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])))
+plot(lmer(WUE~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])))
+qqmath(lmer(WUE~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])), id=.05)
+shapiro.test(resid(lmer(WUE~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",]))))
+# W = 0.97766, p-value = 0.5726
+summary(lmer(WUE~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=final_df_nh)) 
+ggpredict(lmer(WUE~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=final_df), 
+          terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) + labs(title = "WUE, both (all)")
+
+# tot_area -- log10
+grid.arrange( 
+  ggpredict(lmer(log10(tot_area)~rescale(CO2)*rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="V",])), 
+            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
+  + labs(title = "log10(tot_area), V (all)"),
+  ggpredict(lmer(log10(tot_area)~rescale(CO2)*rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",])), 
+            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
+  + labs(title = "log10(tot_area), V (filtered)"),  
+  ggpredict(lmer(log10(tot_area)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="L",])), 
+            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
+  + labs(title = "log10(tot_area), L (all)"),
+  ggpredict(lmer(log10(tot_area)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])), 
+            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
+  + labs(title = "log10(tot_area), L (filtered)"))
+summary(lmer(log10(tot_area)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",]))) 
+plot(lmer(log10(tot_area)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",])))
+qqmath(lmer(log10(tot_area)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",])), id=.05)
+shapiro.test(resid(lmer(log10(tot_area)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",]))))
+# W = 0.95444, p-value = 0.4987
+prior4 <- prior(normal(0,0.5),class = b)
+tot_areaV_full1 <- ##brm(log10(tot_area)~rescale(CO2)*rescale(meanSWC) + (1|Plot), data = final_df_nh[final_df_nh$Spp=="V",], iter = 3000, prior = prior4, control = list(adapt_delta =0.99, max_treedepth = 12))
+  summary(tot_areaV_full1) # all CIs overlap 0
+plot(tot_areaV_full1)
+pp_check(tot_areaV_full1)
+
+tot_areaV_red1 <- ##brm(log10(tot_area)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data = final_df_nh[final_df_nh$Spp=="V",], iter = 3000, prior = prior4, control = list(adapt_delta =0.99, max_treedepth = 12))
+  summary(tot_areaV_red1) # all CIs overlap 0
+
+summary(lmer(log10(tot_area)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])))
+plot(lmer(log10(tot_area)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])))
+qqmath(lmer(log10(tot_area)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])), id=.05)
+shapiro.test(resid(lmer(log10(tot_area)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",]))))
+# W = 0.97725, p-value = 0.3563
+
+tot_areaL_full1 <- ##brm(log10(tot_area)~rescale(CO2)*rescale(meanSWC) + (1|Plot), data = final_df_nh[final_df_nh$Spp=="L",], iter = 3000, prior = prior4, control = list(adapt_delta =0.99, max_treedepth = 12))
+  summary(tot_areaL_full1) #
+plot(tot_areaL_full1)
+pp_check(tot_areaL_full1)
+
+tot_areaL_red1 <- ##brm(log10(tot_area)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data = final_df_nh[final_df_nh$Spp=="L",], iter = 3000, prior = prior4, control = list(adapt_delta =0.99, max_treedepth = 12))
+  summary(tot_areaL_red1)
+
+
+# SRL -- log10
+grid.arrange( 
+  ggpredict(lmer(log10(SRL)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="V",])), 
+            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
+  + labs(title = "log10(SRL), V (all)"),
+  ggpredict(lmer(log10(SRL)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",])), 
+            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
+  + labs(title = "log10(SRL), V (filtered)"),  
+  ggpredict(lmer(log10(SRL)~rescale(CO2)*rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="L",])), 
+            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
+  + labs(title = "log10(SRL), L (all)"),
+  ggpredict(lmer(log10(SRL)~rescale(CO2)*rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])), 
+            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
+  + labs(title = "log10(SRL), L (filtered)"))
+summary(lmer(log10(SRL)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",]))) 
+plot(lmer(log10(SRL)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",])))
+qqmath(lmer(log10(SRL)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",])), id=.05)
+shapiro.test(resid(lmer(log10(SRL)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",]))))
+# W = 0.99179, p-value = 0.9566
+summary(lmer(log10(SRL)~rescale(CO2)*rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])))
+plot(lmer(log10(SRL)~rescale(CO2)*rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])))
+qqmath(lmer(log10(SRL)~rescale(CO2)*rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])), id=.05)
+shapiro.test(resid(lmer(log10(SRL)~rescale(CO2)*rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",]))))
+# W = 0.98945, p-value = 0.8508
+
+# d13 -- none
+grid.arrange( 
+  ggpredict(lmer(d13C~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="V",])), 
+            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
+  + labs(title = "d13C, V (all)"),
+  ggpredict(lmer(d13C~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",])), 
+            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
+  + labs(title = "d13C, V (filtered)"),  
+  ggpredict(lmer(d13C~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="L",])), 
+            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
+  + labs(title = "d13C, L (all)"),
+  ggpredict(lmer(d13C~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])), 
+            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
+  + labs(title = "d13C, L (filtered)"))
+summary(lmer(d13C~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",]))) 
+plot(lmer(d13C~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",])))
+qqmath(lmer(d13C~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",])), id=.05)
+shapiro.test(resid(lmer(d13C~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",]))))
+# W = 0.97802, p-value = 0.5562
+summary(lmer(d13C~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])))
+plot(lmer(d13C~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])))
+qqmath(lmer(d13C~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])), id=.05)
+shapiro.test(resid(lmer(d13C~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",]))))
+# W = 0.96813, p-value = 0.214
+
+# Ht.mm..8 -- log10
+grid.arrange( 
+  ggpredict(lmer(log10(Ht.mm..8)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="V",])), 
+            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
+  + labs(title = "log10(Ht.mm..8), V (all)"),
+  ggpredict(lmer(log10(Ht.mm..8)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",])), 
+            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
+  + labs(title = "log10(Ht.mm..8), V (filtered)"),  
+  ggpredict(lmer(log10(Ht.mm..8)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="L",])), 
+            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
+  + labs(title = "log10(Ht.mm..8), L (all)"),
+  ggpredict(lmer(log10(Ht.mm..8)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])), 
+            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
+  + labs(title = "log10(Ht.mm..8), L (filtered)"))
+summary(lmer(log10(Ht.mm..8)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",]))) 
+plot(lmer(log10(Ht.mm..8)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",])))
+qqmath(lmer(log10(Ht.mm..8)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",])), id=.05)
+shapiro.test(resid(lmer(log10(Ht.mm..8)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",]))))
+# W = 0.95618, p-value = 0.4428
+summary(lmer(log10(Ht.mm..8)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])))
+plot(lmer(log10(Ht.mm..8)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])))
+qqmath(lmer(log10(Ht.mm..8)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])), id=.05)
+shapiro.test(resid(lmer(log10(Ht.mm..8)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",]))))
+# W = 0.96969, p-value = 0.1477
+
+# rootmass_g -- log10
+grid.arrange( 
+  ggpredict(lmer(log10(rootmass_g)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="V",])), 
+            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
+  + labs(title = "log10(rootmass_g), V (all)"),
+  ggpredict(lmer(log10(rootmass_g)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",])), 
+            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
+  + labs(title = "log10(rootmass_g), V (filtered)"),  
+  ggpredict(lmer(log10(rootmass_g)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df[final_df$Spp=="L",])), 
+            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
+  + labs(title = "log10(rootmass_g), L (all)"),
+  ggpredict(lmer(log10(rootmass_g)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])), 
+            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata = TRUE, ci = TRUE, colors=c("red","blue")) 
+  + labs(title = "log10(rootmass_g), L (filtered)"))
+summary(lmer(log10(rootmass_g)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",]))) 
+plot(lmer(log10(rootmass_g)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",])))
+qqmath(lmer(log10(rootmass_g)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",])), id=.05)
+shapiro.test(resid(lmer(log10(rootmass_g)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="V",]))))
+# W = 0.98815, p-value = 0.8213
+summary(lmer(sqrt(rootmass_g)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])))
+plot(lmer(sqrt(rootmass_g)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])))
+qqmath(lmer(sqrt(rootmass_g)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",])), id=.05)
+shapiro.test(resid(lmer(sqrt(rootmass_g)~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df_nh[final_df_nh$Spp=="L",]))))
+# W = 0.98765, p-value = 0.7575
+
+# clean copy of LiCOR interpolation before fixing CO2R/S issue
+LiCOR_all <- df_all %>% 
+  select(ID, Plot, HHMMSS, Ci, Photo, Cond, Tleaf, PARi, VpdL, CO2S, RH_R, RH_S, SWC, Spp) %>% 
+  rbind(select(LiCOR_1, ID, Plot, HHMMSS, Ci, Photo, Cond, Tleaf, PARi, VpdL, CO2S, RH_R, RH_S, SWC, Spp)) %>% 
+  rbind(select(LiCOR_2, ID, Plot, HHMMSS, Ci, Photo, Cond, Tleaf, PARi, VpdL, CO2S, RH_R, RH_S, SWC, Spp)) %>% 
+  left_join(lookup, by = "Plot") %>% 
+  mutate(Tmt = as.factor(Tmt)) %>% 
+  filter(!is.na(Tmt)) %>% 
+  filter(Ci > 0, Photo > 0)
+
+
+## get linear model predictions for each curve
+# start by extracting CO2S and Ci from LiCOR_all
+ggplot(LiCOR_all) +
+  geom_point(aes(x=CO2S, y=Ci, color=Tmt)) + facet_grid(~Spp)
+
+# need to group by ID and then find the Ci predicted at CO2S = 422 and 544 (OR CO2S = plotwise CO2 means from plot_CO2.)
+# so like... a function that works on the data (x,y points for CO2S, Ci) 
+
+LiCOR_IDs <- unique(LiCOR_all$ID) # get plant codes in LiCOR sample
+LiCOR_Ci <- vector(length = length(LiCOR_IDs)) # initialize results vector
+
+# make a function where you get from ID to CO2S based on plot_CO2.
+seedling_CO2 <- function(ID){
+  plot <- if_else(nchar(ID) == 4, substr(ID,1,1), substr(ID,1,2))
+  plotCO2 <- select(filter(plot_CO2., Plot==plot),CO2)
+  names(plotCO2) <- "CO2S"
+  return(plotCO2)
+}
+seedling_CO2(ID = "10L3b")
+
+# need to know how good the following function is; how well does CO2S predict Ci for existing data?
+summary(lm(Ci ~ CO2S, data=LiCOR_all))
+# it anyway should be different for different treatment groups
+summary(lm(Ci ~ CO2S + Tmt, data=LiCOR_all))$adj.r.squared
+# don't panic, you are fitting the model to each plant specifically each time
+
+for(i in 1:length(LiCOR_IDs)){ # calculate linear interpolation for each ID's datapoints, at plot-level CO2S
+  LiCOR_Ci[i] <- predict(lm(Ci ~ CO2S, data = LiCOR_all %>%
+                              filter(ID == LiCOR_IDs[i])), newdata=data.frame(CO2S = seedling_CO2(ID = LiCOR_IDs[i]))) }
+# 22 warnings:  In predict.lm(lm(Ci ~ CO2S, data = LiCOR_all %>% filter(ID ==  ... :
+# prediction from rank-deficient fit; attr(*, "non-estim") has doubtful cases
+# ok because I'll filter out curves with < 3 points later on
+
+# see how well this does; extract R^2 values
+adj.r.sq <- vector(length = length(LiCOR_IDs))
+nobs <- vector(length = length(LiCOR_IDs))
+for(i in 1:length(LiCOR_IDs)){ # calculate linear interpolation for each ID's datapoints, at plot-level CO2S
+  adj.r.sq[i] <- summary(lm(Ci ~ CO2S, data = LiCOR_all %>%
+                              filter(ID == LiCOR_IDs[i])))$adj.r.squared
+  nobs[i] <- nobs(lm(Ci ~ CO2S, data = LiCOR_all %>%
+                       filter(ID == LiCOR_IDs[i])))
+}
+adj.r.sq_df <- data.frame(cbind(adj.r.sq, nobs)) %>% 
+  filter(nobs > 2)
+mean(adj.r.sq_df$adj.r.sq) # 0.6669607
+
+LiCOR_Ci_df <- data.frame(cbind(LiCOR_IDs, LiCOR_Ci)) # pairs ID/code with predicted Ci at Ca
+colnames(LiCOR_Ci_df) <- c("ID","Ci")
+LiCOR_Ci_df$Ci <- as.numeric(LiCOR_Ci_df$Ci)
+LiCOR_Ci_df <- LiCOR_Ci_df %>% 
+  filter(Ci > 150 & Ci < 800)
+
+# now use those Ci values to get the point along the ACi curve
+LiCOR_IDs2 <- unique(LiCOR_Ci_df$ID) # get plant codes in usable subset
+LiCOR_Anet <- vector(length = length(LiCOR_IDs2)) # initialize results vector
+for(i in 1:length(LiCOR_IDs2)){ # calculate linear interpolation for each ID's datapoints
+  LiCOR_Anet[i] <- predict(lm(Photo ~ Ci, data = LiCOR_all %>%
+                                filter(ID == LiCOR_IDs2[i])), newdata=data.frame(Ci = LiCOR_Ci_df[i,2])) }
+LiCOR_Anet_df <- data.frame(cbind(LiCOR_IDs2, LiCOR_Anet)) # pairs ID/code with predicted Ci at Ca
+colnames(LiCOR_Anet_df) <- c("ID","Anet")
+LiCOR_Anet_df$Anet <- as.numeric(LiCOR_Anet_df$Anet)
+
+
+
+# do the same for WUE
+LiCOR_gs <- vector(length = length(LiCOR_IDs2))# initialize results vector
+
+for(i in 1:length(LiCOR_IDs2)){ # calculate linear interpolation *of Cond* for each ID's datapoints, at Ca
+  LiCOR_gs[i] <- predict(lm(Cond ~ Ci, data = LiCOR_all %>%
+                              filter(ID == LiCOR_IDs2[i])), newdata=data.frame(Ci = LiCOR_Ci_df[i,2])) }
+
+LiCOR_gs_df <- data.frame(cbind(LiCOR_IDs2, LiCOR_gs)) # pairs ID/code with predicted gs at 350
+colnames(LiCOR_gs_df) <- c("ID","gs")
+LiCOR_gs_df$gs <- as.numeric(LiCOR_gs_df$gs)
+
+
+newLiCOR <- left_join(LiCOR_Ci_df, LiCOR_gs_df, by="ID") %>% left_join(LiCOR_Anet_df, by="ID")
+
+# plotting_df <- data.frame(ID = c(df_all$ID, LiCOR_extp_df$ID), Ci = c(df_all$Ci, rep(350,length(unique(df_all$ID)))), Photo = c(df_all$Photo, LiCOR_extp_df$LiCOR_extp), Cond = c(df_all$Cond, LiCOR_gs_df$LiCOR_gs))
+
+#left_join(LiCOR_all, newLiCOR, by = "ID")
+
+LiCOR_new <- left_join(LiCOR_all, newLiCOR, by = "ID") %>% 
+  group_by(ID) %>% 
+  mutate(n=n()) %>% 
+  filter(n>2) %>% 
+  summarise(across(c(HHMMSS:SWC,Ci.y,gs,Anet), ~ mean(.x, na.rm = TRUE))) %>% 
+  ungroup() %>% 
+  mutate(Plot = if_else(nchar(ID) == 4, substr(ID,1,1), substr(ID,1,2)), Spp = str_sub(ID, - 3, - 3))  %>%
+  left_join(lookup, by = "Plot") # add Tmt codes
+
+
+ggplot() + # this one will show how well predicted Anet value tracks the A/Ci mini curve
+  geom_point(data=LiCOR_all, mapping=aes(x = Ci, y = Photo)) +
+  geom_smooth(data=LiCOR_all, aes(x=Ci, y=Photo), color="forestgreen",method="lm", se=F) +
+  geom_point(LiCOR_new, mapping=aes(x = Ci.y, y = Anet), color="red") +
+  facet_wrap( ~ ID)
+
+# dumping biomass backfilling
+## Back-filling biomass data
+# I will write a model to see whether height on or before inventory 5 predict final biomass for the non-herbivory plants
+# need to join inventory hts and biomass columns with biomass data, keeping all/only rows in the biomass dataset
+
+biomass_nh2 <- biomass_nh %>% # training data on seedlings with no herbivory
+  left_join(inventory_thinned[,c(1,7,10,13,17,22,27,32,37)]) %>% # select Ht measurements from all inventories
+  mutate(across(c(StemWet_g, LeafWet_g, LeafDry_g, rootmass_g, Ht.mm..1, Ht.mm..2, Ht.mm..3, Ht.mm..4, Ht.mm..5, Ht.mm..6, Ht.mm..7, Ht.mm..8), na_if, -Inf))  %>% 
+  mutate(H2OTmt = substr(Tmt,2,2)) # will write separate models for W and D treatments, not for E/A CO2
+
+# checking this: are any outliers for Ht.8 vs. leaf_g?
+ggplot(biomass_nh2, aes(x=Ht.mm..8, y = LeafWet_g, group = Tmt)) +
+  geom_text(biomass_nh2, mapping =aes(x=Ht.mm..8, y=LeafWet_g, label = Code, color = Tmt))
+# keep 1V6 in the herbivory list; maybe 5V5 too ?
+
+biomass2 <- biomass %>% # prediction data with full dataset and extra inventory columns
+  left_join(inventory_thinned[,c(1,7,10,13,17,22,27,32,37)]) %>% 
+  mutate(across(c(StemWet_g, LeafWet_g, LeafDry_g, rootmass_g, Ht.mm..1, Ht.mm..2, Ht.mm..3, Ht.mm..4, Ht.mm..5, Ht.mm..6, Ht.mm..7, Ht.mm..8), na_if, -Inf))  %>% 
+  mutate(H2OTmt = substr(Tmt,2,2))
+
+
+## model selection
+# VW
+# VW_145 <- lm(StemWet_g ~ polym(Ht.mm..1,Ht.mm..4,Ht.mm..5, degree = 2, raw = TRUE), data = filter(biomass_nh2, Spp == "V" & H2OTmt == "W"))
+# VW_135  <- lm(StemWet_g ~ polym(Ht.mm..1,Ht.mm..3,Ht.mm..5, degree = 2, raw = TRUE), data = filter(biomass_nh2, Spp == "V" & H2OTmt == "W"))
+# VW_125 <- lm(StemWet_g ~ polym(Ht.mm..1,Ht.mm..2,Ht.mm..5, degree = 2, raw = TRUE), data = filter(biomass_nh2, Spp == "V" & H2OTmt == "W"))
+# VW_235 <- lm(StemWet_g ~ polym(Ht.mm..2,Ht.mm..3,Ht.mm..5, degree = 2, raw = TRUE), data = filter(biomass_nh2, Spp == "V" & H2OTmt == "W"))
+# VW_245 <- lm(StemWet_g ~ polym(Ht.mm..2,Ht.mm..4,Ht.mm..5, degree = 2, raw = TRUE), data = filter(biomass_nh2, Spp == "V" & H2OTmt == "W"))
+# VW_345 <- lm(StemWet_g ~ polym(Ht.mm..3,Ht.mm..4,Ht.mm..5, degree = 2, raw = TRUE), data = filter(biomass_nh2, Spp == "V" & H2OTmt == "W"))
+# AIC(VW_145, VW_135, VW_125, VW_235, VW_245, VW_345)
+# AIC(VW_235, VW_125) # winner is VW_235; also against reduced models of VW_235
+# # a simple y ~ x was better after examining the data
+
+# VD
+# VD_145 <- lm(StemWet_g ~ polym(Ht.mm..1,Ht.mm..4,Ht.mm..5, degree = 2, raw = TRUE), data = filter(biomass_nh2, Spp == "V" & H2OTmt == "D"))
+# VD_135  <- lm(StemWet_g ~ polym(Ht.mm..1,Ht.mm..3,Ht.mm..5, degree = 2, raw = TRUE), data = filter(biomass_nh2, Spp == "V" & H2OTmt == "D"))
+# VD_125 <- lm(StemWet_g ~ polym(Ht.mm..1,Ht.mm..2,Ht.mm..5, degree = 2, raw = TRUE), data = filter(biomass_nh2, Spp == "V" & H2OTmt == "D"))
+# VD_235 <- lm(StemWet_g ~ polym(Ht.mm..2,Ht.mm..3,Ht.mm..5, degree = 2, raw = TRUE), data = filter(biomass_nh2, Spp == "V" & H2OTmt == "D"))
+# VD_245 <- lm(StemWet_g ~ polym(Ht.mm..2,Ht.mm..4,Ht.mm..5, degree = 2, raw = TRUE), data = filter(biomass_nh2, Spp == "V" & H2OTmt == "D"))
+# VD_345 <- lm(StemWet_g ~ polym(Ht.mm..3,Ht.mm..4,Ht.mm..5, degree = 2, raw = TRUE), data = filter(biomass_nh2, Spp == "V" & H2OTmt == "D"))
+# AIC(VD_145, VD_135, VD_125, VD_235, VD_245, VD_345)
+# VD_5 <- lm(StemWet_g ~ polym(Ht.mm..5, degree = 2, raw = TRUE), data = filter(biomass_nh2, Spp == "V" & H2OTmt == "D"))
+# AIC(VD_145, VD_5) # winner is VD_5
+
+# LW
+# LW_145 <- lm(StemWet_g ~ polym(Ht.mm..1,Ht.mm..4,Ht.mm..5, degree = 2, raw = TRUE), data = filter(biomass_nh2, Spp == "L" & H2OTmt == "W"))
+# LW_135  <- lm(StemWet_g ~ polym(Ht.mm..1,Ht.mm..3,Ht.mm..5, degree = 2, raw = TRUE), data = filter(biomass_nh2, Spp == "L" & H2OTmt == "W"))
+# LW_125 <- lm(StemWet_g ~ polym(Ht.mm..1,Ht.mm..2,Ht.mm..5, degree = 2, raw = TRUE), data = filter(biomass_nh2, Spp == "L" & H2OTmt == "W"))
+# LW_235 <- lm(StemWet_g ~ polym(Ht.mm..2,Ht.mm..3,Ht.mm..5, degree = 2, raw = TRUE), data = filter(biomass_nh2, Spp == "L" & H2OTmt == "W"))
+# LW_245 <- lm(StemWet_g ~ polym(Ht.mm..2,Ht.mm..4,Ht.mm..5, degree = 2, raw = TRUE), data = filter(biomass_nh2, Spp == "L" & H2OTmt == "W"))
+# LW_345 <- lm(StemWet_g ~ polym(Ht.mm..3,Ht.mm..4,Ht.mm..5, degree = 2, raw = TRUE), data = filter(biomass_nh2, Spp == "L" & H2OTmt == "W"))
+# AIC(LW_145, LW_135, LW_125, LW_235, LW_245, LW_345)
+# AIC(LW_235, LW_135) # winner is LW_135; also against reduced models of LW_135
+# # trying LW_5.1
+# LW_5.1 <- lm(StemWet_g ~ Ht.mm..5, data = filter(biomass_nh2, Spp == "L" & H2OTmt == "W"))
+
+# LD
+# LD_145 <- lm(StemWet_g ~ polym(Ht.mm..1,Ht.mm..4,Ht.mm..5, degree = 2, raw = TRUE), data = filter(biomass_nh2, Spp == "L" & H2OTmt == "D"))
+# LD_135  <- lm(StemWet_g ~ polym(Ht.mm..1,Ht.mm..3,Ht.mm..5, degree = 2, raw = TRUE), data = filter(biomass_nh2, Spp == "L" & H2OTmt == "D"))
+# LD_125 <- lm(StemWet_g ~ polym(Ht.mm..1,Ht.mm..2,Ht.mm..5, degree = 2, raw = TRUE), data = filter(biomass_nh2, Spp == "L" & H2OTmt == "D"))
+# LD_235 <- lm(StemWet_g ~ polym(Ht.mm..2,Ht.mm..3,Ht.mm..5, degree = 2, raw = TRUE), data = filter(biomass_nh2, Spp == "L" & H2OTmt == "D"))
+# LD_245 <- lm(StemWet_g ~ polym(Ht.mm..2,Ht.mm..4,Ht.mm..5, degree = 2, raw = TRUE), data = filter(biomass_nh2, Spp == "L" & H2OTmt == "D"))
+# LD_345 <- lm(StemWet_g ~ polym(Ht.mm..3,Ht.mm..4,Ht.mm..5, degree = 2, raw = TRUE), data = filter(biomass_nh2, Spp == "L" & H2OTmt == "D"))
+# AIC(LD_145, LD_135, LD_125, LD_235, LD_245, LD_345)
+# AIC(LD_345, LD_125) # winner is LD_345 
+# # against reduced models of LD_345, degree 1 of _345 wins
+# LD_345.1 <- lm(StemWet_g ~ polym(Ht.mm..3, Ht.mm..4, Ht.mm..5, degree = 1, raw = TRUE), data = filter(biomass_nh2, Spp == "L" & H2OTmt == "D")) # winner is LD_345.1
+
+# winning models go here:
+lm_VW <- lm(StemWet_g ~ Ht.mm..5, data = filter(biomass_nh2, Spp == "V" & H2OTmt == "W"))
+lm_VD <- lm(StemWet_g ~ polym(Ht.mm..5, degree = 2, raw = TRUE), data = filter(biomass_nh2, Spp == "V" & H2OTmt == "D"))
+lm_LW <-  lm(StemWet_g ~ polym(Ht.mm..5, degree = 2, raw = TRUE), data = filter(biomass_nh2, Spp == "L" & H2OTmt == "W"))
+lm_LD <- lm(StemWet_g ~ polym(Ht.mm..3, Ht.mm..4, Ht.mm..5, degree = 1, raw = TRUE), data = filter(biomass_nh2, Spp == "L" & H2OTmt == "D")) 
+# now I need to use these to predict the final StemWet_g in the non-herbivory training data:
+biomass_nh2$predVW <- predict(lm_VW, newdata = biomass_nh2)
+biomass_nh2$predVD <- predict(lm_VD, newdata = biomass_nh2)
+biomass_nh2$predLW <- predict(lm_LW, newdata = biomass_nh2)
+biomass_nh2$predLD <- predict(lm_LD, newdata = biomass_nh2)
+
+# biomass_nh2 <- biomass_nh2 %>% # make each row choose its species-tmt-combo related stem mass prediction
+#   mutate(pred = abs(case_when(Spp == "V" & H2OTmt == "W" ~ predVW, # adding abs( to avoid 1-2 negative values
+#                           Spp == "V" & H2OTmt == "D" ~ predVD,
+#                           Spp == "L" & H2OTmt == "W" ~ predLW,
+#                           Spp == "L" & H2OTmt == "D" ~ predLD)))
+
+# extrapolate predicted stem masses for *all* data, including herbivory seedlings
+biomass2$predVW <- predict(lm_VW, newdata = biomass2)
+biomass2$predVD <- predict(lm_VD, newdata = biomass2)
+biomass2$predLW <- predict(lm_LW, newdata = biomass2)
+biomass2$predLD <- predict(lm_LD, newdata = biomass2)
+# biomass2 <- biomass2 %>% 
+#   mutate(pred = abs(case_when(Spp == "V" & H2OTmt == "W" ~ predVW, # adding abs( to avoid 1-2 negative values
+#                           Spp == "V" & H2OTmt == "D" ~ predVD,
+#                           Spp == "L" & H2OTmt == "W" ~ predLW,
+#                           Spp == "L" & H2OTmt == "D" ~ predLD)))
+
+ggplot(biomass2, aes(x=Ht.mm..5, y = StemWet_g)) + # plot real values (dots) vs predicted (crosses)
+  geom_point(biomass2, mapping= aes(x=Ht.mm..5, y=pred, color = H2OTmt), shape = 3) +
+  geom_point(biomass2, mapping=aes(x=Ht.mm..5, y=StemWet_g, group = H2OTmt, color = H2OTmt)) + facet_grid( ~ Spp)
+
+# how far off are the pred values
+ggplot(biomass2, aes(x=Ht.mm..8, y=StemWet_g - pred, color = H2OTmt)) +
+  geom_point() + facet_grid( ~Spp)
+# pretty good except VW skew too low; then again that makes sense because those all got eaten?
+ggplot(biomass_nh2, aes(x=Ht.mm..8, y=StemWet_g - pred, color = H2OTmt)) +
+  geom_point() + facet_grid( ~Spp) # that's what I wanted! within the non-eaten subset, this is a fairly reliable predictor
+
+## Do it again but for LeafWet_g. Hunch is that leaf count might want to be involved
+biomass_nh2_leaf <- biomass_nh %>% # training data on seedlings with no herbivory
+  left_join(inventory_thinned[,c(1,7,10,13,17,22,27,32,37,15,19,24,30,35,20,25,29,34,39)]) %>% 
+  mutate(across(c(StemWet_g, LeafWet_g, LeafDry_g, rootmass_g, Ht.mm..1, Ht.mm..2, Ht.mm..3, Ht.mm..4, Ht.mm..5, Ht.mm..6, Ht.mm..7, Ht.mm..8, 
+                  c("Leaf.Ct.",paste0("Leaf.Ct..",c(1,5,6,7))), c("Max.Leaf.Length.1",paste0("Max.Leaf.",c(5,6,7,8)))), na_if, -Inf))  %>% 
+  mutate(H2OTmt = substr(Tmt,2,2))
+
+biomass2_leaf <- biomass %>% # prediction data with full dataset and extra inventory columns
+  left_join(inventory_thinned[,c(1,7,10,13,17,22,27,32,37,15,19,24,30,35,20,25,29,34,39)]) %>% 
+  mutate(across(c(StemWet_g, LeafWet_g, LeafDry_g, rootmass_g, Ht.mm..1, Ht.mm..2, Ht.mm..3, Ht.mm..4, Ht.mm..5, Ht.mm..6, Ht.mm..7, Ht.mm..8, 
+                  c("Leaf.Ct.",paste0("Leaf.Ct..",c(1,5,6,7))), c("Max.Leaf.Length.1",paste0("Max.Leaf.",c(5,6,7,8)))), na_if, -Inf))  %>% 
+  mutate(H2OTmt = substr(Tmt,2,2))
+
+ggplot(biomass_nh2_leaf) +
+  geom_point(aes(x=Leaf.Ct..5, y=LeafWet_g, color = H2OTmt)) + facet_grid(~Spp) # not a strong pattern :\
+# even more missing data than for stems, due to leaf loss
+ggplot(biomass_nh2_leaf) +
+  geom_point(aes(x=Ht.mm..5, y=LeafWet_g, color = H2OTmt)) + facet_grid(~Spp) # Ht.mm..5 looks better
+
+## model selection 
+# VW
+# VW_a <- lm(LeafWet_g ~ Ht.mm..5, data = filter(biomass_nh2_leaf, Spp == "V" & H2OTmt == "W"))
+# VW_b <- lm(LeafWet_g ~ polym(Ht.mm..5, degree = 2, raw = TRUE),data = filter(biomass_nh2_leaf, Spp == "V" & H2OTmt == "W"))
+VW_c <- lm(LeafWet_g ~ Ht.mm..5, data = filter(biomass_nh2_leaf, Spp == "V" & H2OTmt == "W"))
+# AIC(VW_b, VW_c) # winner is VW_b, but seems like one point is exerting too much influence; go with VW_c
+
+# VD
+VD_a <- lm(LeafWet_g ~ Ht.mm..5, data = filter(biomass_nh2_leaf, Spp == "V" & H2OTmt == "D"))
+# VD_b <- lm(LeafWet_g ~ polym(Leaf.Ct..5,Ht.mm..5, degree = 2, raw = TRUE),data = filter(biomass_nh2_leaf, Spp == "V" & H2OTmt == "D"))
+# VD_c <- lm(LeafWet_g ~ polym(Leaf.Ct..5, degree = 2, raw = TRUE),data = filter(biomass_nh2_leaf, Spp == "L" & H2OTmt == "W"))
+# AIC(VD_a, VD_b, VD_c) # winner is VD_a
+
+# LW
+# LW_a <- lm(LeafWet_g ~ Ht.mm..5, data = filter(biomass_nh2_leaf, Spp == "L" & H2OTmt == "W"))
+# LW_b <- lm(LeafWet_g ~ polym(Ht.mm..5, degree = 2, raw = TRUE),data = filter(biomass_nh2_leaf, Spp == "L" & H2OTmt == "W"))
+# LW_c <- lm(LeafWet_g ~ polym(Leaf.Ct..5, degree = 2, raw = TRUE),data = filter(biomass_nh2_leaf, Spp == "L" & H2OTmt == "W"))
+LW_d <- lm(LeafWet_g ~ Leaf.Ct..5,data = filter(biomass_nh2_leaf, Spp == "L" & H2OTmt == "W"))
+# AIC(LW_c, LW_d) # winner is LW_c but not by much, and d is simpler
+
+# LD
+# LD_a <- lm(LeafWet_g ~ Ht.mm..5, data = filter(biomass_nh2_leaf, Spp == "L" & H2OTmt == "D"))
+# LD_b <- lm(LeafWet_g ~ polym(Ht.mm..5, degree = 2, raw = TRUE),data = filter(biomass_nh2_leaf, Spp == "L" & H2OTmt == "D"))
+LD_c <- lm(LeafWet_g ~ Leaf.Ct..5, data = filter(biomass_nh2_leaf, Spp == "L" & H2OTmt == "D"))
+# AIC(LD_a, LD_b, LD_c) # winner is LD_c
+
+# now I need to use these to predict the final LeafWet_g in the no-herbivory training data:
+biomass_nh2_leaf$predVW <- predict(VW_c, newdata = biomass_nh2_leaf)
+biomass_nh2_leaf$predVD <- predict(VD_a, newdata = biomass_nh2_leaf)
+biomass_nh2_leaf$predLW <- predict(LW_d, newdata = biomass_nh2_leaf)
+biomass_nh2_leaf$predLD <- predict(LD_c, newdata = biomass_nh2_leaf)
+
+biomass_nh2_leaf <- biomass_nh2_leaf %>% 
+  mutate(pred = abs(case_when(Spp == "V" & H2OTmt == "W" ~ predVW,
+                              Spp == "V" & H2OTmt == "D" ~ predVD,
+                              Spp == "L" & H2OTmt == "W" ~ predLW,
+                              Spp == "L" & H2OTmt == "D" ~ predLD)))
+
+biomass2_leaf$predVW <- predict(VW_c, newdata = biomass2_leaf)
+biomass2_leaf$predVD <- predict(VD_a, newdata = biomass2_leaf)
+biomass2_leaf$predLW <- predict(LW_d, newdata = biomass2_leaf)
+biomass2_leaf$predLD <- predict(LD_c, newdata = biomass2_leaf)
+
+biomass2_leaf <- biomass2_leaf %>% 
+  mutate(predleaf = abs(case_when(Spp == "V" & H2OTmt == "W" ~ predVW,
+                                  Spp == "V" & H2OTmt == "D" ~ predVD,
+                                  Spp == "L" & H2OTmt == "W" ~ predLW,
+                                  Spp == "L" & H2OTmt == "D" ~ predLD)))
+
+# how far off are the pred values 
+ggplot(biomass2_leaf, aes(x=Ht.mm..5, y=LeafWet_g - predleaf, color = H2OTmt)) +
+  geom_point() + facet_grid( ~Spp)
+ggplot(biomass2_leaf, aes(x=Leaf.Ct..5, y=LeafWet_g - predleaf, color = H2OTmt)) +
+  geom_point() + facet_grid( ~Spp)
+
+ggplot(biomass_nh2_leaf, aes(x=Ht.mm..5, y=LeafWet_g - pred, color = H2OTmt)) +
+  geom_point() + facet_grid( ~Spp)
+ggplot(biomass_nh2_leaf, aes(x=Leaf.Ct..5, y=LeafWet_g - pred, color = H2OTmt)) +
+  geom_point() + facet_grid( ~Spp)
+
+# It's not very good; plot model line with real and fake data to be sure 
+ggplot(biomass_nh2_leaf, aes(x = Ht.mm..5, y=LeafWet_g, color = H2OTmt)) + # plot against Ht.mm..5
+  geom_point() + facet_grid(~Spp) +
+  geom_hline(aes(yintercept=0)) +
+  geom_smooth(data = biomass_nh2_leaf, aes(x=Ht.mm..5, y=pred, group = H2OTmt), color = c("red")) +
+  geom_point(data = biomass_nh2_leaf, aes(x=Ht.mm..5, y=pred, group = H2OTmt, color = "darkgreen"))
+ggplot(biomass_nh2_leaf, aes(x = Leaf.Ct..5, y=LeafWet_g, color = H2OTmt)) + # plot against Leaf.Ct..5
+  geom_point() + facet_grid(~Spp) +
+  geom_hline(aes(yintercept=0)) +
+  geom_smooth(data = biomass_nh2_leaf, aes(x=Leaf.Ct..5, y=pred, group = H2OTmt), color = c("red")) +
+  geom_point(data = biomass_nh2_leaf, aes(x=Leaf.Ct..5, y=pred, group = H2OTmt, color = "darkgreen"))
+
+ggplot(biomass2_leaf, aes(x=Ht.mm..5, y = LeafWet_g)) + # plot
+  geom_point(biomass2_leaf, mapping= aes(x=Ht.mm..5, y=predleaf, color = H2OTmt), shape = 3) +
+  geom_point(biomass2_leaf, mapping=aes(x=Ht.mm..5, y=LeafWet_g, group = H2OTmt, color = H2OTmt)) + facet_grid( ~ Spp)
+ggplot(biomass2_leaf, aes(x=Leaf.Ct..5, y = LeafWet_g)) + # plot
+  geom_point(biomass2_leaf, mapping= aes(x=Leaf.Ct..5, y=predleaf, color = H2OTmt), shape = 3) +
+  geom_point(biomass2_leaf, mapping=aes(x=Leaf.Ct..5, y=LeafWet_g, group = H2OTmt, color = H2OTmt)) + facet_grid( ~ Spp)
+
+# final biomass df with a column for predicted (if herb) or observed stem and leaf mass:
+# biomass2 <- left_join(biomass2, biomass2_leaf[,c(3,34)], by = "Code") # combine stem and leaf predictions
+# biomass2 <- biomass2 %>% 
+#   mutate(StemWet_expanded = case_when(Code %in% firstfullherb$Code ~ pred, # changed to firstfullherb
+#                                       TRUE ~ StemWet_g)) %>% 
+#   mutate(LeafWet_expanded = case_when(Code %in% firstherb$Code ~ predleaf,
+#                                       TRUE ~ LeafWet_g))
+
+# here I will add a similar interpolation/backfilling for final height (Ht.mm..8) based on prior height
+
+biomass_nh2_ht <- biomass_nh %>% # training data on seedlings with no herbivory
+  left_join(inventory_thinned[,c(1,7,10,13,17,22,27,32,37)]) %>% # select Ht measurements from all inventories
+  mutate(across(c(StemWet_g, LeafWet_g, LeafDry_g, rootmass_g, Ht.mm..1, Ht.mm..2, Ht.mm..3, Ht.mm..4, Ht.mm..5, Ht.mm..6, Ht.mm..7, Ht.mm..8), na_if, -Inf))  %>% 
+  mutate(H2OTmt = substr(Tmt,2,2)) # will write separate models for W and D treatments, not for E/A CO2
+
+biomass2_ht <- biomass %>% # prediction data with full dataset and extra inventory columns
+  left_join(inventory_thinned[,c(1,7,10,13,17,22,27,32,37)]) %>% 
+  mutate(across(c(StemWet_g, LeafWet_g, LeafDry_g, rootmass_g, Ht.mm..1, Ht.mm..2, Ht.mm..3, Ht.mm..4, Ht.mm..5, Ht.mm..6, Ht.mm..7, Ht.mm..8), na_if, -Inf))  %>% 
+  mutate(H2OTmt = substr(Tmt,2,2))
+
+inv_all_nh %>% 
+  group_by(Code) %>% 
+  summarise(ht8_pred = predict(lm(ht_mm ~ poly(Date,3), data = inv_all_nh), newdata=inv_all_nh)) %>% View()
+
+inv_all_nh1 <- inv_all_nh
+
+for(i in 1:length(unique(inv_all_nh1$Code))){
+  dat <- filter(inv_all_nh1, Code == unique(inv_all_nh1$Code)[i])
+  inv_all_nh1$Ht8_pred <- predict(lm(ht_mm ~ poly(value, 3), data = dat), newdata = unique(inv_all_nh1$value)[8])
+}
+
+inv_train <- inv_all %>% 
+  filter(Code %in% biomass2$Code) %>% 
+  filter(!Code %in% firstfullherb$Code)
+
+biomass_nh2_ht$ht8_pred <- 0
+inv_all_nh1$ht8_pred <- 0
+inv_train$ht8_pred <- 0
+inv_train$ht8_pred2 <- 0
+
+# for(i in seq_along(unique(biomass_nh2_ht$Code))){
+#   code_i <- unique(biomass_nh2_ht$Code)[i]
+#   fit <- lm(ht_mm ~ poly(value, 3), data = inv_all_nh1, subset = Code == code_i)
+#   ht8_pred <- predict(fit, newdata = data.frame(value = c(unique(inv_all_nh1$value)[8])))
+#   biomass_nh2_ht[biomass_nh2_ht$Code == code_i,]$ht8_pred <- ht8_pred
+# } # works
+
+for(i in seq_along(unique(inv_train$Code))){
+  code_i <- unique(inv_train$Code)[i]
+  fit <- lm(ht_mm ~ poly(value, 3), data = inv_train, subset = Code == code_i)
+  ht8_pred <- predict(fit, newdata = data.frame(value = c(unique(inv_train$value)[8])))
+  inv_train[inv_train$Code == code_i,]$ht8_pred <- ht8_pred
+}
+
+for(i in seq_along(unique(inv_train$Code))){
+  code_i <- unique(inv_train$Code)[i]
+  fit <- lm(ht_mm ~ poly(value, 3), data = filter(inv_train, value < unique(inv_train$value)[6]), subset = Code == code_i)
+  ht8_pred2 <- predict(fit, newdata = data.frame(value = c(unique(inv_train$value)[8])))
+  inv_train[inv_train$Code == code_i,]$ht8_pred2 <- ht8_pred2
+}
+
+ggplot(inv_train, group = Code) +
+  geom_line(aes(x=value, y= ht_mm, color= Tmt, group=Code)) + 
+  geom_point(aes(x=unique(inv_train$value)[8], y=ht8_pred), color = "black") +
+  facet_grid(vars(Spp), vars(Tmt), scales = "free")
+
+# code_4 <- unique(inv_all_nh1$Code)[4]
+# fit <- lm(ht_mm ~ poly(value, 2), data = inv_all_nh1, subset = Code == "10L3")
+# ht8_pred <- predict(fit, newdata = data.frame(value = c(unique(inv_all_nh1$value))))
+
+ggplot(biomass_nh2_ht) +
+  geom_point(data=biomass_nh2_ht, aes(x=Ht.mm..8, y=ht8_pred, color=Tmt)) +
+  geom_smooth(aes(x=Ht.mm..8, y=ht8_pred), method = "lm")
+
+inv_all
+
+## model each set of points based on a 3rd-degree polynomial and however many dates it recorded heights
+# extpTest_df2 <- data.frame(unique(inv_all_nh[which(inv_all_nh$Code == "11V3"),]$value), inv_all_nh[which(inv_all_nh$Code == "11V3"),]$ht_mm) # prep df
+# colnames(extpTest_df2) <- c("Date","ht_mm")
+# extpTest_df2$pred1 <- predict(lm(ht_mm ~ poly(Date,3), data=extpTest_df2)) # add predicted values
+# 
+# pred2 <- data.frame(Date = c(unique(inv_all_nh$value)))
+# pred2$ht_mm <- predict(lm(ht_mm ~ poly(Date,3), data = extpTest_df2), newdata=pred2)
+
+
+## Compare figures for filtered vs backfilled data
+# plot the resulting data (N = 128; 87 observed, 41 predicted)
+nequals_nfh <- biomass_nfh %>% 
+  group_by(Tmt, Spp) %>% 
+  tally()
+nequals_bm <- biomass %>% 
+  group_by(Tmt, Spp) %>% 
+  tally()
+grid.arrange( biomass_nfh %>% ggplot(aes(x=Tmt, y=StemWet_g)) + geom_point( aes(x=Tmt, y=StemWet_g, color = Tmt)) + 
+                facet_grid(rows = vars(Spp), scales = "free") +
+                geom_text(data = nequals_nfh, aes(x = Tmt, y = 0, label = paste0("N = ",n))) + 
+                labs(y = "Stem Biomass (g)", title = "Stem Biomass (filtered)") +
+                scale_color_manual(values = c("pink", "lightblue", "red", "blue")) ,
+              #   geom_signif(test="wilcox.test", exact=FALSE, comparisons = combn(c("AD", "AW", "ED", "EW"),2,simplify=F),step_increase=0.2) ,
+              biomass2 %>% ggplot(aes(x=Tmt, y=StemWet_g)) + 
+                geom_point(aes(x=Tmt, y=StemWet_expanded, color = Tmt)) + 
+                facet_grid(rows = vars(Spp), scales = "free") +
+                geom_text(data = nequals_bm, aes(x = Tmt, y = 0, label = paste0("N = ",n))) + 
+                labs(y = "Stem Biomass (g)", title = "Stem Biomass (expanded data)") +
+                scale_color_manual(values = c("pink", "lightblue", "red", "blue")), nrow = 1) 
+# geom_signif(test="wilcox.test", exact=FALSE, comparisons = combn(c("AD", "AW", "ED", "EW"),2,simplify=F),step_increase=0.2), nrow = 1 )
+
+# total biomass grouped by Tmt, for all seedlings without FULL herbivory
+grid.arrange( biomass_nfh %>% ggplot(aes(x=Tmt, y=StemWet_g)) + geom_boxplot( aes(x=Tmt, y= log(StemWet_g+LeafWet_g+rootmass_g), color = Tmt)) + facet_grid(rows = vars(Spp), scales = "free") +
+                geom_text(data = nequals_nfh, aes(x = Tmt, y = 0.2, label = paste0("N = ",n))) + labs(y = "log Total Biomass (g)", title = "Total Biomass (filtered)") +
+                scale_color_manual(values = c("pink", "lightblue", "red", "blue")) ,
+              biomass2 %>% # combined stem and leaf predictions
+                ggplot(aes(x=Tmt, y=StemWet_g)) +
+                geom_boxplot(mapping=aes(x=Tmt, y=log(rootmass_g+StemWet_expanded+LeafWet_expanded), color = Tmt)) + 
+                facet_grid(rows = vars(Spp), scales = "free") +
+                geom_text(data = nequals_bm, aes(x = Tmt, y = 0.2, label = paste0("N = ",n))) + 
+                labs(y = "log Total Biomass (g)", title = "Total Biomass (expanded data)") +
+                scale_color_manual(values = c("pink", "lightblue", "red", "blue")) , nrow = 1)
+
+nequals_nh <- biomass_nh %>% 
+  group_by(Tmt, Spp) %>% 
+  tally()
+biomass_nh %>% # Leaf Water Content grouped by Tmt, for all seedlings without ANY herbivory
+  ggplot() + geom_boxplot(aes(x = Tmt, y = (LeafWet_g - LeafDry_g)*100/LeafWet_g, color=Tmt)) + facet_grid(rows = vars(Spp), scales = "free") + geom_text(data = nequals_nh, aes(x = Tmt, y = 40, label = paste0("N = ",n))) + labs(y = "Leaf Water Content (% by mass)", title="Leaf Water Content (filtered)") +
+  scale_color_manual(values = c("pink", "lightblue", "red", "blue")) 
+# seems too far a stretch to do LWC on modeled LeafWet vs LeafDry ...
+
+grid.arrange( biomass_nh %>% # root:shoot ratio for seedlings without any herbivory
+                ggplot() + geom_boxplot(aes(x=Tmt, y= (rootmass_g/(StemWet_g+LeafWet_g)), color = Tmt)) + facet_grid(rows =  vars(Spp), scales = "free") +
+                geom_text(data = nequals_nh, aes(x = Tmt, y = 0.2, label = paste0("N = ",n))) + labs(y = "Root:Shoot", title = "Root:Shoot (filtered)") +
+                scale_color_manual(values = c("pink", "lightblue", "red", "blue")) ,
+              
+              biomass2 %>% 
+                ggplot() +
+                geom_boxplot(mapping=aes(x=Tmt, y=(rootmass_g/(StemWet_expanded+LeafWet_expanded)), color = Tmt)) + 
+                facet_grid(rows = vars(Spp), scales = "free") +
+                geom_text(data = nequals_bm, aes(x = Tmt, y = 0.2, label = paste0("N = ",n))) + 
+                labs(y = "Root:Shoot", title = "Root:Shoot (expanded data)") +
+                scale_color_manual(values = c("pink", "lightblue", "red", "blue")), nrow = 1)
+
+# Last but not least, PERMANOVA
+library(vegan)
+plotmeans.V <- final_df_nh %>% 
+  filter(Spp == "V") %>% 
+  group_by(Plot, H2OTmt, CO2Tmt, meanSWC, CO2) %>% 
+  summarise(across(is.numeric, ~ mean(.x, na.rm=T)))
+pm.V_responsemat <- plotmeans.V[,c("Anet","SRL","Ht.mm..8")]
+
+adonis2(pm.V_responsemat ~ rescale(CO2)*rescale(meanSWC), plotmeans.V, na.rm=T) 
+adonis2(pm.V_responsemat ~ CO2Tmt*H2OTmt, plotmeans.V, na.rm=T) 
+
+plotmeans.L <- final_df_nh %>% 
+  filter(Spp == "L") %>% 
+  group_by(Plot, H2OTmt, CO2Tmt, meanSWC, CO2) %>% 
+  summarise(across(is.numeric, ~ mean(.x, na.rm=T)))
+pm.L_responsemat <- plotmeans.L[,c("SRL")]
+# pm.L_responsemat <- plotmeans.L[,c("Anet","SRL","Ht.mm..8")]
+
+adonis2(pm.L_responsemat ~ rescale(CO2)*rescale(meanSWC), plotmeans.L, na.rm=T) 
+#adonis2(pm.L_responsemat ~ CO2Tmt*H2OTmt, plotmeans.L, na.rm=T) 
+
+anova(lm(Ht.mm..8 ~ rescale(CO2)*rescale(meanSWC), data=plotmeans.L))
+
+
+
+# gs, but categorical H2OTmt
+# gs
+grid.arrange(
+  ggpredict(lm(gs~CO2*H2OTmt, data=plotmeans.V), 
+            terms=c("CO2","H2OTmt"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="gs, V *"),
+  ggpredict(lm(gs~CO2+H2OTmt, data=plotmeans.V), 
+            terms=c("CO2","H2OTmt"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="gs, V +"),
+  ggpredict(lm(gs~CO2*H2OTmt, data=plotmeans.L), 
+            terms=c("CO2","H2OTmt"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="gs, L *"),
+  ggpredict(lm(gs~CO2+H2OTmt, data=plotmeans.L), 
+            terms=c("CO2","H2OTmt"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="gs, L +") )
+summary(lm(gs~CO2*H2OTmt, data=plotmeans.V)) 
+plot(lm(gs~CO2*H2OTmt, data=plotmeans.V))
+qqPlot(lm(gs~CO2*H2OTmt, data=plotmeans.V))
+shapiro.test(resid(lm(gs~CO2*H2OTmt, data=plotmeans.V))) # W = 0.96484, p-value = 0.8012
+
+summary(lm(gs~CO2*H2OTmt, data=plotmeans.L)) 
+plot(lm(gs~CO2*H2OTmt, data=plotmeans.L))
+qqPlot(lm(gs~CO2*H2OTmt, data=plotmeans.L))
+shapiro.test(resid(lm(gs~CO2*H2OTmt, data=plotmeans.L))) 
+
+# is Ht.mm..5 associated with herb?
+# both spp
+summary(glm(herb ~ Ht.mm..5*H2OTmt, data = final_df %>% 
+              mutate(herb = as.numeric(Code %in% firstfullherb$Code)) ))
+ggpredict(glm(herb ~ Ht.mm..5*H2OTmt, data = final_df %>% 
+                mutate(herb = as.numeric(Code %in% firstfullherb$Code))), terms=c("Ht.mm..5","H2OTmt") ) %>% plot(rawdata=T, colors=c("blue","red")) 
+# two things: live oaks tended not to get eaten, and also tended to be taller. So not actually going through herbivory at all, all the eaten ones are Vs
+
+# just V
+summary(glm(herb ~ Ht.mm..5+H2OTmt, family = "binomial", data = final_df %>% 
+              filter(Spp == "V") %>% 
+              mutate(herb = as.numeric(Code %in% firstherb$Code)) ))
+
+ggpredict(glm(herb ~ Ht.mm..5+H2OTmt, family = "binomial", data = final_df %>% 
+                filter(Spp == "V") %>% 
+                mutate(herb = as.numeric(Code %in% firstherb$Code)) ), terms=c("Ht.mm..5 [all]","H2OTmt") ) %>% plot(rawdata=T, colors=c("blue","red")) 
+# it sure looks like the relationship between height and herbivory depends on spp. Probably interacting with water
+
+summary(glm(herb ~ Ht.mm..5+H2OTmt, family = "binomial", data = final_df %>% 
+              filter(Spp == "L") %>% 
+              mutate(herb = as.numeric(Code %in% firstfullherb$Code)) ))
+
+ggpredict(glm(herb ~ Ht.mm..5+H2OTmt, family = "binomial", data = final_df %>% 
+                filter(Spp == "L") %>% 
+                mutate(herb = as.numeric(Code %in% firstherb$Code)) ), terms=c("Ht.mm..5 [all]","H2OTmt") ) %>% plot(rawdata=T, colors=c("blue","red")) 
+
+# now for L
+summary(glm(herb ~ Ht.mm..5+H2OTmt, family = "binomial", data = final_df %>% 
+              filter(Spp == "L") %>% 
+              mutate(herb = as.numeric(Code %in% firstherb$Code)) ))
+
+ggpredict(glm(herb ~ Ht.mm..5*H2OTmt, data = final_df %>% 
+                filter(Spp == "L") %>% 
+                mutate(herb = as.numeric(Code %in% firstfullherb$Code))), terms=c("Ht.mm..5","H2OTmt") ) %>% plot(rawdata=T, colors=c("blue","red")) 
+summary(glm(herb ~ Ht.mm..5*H2OTmt, data = final_df %>% 
+              filter(Spp == "L") %>% 
+              mutate(herb = as.numeric(Code %in% firstherb$Code)) ))
+ggpredict(glm(herb ~ Ht.mm..5*H2OTmt, data = final_df %>% 
+                filter(Spp == "L") %>% 
+                mutate(herb = as.numeric(Code %in% firstherb$Code))), terms=c("Ht.mm..5","H2OTmt") ) %>% plot(rawdata=T, colors=c("blue","red")) 
+
+
+## clean copy of Fig2 from raubenheimer
+# Fig 2 from Raubenheimer and Ripley
+# need a df where x = variable name, y, ymin, ymax are mean, mean-se, and mean+se of %∆ with CO2; group by H2OTmt
+# want to see %∆ for wet and dry plants with eCO2
+
+# start with every obs of every variable (long format) and columns for Tmt. Then summarise y, ymin, and ymax with mutate and reference to AD or AW column value
+
+# functions
+mean_narm <- function(x){
+  mean(x, na.rm=TRUE)
+}
+
+minus_se <- function(x){
+  mean(x, na.rm=TRUE) - (sd(x, na.rm = TRUE)/sqrt(length(x[!is.na(x)])))
+}
+plus_se <- function(x){
+  mean(x, na.rm=TRUE) + (sd(x, na.rm = TRUE)/sqrt(length(x[!is.na(x)])))
+}
+
+# try thinking about it for just one species, just for totmass, just for mean
+fig2_meanse <- final_df_nh %>% 
+  # fig2_meanse <- final_df %>% 
+  filter(Spp=="L") %>% 
+  select(Tmt, totmass, rootmass_g, Ht.mm..8, tot_area, rootshoot, SRL, lwc, d13C, Anet, gs, WUE) %>% 
+  # select(Tmt, totmass, rootshoot, Ht.mm..8, lwc, Anet, gs, WUE, tot_area, SRL, d13C, rootmass_g) %>%
+  rename(totarea = tot_area) %>% 
+  rename(rootmass = rootmass_g) %>% 
+  group_by(Tmt) %>% 
+  summarise_if(is.numeric, list(y=mean_narm, ymin=minus_se, ymax=plus_se)) %>% 
+  t() %>% data.frame()
+# this is good! I want the columns to be the Tmts, and I want to move rownames into 2 columns: variable and y*
+
+#names(fig2_meanse) <- fig2_meanse[1,]
+fig2_meanse <- fig2_meanse[-1,]
+fig2_meanse[,5] <- rownames(fig2_meanse)
+colnames(fig2_meanse) <- c("AD","AW","ED","EW","var_y")
+
+fig2_meanse <- separate(fig2_meanse, var_y, into = c("variable","y"), sep="_")
+# still need to percentify the tmt columns with reference to AD
+
+fig2_meanse$standardD <- c(rep(fig2_meanse[1:11,1], 3))
+fig2_meanse$standardD2 <- c(fig2_meanse[1:11,1], fig2_meanse[23:33,1], fig2_meanse[12:22,1])
+fig2_meanse$standardW <- c(rep(fig2_meanse[1:11,2], 3))
+fig2_meanse$standardW2 <- c(fig2_meanse[1:11,2], fig2_meanse[23:33,2], fig2_meanse[12:22,2])
+
+fig2_meanse <- fig2_meanse %>% 
+  mutate(across(!c("variable","y"), as.numeric)) %>% 
+  # mutate(ED1 = (ED - standardD)*100/standardD) %>%
+  # mutate(EW1 = (EW - standardW)*100/standardW) # %>% 
+  mutate(ED1 = (ED - standardD2)*100/standardD2) %>%
+  mutate(EW1 = (EW - standardW2)*100/standardW2)
+
+#  mutate_if(is.numeric, list(pct_chg = (AD - .x)*100/AD)) %>% View()
+# get Tmt to be its own column with pivot_longer
+variable_order <- c("totmass", "rootmass", "Ht.mm..8", "totarea", "rootshoot", "SRL", "lwc", "d13C", "Anet", "gs", "WUE")
+
+fig2L_nh <- fig2_meanse %>% 
+  # fig2L <- fig2_meanse %>% 
+  pivot_longer(cols=c("ED1","EW1"), names_to="Tmt", values_to="value") %>% 
+  select(variable, y, Tmt, value) %>% 
+  pivot_wider(names_from = "y", values_from = "value") %>% 
+  ggplot() +
+  geom_pointrange(aes(x=factor(variable, level=variable_order), y=y, ymin=ymin, ymax=ymax, group=Tmt, color=Tmt), size=1.2, linewidth=1.2, position=position_dodge(width=0.2)) + scale_color_manual(values=c("red","blue")) +
+  ggtitle("Quercus wislizenii (live oak), filtered") +
+  ylab("% change with eCO2") + xlab("Plant Response") +
+  theme_classic(base_size = 20) + geom_abline(color= "red", linetype="dashed", slope = 0, intercept= 0)
+
+
+# now for V!
+fig2_meanseV <- final_df_nh %>% 
+  #  fig2_meanseV <- final_df %>% 
+  filter(Spp=="V") %>% 
+  select(Tmt, totmass, rootmass_g, Ht.mm..8, tot_area, rootshoot, SRL, lwc, d13C, Anet, gs, WUE) %>% 
+  # select(Tmt, totmass, rootshoot, Ht.mm..8, lwc, Anet, gs, WUE, tot_area, SRL, d13C, rootmass_g) %>% 
+  rename(totarea = tot_area) %>% 
+  rename(rootmass = rootmass_g) %>% 
+  group_by(Tmt) %>% 
+  summarise_if(is.numeric, list(y=mean_narm, ymin=minus_se, ymax=plus_se)) %>% 
+  t() %>% data.frame()
+# this is good! I want the columns to be the Tmts, and I want to move rownames into 2 columns: variable and y*
+
+fig2_meanseV <- fig2_meanseV[-1,]
+fig2_meanseV[,5] <- rownames(fig2_meanseV)
+colnames(fig2_meanseV) <- c("AD","AW","ED","EW","var_y")
+
+fig2_meanseV <- separate(fig2_meanseV, var_y, into = c("variable","y"), sep="_")
+# still need to percentify the tmt columns with reference to AD
+
+fig2_meanseV$standardD <- c(rep(fig2_meanseV[1:11,1], 3))
+fig2_meanseV$standardD2 <- c(fig2_meanseV[1:11,1], fig2_meanseV[23:33,1], fig2_meanseV[12:22,1])
+fig2_meanseV$standardW <- c(rep(fig2_meanseV[1:11,2], 3))
+fig2_meanseV$standardW2 <- c(fig2_meanseV[1:11,2], fig2_meanseV[23:33,2], fig2_meanseV[12:22,2])
+
+fig2_meanseV <- fig2_meanseV %>% 
+  mutate(across(!c("variable","y"), as.numeric)) %>% 
+  # mutate(ED1 = (ED - standardD)*100/standardD) %>%
+  # mutate(EW1 = (EW - standardW)*100/standardW) # %>% 
+  mutate(ED1 = (ED - standardD2)*100/standardD2) %>%
+  mutate(EW1 = (EW - standardW2)*100/standardW2)
+
+#  mutate_if(is.numeric, list(pct_chg = (AD - .x)*100/AD)) %>% View()
+# get Tmt to be its own column with pivot_longer
+
+fig2V_nh <- fig2_meanseV %>% 
+  #fig2V <- fig2_meanseV %>% 
+  pivot_longer(cols=c("ED1","EW1"), names_to="Tmt", values_to="value") %>% 
+  select(variable, y, Tmt, value) %>% 
+  pivot_wider(names_from = "y", values_from = "value") %>% 
+  ggplot() +
+  geom_pointrange(aes(x=factor(variable, level=variable_order), y=y, ymin=ymin, ymax=ymax, group=Tmt, color=Tmt), size=1.2, linewidth=1.2, position=position_dodge(width=0.2)) + scale_color_manual(values=c("red","blue")) +
+  ggtitle("Quercus lobata (valley oak), filtered") +
+  ylab("% change with eCO2") + xlab("Plant Response") +
+  theme_classic(base_size = 20) + geom_abline(color= "red", linetype="dashed", slope = 0, intercept= 0)
+
+# compare filtered versions
+grid.arrange(fig2V_nh, fig2L_nh, nrow=2)
+
+# compare unfiltered versions
+grid.arrange(fig2V, fig2L, nrow=2) # not that interesting
+
+
+## attempt to do plotmeans and time-correction for Anet and gs
+fig2_meanse <- final_df_nh %>% 
+  # fig2_meanse <- final_df %>% 
+  filter(Spp=="L") %>% 
+  select(Tmt, Plot, time_scaled, totmass, rootmass_g, Ht.mm..8, tot_area, rootshoot, SRL, lwc, d13C, Anet, gs, WUE) %>% 
+  # select(Tmt, totmass, rootshoot, Ht.mm..8, lwc, Anet, gs, WUE, tot_area, SRL, d13C, rootmass_g) %>%
+  rename(totarea = tot_area) %>% 
+  rename(rootmass = rootmass_g) %>% 
+  #  mutate(gs = -0.040861*time_scaled+gs) %>% # time of day correction for gs
+  # group_by(Plot, Tmt) %>% 
+  # summarise_if(is.numeric, list(mean_narm)) %>%
+  #  mutate(Anet = -3.637*time_scaled+Anet) %>% # time of day correction for Anet (plot means for L)
+  group_by(Tmt) %>% 
+  select(!time_scaled) %>% 
+  summarise_if(is.numeric, list(y=mean_narm, ymin=minus_se, ymax=plus_se)) %>%
+  t() %>% data.frame() 
+
+# cooksd <- cooks.distance(lmer(Anet~rescale(CO2)+rescale(meanSWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="V")))
+# plot(cooks.distance(lmer(Anet~rescale(CO2)+rescale(meanSWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="V"))))
+# sample_size <- nobs(lmer(Anet~rescale(CO2)+rescale(meanSWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="V")))
+# abline(h = 4/nobs(lmer(Anet~rescale(CO2)+rescale(meanSWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="V"))), col="red")
+# text(x=1:length(cooksd)+1, y=cooksd, labels=ifelse(cooksd>4/sample_size, names(cooksd),""), col="red")  # add labels
+# # eliminate outlier from row 52, "7V1" (EW with very low Anet)
+
+cooksd <- cooks.distance(lmer(Anet~rescale(CO2)+rescale(meanSWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="L")))
+plot(cooks.distance(lmer(Anet~rescale(CO2)+rescale(meanSWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="L"))))
+sample_size <- nobs(lmer(Anet~rescale(CO2)+rescale(meanSWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="L")))
+abline(h = 4/nobs(lmer(Anet~rescale(CO2)+rescale(meanSWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="L"))), col="red")
+text(x=1:length(cooksd)+1, y=cooksd, labels=ifelse(cooksd>4/sample_size, names(cooksd),""), col="red")  # add labels
+# try it without row 53, "13L6" ... still singular
+
+prior2 <- prior(normal(0,15),class = b)
+Anet_full_L <- brm(Anet ~ rescale(CO2)*rescale(meanSWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="L"), iter=3000, prior=prior2, control = list(adapt_delta =0.99, max_treedepth = 12))
+summary(Anet_full_L)
+
+
+# trying out % change in lwc and d13C idea
+L_lwcd13C <- final_df_nh %>% 
+  filter(Spp=="L") %>% 
+  select(Tmt, H2OTmt, lwc, d13C) %>% 
+  mutate(d13C = abs(d13C)) %>% 
+  #mutate(overallmin = min(d13C, na.rm=T), overallmax=max(d13C, na.rm=T)) %>% View() # 30.71429, 46.54088; 26.29, 31.09
+  group_by(Tmt) %>%
+  summarise_if(is.numeric, list(y=mean_narm, ymin=minus_se, ymax=plus_se)) %>% 
+  t() %>% data.frame() 
+
+L_lwcd13C <- L_lwcd13C[-1,]
+L_lwcd13C[,5] <- rownames(L_lwcd13C)
+colnames(L_lwcd13C) <- c("AD","AW","ED","EW","var_y")
+L_lwcd13C <- separate(L_lwcd13C, var_y, into = c("variable","y"), sep="_")
+L_lwcd13C$standardD2 <- c(L_lwcd13C[1:2,1], L_lwcd13C[5:6,1], L_lwcd13C[3:4,1])
+L_lwcd13C$standardW2 <- c(L_lwcd13C[1:2,2], L_lwcd13C[5:6,2], L_lwcd13C[3:4,2])
+
+L_lwcd13C <- L_lwcd13C %>% 
+  mutate(across(!c("variable","y"), as.numeric)) %>% 
+  mutate(ED1_lwc = (ED - standardD2)*100/(46.54088- 30.71429)) %>%
+  mutate(EW1_lwc = (EW - standardW2)*100/(46.54088- 30.71429)) %>% 
+  mutate(ED1_d13C = (ED - standardD2)*100/(31.09-26.29)) %>%
+  mutate(EW1_d13C = (EW - standardW2)*100/(31.09-26.29))
+
+# reverse sign
+L_lwcd13C["d13C_y","ED1_d13C"] <- -L_lwcd13C["d13C_y","ED1_d13C"]
+L_lwcd13C["d13C_ymin","ED1_d13C"] <- -L_lwcd13C["d13C_ymin","ED1_d13C"]
+L_lwcd13C["d13C_ymax","ED1_d13C"] <- -L_lwcd13C["d13C_ymax","ED1_d13C"]
+
+L_lwcd13C["d13C_y","EW1_d13C"] <- -L_lwcd13C["d13C_y","EW1_d13C"]
+L_lwcd13C["d13C_ymin","EW1_d13C"] <- -L_lwcd13C["d13C_ymin","EW1_d13C"]
+L_lwcd13C["d13C_ymax","EW1_d13C"] <- -L_lwcd13C["d13C_ymax","EW1_d13C"]
+
+# add corrected d13C to table 
+fig2_meanse["d13C_y","ED1"] <- L_lwcd13C["d13C_y","ED1_d13C"]
+fig2_meanse["d13C_ymin","ED1"] <- L_lwcd13C["d13C_ymin","ED1_d13C"] 
+fig2_meanse["d13C_ymax","ED1"] <- L_lwcd13C["d13C_ymax","ED1_d13C"]
+
+fig2_meanse["d13C_y","EW1"] <- L_lwcd13C["d13C_y","EW1_d13C"]
+fig2_meanse["d13C_ymin","EW1"] <- L_lwcd13C["d13C_ymin","EW1_d13C"]
+fig2_meanse["d13C_ymax","EW1"] <- L_lwcd13C["d13C_ymax","EW1_d13C"]
+
+fig2_meanse["lwc_y","ED1"] <- L_lwcd13C["lwc_y","ED1_d13C"]
+fig2_meanse["lwc_ymin","ED1"] <- L_lwcd13C["lwc_ymin","ED1_d13C"] 
+fig2_meanse["lwc_ymax","ED1"] <- L_lwcd13C["lwc_ymax","ED1_d13C"]
+
+fig2_meanse["lwc_y","EW1"] <- L_lwcd13C["lwc_y","EW1_d13C"]
+fig2_meanse["lwc_ymin","EW1"] <- L_lwcd13C["lwc_ymin","EW1_d13C"]
+fig2_meanse["lwc_ymax","EW1"] <- L_lwcd13C["lwc_ymax","EW1_d13C"]
+
+# now for V
+V_lwcd13C <- final_df_nh %>% 
+  filter(Spp=="V") %>% 
+  select(Tmt, H2OTmt, lwc, d13C) %>% 
+  mutate(d13C = abs(d13C)) %>% 
+  #mutate(overallmin = min(lwc, na.rm=T), overallmax=max(lwc, na.rm=T)) %>% View() # 14.28571, 50; 26.62, 31.77
+  group_by(Tmt) %>%
+  summarise_if(is.numeric, list(y=mean_narm, ymin=minus_se, ymax=plus_se)) %>% 
+  t() %>% data.frame() 
+
+V_lwcd13C <- V_lwcd13C[-1,]
+V_lwcd13C[,5] <- rownames(V_lwcd13C)
+colnames(V_lwcd13C) <- c("AD","AW","ED","EW","var_y")
+V_lwcd13C <- separate(V_lwcd13C, var_y, into = c("variable","y"), sep="_")
+V_lwcd13C$standardD2 <- c(V_lwcd13C[1:2,1], V_lwcd13C[5:6,1], V_lwcd13C[3:4,1])
+V_lwcd13C$standardW2 <- c(V_lwcd13C[1:2,2], V_lwcd13C[5:6,2], V_lwcd13C[3:4,2])
+
+V_lwcd13C <- V_lwcd13C %>% 
+  mutate(across(!c("variable","y"), as.numeric)) %>% 
+  mutate(ED1_lwc = (ED - standardD2)*100/(50 - 14.28571)) %>%
+  mutate(EW1_lwc = (EW - standardW2)*100/(50 - 14.28571)) %>% 
+  mutate(ED1_d13C = (ED - standardD2)*100/(31.77-26.62)) %>%
+  mutate(EW1_d13C = (EW - standardW2)*100/(31.77-26.62))
+
+# reverse sign
+V_lwcd13C["d13C_y","ED1_d13C"] <- -V_lwcd13C["d13C_y","ED1_d13C"]
+V_lwcd13C["d13C_ymin","ED1_d13C"] <- -V_lwcd13C["d13C_ymin","ED1_d13C"]
+V_lwcd13C["d13C_ymax","ED1_d13C"] <- -V_lwcd13C["d13C_ymax","ED1_d13C"]
+
+V_lwcd13C["d13C_y","EW1_d13C"] <- -V_lwcd13C["d13C_y","EW1_d13C"]
+V_lwcd13C["d13C_ymin","EW1_d13C"] <- -V_lwcd13C["d13C_ymin","EW1_d13C"]
+V_lwcd13C["d13C_ymax","EW1_d13C"] <- -V_lwcd13C["d13C_ymax","EW1_d13C"]
+
+# add corrected d13C to table 
+fig2_meanseV["d13C_y","ED1"] <- V_lwcd13C["d13C_y","ED1_d13C"]
+fig2_meanseV["d13C_ymin","ED1"] <- V_lwcd13C["d13C_ymin","ED1_d13C"] 
+fig2_meanseV["d13C_ymax","ED1"] <- V_lwcd13C["d13C_ymax","ED1_d13C"]
+
+fig2_meanseV["d13C_y","EW1"] <- V_lwcd13C["d13C_y","EW1_d13C"]
+fig2_meanseV["d13C_ymin","EW1"] <- V_lwcd13C["d13C_ymin","EW1_d13C"]
+fig2_meanseV["d13C_ymax","EW1"] <- V_lwcd13C["d13C_ymax","EW1_d13C"]
+
+fig2_meanseV["lwc_y","ED1"] <- V_lwcd13C["lwc_y","ED1_d13C"]
+fig2_meanseV["lwc_ymin","ED1"] <- V_lwcd13C["lwc_ymin","ED1_d13C"] 
+fig2_meanseV["lwc_ymax","ED1"] <- V_lwcd13C["lwc_ymax","ED1_d13C"]
+
+fig2_meanseV["lwc_y","EW1"] <- V_lwcd13C["lwc_y","EW1_d13C"]
+fig2_meanseV["lwc_ymin","EW1"] <- V_lwcd13C["lwc_ymin","EW1_d13C"]
+fig2_meanseV["lwc_ymax","EW1"] <- V_lwcd13C["lwc_ymax","EW1_d13C"]
+
+# summary(lm(StemWet_g.x~rescale(CO2)*rescale(meanSWC), data=plotmeans.L)) 
+# 
+# Call:
+#   lm(formula = StemWet_g.x ~ rescale(CO2) * rescale(meanSWC), data = plotmeans.L)
+# 
+# Residuals:
+#   Min      1Q  Median      3Q     Max 
+# -3.2193 -0.9668 -0.3238  0.2913  4.9746 
+# 
+# Coefficients:
+#   Estimate Std. Error t value Pr(>|t|)  
+# (Intercept)                     0.9643     1.2112   0.796   0.4414  
+# rescale(CO2)                    2.2937     2.5567   0.897   0.3873  
+# rescale(meanSWC)                4.9590     2.1519   2.304   0.0399 *
+#   rescale(CO2):rescale(meanSWC)  -1.3913     4.6959  -0.296   0.7721  
+# ---
+#   Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+# 
+# Residual standard error: 2.121 on 12 degrees of freedom
+# Multiple R-squared:  0.4757,	Adjusted R-squared:  0.3447 
+# F-statistic:  3.63 on 3 and 12 DF,  p-value: 0.04511
+
+# Anova(lm(StemWet_g.x~rescale(CO2)*rescale(meanSWC), data=plotmeans.L), test = "F") 
+# Anova Table (Type II tests)
+# 
+# Response: StemWet_g.x
+# Sum Sq Df F value   Pr(>F)   
+# rescale(CO2)                   5.417  1  1.2048 0.293910   
+# rescale(meanSWC)              42.667  1  9.4885 0.009532 **
+#   rescale(CO2):rescale(meanSWC)  0.395  1  0.0878 0.772082   
+# Residuals                     53.960 12  
+
+# grid.arrange(
+#      ggpredict(lm(StemWet_g.x~rescale(CO2)*rescale(meanSWC), data=plotmeans.L), 
+#               terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="Stem Mass, L *"),
+#      ggpredict(lm(StemWet_g.x~rescale(CO2)+rescale(meanSWC), data=plotmeans.L), 
+#                       terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="Stem Mass, L +"),
+#      nrow=2)
+
 # NEVER EVER GIVE UP
 # NEVER SURRENDER
