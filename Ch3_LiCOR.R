@@ -273,8 +273,8 @@ LiCOR_2$HHMMSS <- parse_date_time(LiCOR_2$HHMMSS, orders = c("HMS"), tz = "Ameri
 
 LiCOR_all <- df_all %>% 
   select(ID, Plot, Date, HHMMSS, Ci, Photo, Cond, Tleaf, PARi, VpdL, CO2R, RH_R, RH_S, SWC, Spp) %>% 
-  rbind(filter(select(LiCOR_1, ID, Plot, Date, HHMMSS, Ci, Photo, Cond, Tleaf, PARi, VpdL, CO2R, RH_R, RH_S, SWC, Spp), ID %in% c("12L6a","16L1b", "7V1b"))) %>% 
-  rbind(filter(select(LiCOR_2, ID, Plot, Date, HHMMSS, Ci, Photo, Cond, Tleaf, PARi, VpdL, CO2R, RH_R, RH_S, SWC, Spp), ID %in% c("12L6a","16L1b", "7V1b"))) %>% 
+  # rbind(filter(select(LiCOR_1, ID, Plot, Date, HHMMSS, Ci, Photo, Cond, Tleaf, PARi, VpdL, CO2R, RH_R, RH_S, SWC, Spp), ID %in% c("12L6a","16L1b", "7V1b"))) %>% 
+  # rbind(filter(select(LiCOR_2, ID, Plot, Date, HHMMSS, Ci, Photo, Cond, Tleaf, PARi, VpdL, CO2R, RH_R, RH_S, SWC, Spp), ID %in% c("12L6a","16L1b", "7V1b"))) %>% 
   left_join(lookup, by = "Plot") %>% 
   mutate(Tmt = as.factor(Tmt)) %>% 
   filter(!is.na(Tmt)) %>% 
@@ -322,7 +322,7 @@ for(i in 1:length(LiCOR_IDs)){ # calculate linear interpolation for each ID's da
 }
 r.sq_df <- data.frame(cbind(r.sq, nobs)) %>% 
   filter(nobs > 2)
-mean(r.sq_df$r.sq) # 0.9212305
+mean(r.sq_df$r.sq) # 0.9215826
 r.sq_df$r.sq
 
 
@@ -352,7 +352,7 @@ for(i in 1:length(LiCOR_IDs)){ # calculate linear interpolation for each ID's da
 }
 Anet_r.sq_df <- data.frame(cbind(Anet_r.sq, Anet_nobs)) %>% 
   filter(Anet_nobs > 2)
-mean(Anet_r.sq_df$Anet_r.sq) # 0.7963953
+mean(Anet_r.sq_df$Anet_r.sq) # 0.8093054
 
 
 # do the same for gs
@@ -376,7 +376,7 @@ for(i in 1:length(LiCOR_IDs)){ # calculate linear interpolation for each ID's da
 }
 gs_r.sq_df <- data.frame(cbind(gs_r.sq, gs_nobs)) %>% 
   filter(gs_nobs > 2)
-mean(gs_r.sq_df$gs_r.sq) # 0.6098981
+mean(gs_r.sq_df$gs_r.sq) # 0.6110546
 
 
 newLiCOR <- left_join(LiCOR_Ci_df, LiCOR_gs_df, by="ID") %>% left_join(LiCOR_Anet_df, by="ID")
