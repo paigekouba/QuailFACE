@@ -5474,5 +5474,32 @@ fig2_meanseV["lwc_ymax","EW1"] <- V_lwcd13C["lwc_ymax","EW1_d13C"]
 #                       terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="Stem Mass, L +"),
 #      nrow=2)
 
+permanova.dfL <- plotmeans.L %>% 
+# select(Plot, totmass, rootmass_g, Ht.mm..8, Anet, gs, WUE, CO2Tmt, H2OTmt, CO2, meanSWC) %>% 
+  select(Plot, totmass, rootmass_g, Ht.mm..8, Anet, gs, WUE, CO2Tmt, H2OTmt, CO2, meanSWC) %>% 
+  filter(!if_any(everything(),is.na))
+
+response_matL <- t(permanova.dfL[,2:7])
+rowSums(response_matL)
+response_matL <- t(cbind(response_matL, rowSums(response_matL)))[1:16,] %>% 
+  data.frame() %>% 
+  mutate(totmass = totmass/174.5933667, rootmass_g = rootmass_g/66.4796667, Ht.mm..8 = Ht.mm..8/4021.7500000, Anet = Anet/110.7655665, gs = gs/0.9853415, WUE = WUE/1935.3572586)
+
+adonis2(response_matL ~ H2OTmt*CO2Tmt, permanova.dfL)
+
+permanova.dfV <- plotmeans.V %>% 
+# select(Plot, totmass, rootmass_g, Ht.mm..8, Anet, gs, WUE, CO2Tmt, H2OTmt, CO2, meanSWC) %>% 
+  select(Plot, rootmass_g, Anet, gs, CO2Tmt, H2OTmt, CO2, meanSWC) %>% 
+  filter(!if_any(everything(),is.na))
+
+response_matV <- t(permanova.dfV[,2:4])
+rowSums(response_matV)
+response_matV <- t(cbind(response_matV, rowSums(response_matV)))[1:14,] %>% 
+  data.frame() %>% 
+  mutate(rootmass_g = rootmass_g/61.900333, Anet = Anet/190.467240, gs = gs/2.022545)
+
+adonis2(response_matV ~ H2OTmt*CO2Tmt, permanova.dfV)
+
+
 # NEVER EVER GIVE UP
 # NEVER SURRENDER
