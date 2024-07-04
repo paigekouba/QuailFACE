@@ -527,3 +527,95 @@ quail_weather <- weather %>%
   theme_classic(base_size = 18)
 
 ## here is where I will make a plot comparing avg or max wind speed at the TinyFACE array vs weather station
+
+## here is where I will look at the microclimate effects of the screens
+
+PAR_df <- read.csv("/Users/paigekouba/Documents/UC_Davis/2021_Winter/Quals/Proposal/Chapter 1/TinyFACE/GitHub/QuailFACE/RawData/tinyFACE_PAR.csv")
+temp_df <- read.csv("/Users/paigekouba/Documents/UC_Davis/2021_Winter/Quals/Proposal/Chapter 1/TinyFACE/GitHub/QuailFACE/RawData/tinyFACE_T.csv")
+
+typeof(hms::parse_hm(PAR_df$time))
+
+PAR_df %>% 
+  pivot_longer(A:L, names_to = "spot", values_to = "PAR") %>% 
+  mutate(time = hms::parse_hm(time)) %>% 
+  group_by(Plot, CO2Tmt) %>% 
+ggplot() +
+  geom_point(aes(x= time, y=PAR, color=screen))
+
+PAR_df %>% 
+  pivot_longer(A:L, names_to = "spot", values_to = "PAR") %>% 
+  mutate(time = hms::parse_hm(time)) %>% 
+  mutate(sample = rep(1:8,each=96)) %>% 
+  ggplot() +
+  geom_boxplot(aes(x=as.factor(sample), y=PAR, color=screen)) 
+
+temp_df %>% 
+  pivot_longer(A:L, names_to = "spot", values_to = "temperature") %>% 
+  mutate(time = hms::parse_hm(time)) %>% 
+  group_by(Plot, CO2Tmt) %>% 
+  ggplot() +
+  geom_point(aes(x= time, y=temperature, color=screen))
+
+temp_df %>% 
+  pivot_longer(A:L, names_to = "spot", values_to = "temperature") %>% 
+  mutate(time = hms::parse_hm(time)) %>% 
+  mutate(sample = rep(1:8,each=96)) %>% 
+  ggplot() +
+  geom_boxplot(aes(x=as.factor(sample), y=temperature, color=screen)) 
+
+
+temp_diff <- temp_df %>% 
+  pivot_longer(A:L, names_to = "spot", values_to = "temperature") %>% 
+  mutate(time = hms::parse_hm(time)) %>% 
+  mutate(sample = rep(1:8,each=96)) %>% 
+  select(!time) %>% 
+  group_by(sample, Plot, spot) %>% 
+# group_by(sample, Plot, CO2Tmt, screen) %>% 
+# summarise_if(is.numeric, list(y=mean_narm, ymin=minus_se, ymax=plus_se)) %>% 
+  pivot_wider(names_from = screen, values_from = temperature) %>% 
+  mutate(diff = o - i) %>% 
+  group_by(Plot, sample) %>% 
+  summarise(mean_i = mean(i), mean_o = mean(o)) # t = -0.7146, df = 61.635, p-value = 0.4776; mean of x mean of y 40.36198  43.29245 
+# ggplot(temp_diff) + geom_density(aes(x=temperature, group =screen, color=screen))
+
+# Welch Two Sample t-test
+# 
+# data:  temp_diff$mean_i and temp_diff$mean_o
+# t = -0.7146, df = 61.635, p-value = 0.4776
+# alternative hypothesis: true difference in means is not equal to 0
+# 95 percent confidence interval:
+#   -11.128863   5.267926
+# sample estimates:
+#   mean of x mean of y 
+# 40.36198  43.29245 
+# 100*abs(40.36198 - 43.29245)/43.29245
+# [1] 6.769009
+
+PAR_diff <- PAR_df %>% 
+  pivot_longer(A:L, names_to = "spot", values_to = "PAR") %>% 
+  mutate(time = hms::parse_hm(time)) %>% 
+  mutate(sample = rep(1:8,each=96)) %>% 
+  select(!time) %>% 
+  group_by(sample, Plot, spot) %>% 
+  # group_by(sample, Plot, CO2Tmt, screen) %>% 
+  # summarise_if(is.numeric, list(y=mean_narm, ymin=minus_se, ymax=plus_se)) %>% 
+  pivot_wider(names_from = screen, values_from = PAR) %>% 
+  mutate(diff = o - i) %>% 
+  group_by(Plot, sample) %>% 
+  summarise(mean_i = mean(i), mean_o = mean(o))
+
+# Welch Two Sample t-test
+# 
+# data:  PAR_diff$mean_i and PAR_diff$mean_o
+# t = -0.58992, df = 61.913, p-value = 0.5574
+# alternative hypothesis: true difference in means is not equal to 0
+# 95 percent confidence interval:
+#   -425.8269  231.7681
+# sample estimates:
+#   mean of x mean of y 
+# 666.6964  763.7258 
+# 
+# > 666.6964/763.7258
+# [1] 0.8729526
+ 
+#  summarise(meanT = mean(temperature), sdT = sd(temperature), seT = sd(temperature)/sqrt(n)) %>% 
