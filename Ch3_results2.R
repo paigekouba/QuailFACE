@@ -373,8 +373,9 @@ grid.arrange(
             terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="WUE, L +") )
 #summary(lm(WUE~rescale(CO2)+rescale(meanSWC), data=plotmeans.V)) 
 #summary(lm(WUE~rescale(CO2)+rescale(meanSWC)+time_scaled, data=plotmeans.V)) 
-summary(lmer(WUE~rescale(CO2)*rescale(meanSWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="V")))
+#summary(lmer(WUE~rescale(CO2)*rescale(meanSWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="V")))
 summary(lmer(WUE~rescale(CO2)+rescale(meanSWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="V")))
+Anova(lmer(WUE~rescale(CO2)+rescale(meanSWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="V")), test = "F")
 plot(lmer(WUE~rescale(CO2)+rescale(meanSWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="V")))
 qqmath(lmer(WUE~rescale(CO2)+rescale(meanSWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="V")))
 shapiro.test(resid(lmer(WUE~rescale(CO2)+rescale(meanSWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="V")))) # W = 0.97932, p-value = 0.7514
@@ -530,6 +531,7 @@ qqPlot(lm(rootmass_g~rescale(CO2)+rescale(meanSWC), data=plotmeans.V))
 shapiro.test(resid(lm(rootmass_g~rescale(CO2)+rescale(meanSWC), data=plotmeans.V))) # W = 0.97232, p-value = 0.8746
 
 summary(lm(rootmass_g~rescale(CO2)+rescale(meanSWC), data=plotmeans.L)) 
+Anova(lm(rootmass_g~rescale(CO2)+rescale(meanSWC), data=plotmeans.L)) 
 plot(lm(rootmass_g~rescale(CO2)+rescale(meanSWC), data=plotmeans.L))
 qqPlot(lm(rootmass_g~rescale(CO2)+rescale(meanSWC), data=plotmeans.L))
 shapiro.test(resid(lm(rootmass_g~rescale(CO2)+rescale(meanSWC), data=plotmeans.L))) # W = 0.96603, p-value = 0.7709
@@ -839,3 +841,13 @@ grid.arrange(fig2V_nh, fig2L_nh, nrow=2)
 # compare unfiltered versions
 # grid.arrange(fig2V, fig2L, nrow=2) # not that interesting
 
+# model plots with interaction terms
+grid.arrange(
+  ggpredict(lm(Ht.mm..8~rescale(CO2)*rescale(meanSWC), data=plotmeans.L), 
+            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="Final Height (mm)"),
+  ggpredict(lm(SRL~rescale(CO2)*rescale(meanSWC), data=plotmeans.L), 
+            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="Specifc Root Length (mm/g)"),
+  ggpredict(lm(Anet~rescale(CO2)*rescale(meanSWC), data=plotmeans.L),
+            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="Anet (µmol CO2/m2/s)"),
+  ggpredict(lmer(gs~rescale(CO2)*rescale(meanSWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="L",)), 
+            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="Stomatal Conductance (mmol H2O/m2/s)"))
