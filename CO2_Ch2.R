@@ -305,7 +305,7 @@ CO2_total_corr %>%
 # also need aCO2 interpolated for broken-pump days
 # then, scale 10/9 plotwise eCO2 values to overall average
 
-CO2_total_corr %>% 
+CO2_Oaks <- CO2_total_corr %>% 
   group_by(month=cut(TIMESTAMP, breaks = "1 month")) %>% 
   mutate(month=ymd(month)) %>% 
   # ggplot() +
@@ -418,6 +418,11 @@ ggplot(avg_between, aes(factor(Plot, levels = c("1","2","3","4","5","6","7","8",
   geom_point() +
   geom_pointrange(data = avg_between, aes(ymin=(mDeltaTest - sd), ymax = (mDeltaTest + sd))) +
   theme_classic(base_size = 20)
+
+plot_CO2 <- left_join(avg_between, plot_CO2., by = "Plot") %>% 
+  ggplot() +
+  geom_pointrange(mapping=aes(x=factor(Plot, levels = c("1","2","3","4","5","6","7","8","9","10","11","12","13","14","15","16")), ymin=(CO2 - sd), y= CO2, ymax = (CO2 + sd)), size=1) +
+  xlab(label = "Plot") + theme_classic(base_size=20)
 
 # within-plot testing: 3/27/24
 
