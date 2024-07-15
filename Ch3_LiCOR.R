@@ -246,7 +246,7 @@ df_all <- rbind(df4, df3_nonoverlapping)
 
 
 
-# add in Survey 1 and 2
+# read in Survey 1 and 2
 
 LiCOR_1 <- read.csv("RawData/LiCOR_6.15.23.csv")
 LiCOR_2 <- read.csv("RawData/LiCOR_7.28.23.csv")
@@ -427,3 +427,91 @@ t.test(plot_SWC.[plot_SWC.$Plot %in% c(3,8,12,16),"meanSWC"],plot_SWC.[plot_SWC.
 
 t.test(plot_SWC.[plot_SWC.$Plot %in% c(1,5,10,14),"meanSWC"],plot_SWC.[plot_SWC.$Plot %in% c(4,7,11,15),"meanSWC"]) # p = 0.522 for AW v. EW
 # redo this for SWC_plot
+
+
+# creating new plot_SWC. df to restore results
+# plot_SWC. <- LiCOR_all[,c("Plot", "SWC")] %>% 
+#   group_by(Plot) %>% 
+#   summarise(meanSWC=mean(SWC)) %>% 
+#   as.data.frame()
+
+# plot_SWC. (plot means at time of LiCOR meas.) depend on which subset of points are included in the LiCOR df.
+# at one point it was just 3 and 4; then it was 3 and 4 and 1 and 2 (maybe only 3 from 1 and 2); then it was 4 and any extras that 3 could add
+# try all those 
+# just 3 and 4, with df_all <- rbind(df3, df4) 
+# just 3 and 4, only non-overlapping from 3
+# 3 and 4 (all) and 1 and 2 (points)
+# 3 and 4 (all) and 1 and 2 (all)
+# LiCOR_all <- rbind(df3, df4) %>% 
+#   select(ID, Plot, Date, HHMMSS, Ci, Photo, Cond, Tleaf, PARi, VpdL, CO2R, RH_R, RH_S, SWC, Spp) %>% 
+#   rbind(select(LiCOR_1, ID, Plot, Date, HHMMSS, Ci, Photo, Cond, Tleaf, PARi, VpdL, CO2R, RH_R, RH_S, SWC, Spp)) %>% 
+#   rbind(select(LiCOR_2, ID, Plot, Date, HHMMSS, Ci, Photo, Cond, Tleaf, PARi, VpdL, CO2R, RH_R, RH_S, SWC, Spp)) %>% 
+#   left_join(lookup, by = "Plot") %>% 
+#   mutate(Tmt = as.factor(Tmt)) %>% 
+#   filter(!is.na(Tmt)) %>% 
+#   filter(Ci > 0, Photo > 0)
+# that was it!! SWC at the time of the t.tests was plotwise means from all points, all surveys
+# now test non-LiCOR responses: rootmass (not dependent on herbivory filter) and totmass (depends on herbivory filter)
+
+# plot_SWC. <- LiCOR_all[,c("Plot", "SWC")] %>% 
+#   group_by(Plot) %>% 
+#   summarise(meanSWC=mean(SWC)) %>% 
+#   as.data.frame()
+
+plot_SWC. <- rbind(df3, df4) %>% 
+  select(ID, Plot, Date, HHMMSS, Ci, Photo, Cond, Tleaf, PARi, VpdL, CO2R, RH_R, RH_S, SWC, Spp) %>% 
+  rbind(select(LiCOR_1, ID, Plot, Date, HHMMSS, Ci, Photo, Cond, Tleaf, PARi, VpdL, CO2R, RH_R, RH_S, SWC, Spp)) %>% 
+  rbind(select(LiCOR_2, ID, Plot, Date, HHMMSS, Ci, Photo, Cond, Tleaf, PARi, VpdL, CO2R, RH_R, RH_S, SWC, Spp)) %>% 
+  left_join(lookup, by = "Plot") %>% 
+  mutate(Tmt = as.factor(Tmt)) %>% 
+  filter(!is.na(Tmt)) %>% 
+  filter(Ci > 0, Photo > 0) %>% 
+  select(Plot, SWC) %>% 
+  group_by(Plot) %>% 
+  summarise(meanSWC=mean(SWC)) %>% 
+  as.data.frame()
+  
+licor_SWC.1 <- df3 %>%
+  select(ID, Plot, Date, HHMMSS, Ci, Photo, Cond, Tleaf, PARi, VpdL, CO2R, RH_R, RH_S, SWC, Spp) %>%
+  left_join(lookup, by = "Plot") %>%
+  mutate(Tmt = as.factor(Tmt)) %>%
+  filter(!is.na(Tmt)) %>%
+  filter(Ci > 0, Photo > 0) %>%
+  select(Plot, SWC) %>%
+  group_by(Plot) %>%
+  summarise(meanSWC=mean(SWC)) %>%
+  as.data.frame()
+
+licor_SWC. <- df_all[,c("Plot", "SWC")] %>%
+  group_by(Plot) %>%
+  summarise(meanSWC=mean(SWC)) %>%
+  as.data.frame()
+
+licor_SWC.update <- df_all[,c("ID", "SWC")] %>%
+  group_by(ID) %>%
+  summarise(SWC=mean(SWC)) %>%
+  mutate(Code = if_else(nchar(ID)==4,substr(ID,1,3),substr(ID,1,4)))  # shortcode
+
+# truly, the SWC values should come from where? for LiCOR stuff, makes sense to only use values from the specific measurement. For everything else, makes sense to average as many samples as possible. Not sure I can do that; sure I can. one SWC column for state responses, one for fluxes
+
+# all-time all SWC measurements, one per plot per date
+all_SWC <- df_all %>% 
+  select(ID, Plot, Date, HHMMSS, Ci, Photo, Cond, Tleaf, PARi, VpdL, CO2R, RH_R, RH_S, SWC, Spp) %>% 
+  rbind(filter(select(LiCOR_1, ID, Plot, Date, HHMMSS, Ci, Photo, Cond, Tleaf, PARi, VpdL, CO2R, RH_R, RH_S, SWC, Spp), ID %in% c("12L6a","16L1b", "7V1b"))) %>% 
+  rbind(filter(select(LiCOR_2, ID, Plot, Date, HHMMSS, Ci, Photo, Cond, Tleaf, PARi, VpdL, CO2R, RH_R, RH_S, SWC, Spp), ID %in% c("12L6a","16L1b", "7V1b"))) %>% 
+  left_join(lookup, by = "Plot") %>% 
+  mutate(Tmt = as.factor(Tmt)) %>% 
+  filter(!is.na(Tmt)) %>% group_by(Date, Plot, Tmt) %>% summarise(SWC = mean(SWC)) %>% group_by(Plot, SWC, Tmt) %>% summarise(SWC = mean(SWC)) %>% 
+  mutate(H2OTmt = substr(Tmt,2,2)) %>% 
+  mutate(CO2Tmt = substr(Tmt,1,1)) %>% 
+  ungroup() %>% 
+  left_join(plot_CO2., by = "Plot") 
+
+summary(lm(SWC ~ CO2Tmt*H2OTmt, all_SWC)) # no CO2, no intxn
+summary(lm(SWC ~ CO2Tmt, all_SWC)) # p = 0.92
+summary(lm(SWC ~ CO2, all_SWC)) # p = 0.63
+summary(lm(SWC ~ CO2*H2OTmt, all_SWC)) # p = 0.78
+ggplot(filter(all_SWC, H2OTmt == "D")) + geom_point(aes(x=Tmt, y=SWC, color=CO2Tmt)) # this is maybe a thing?
+ggplot(filter(all_SWC, H2OTmt == "W")) + geom_point(aes(x=Tmt, y=SWC, color=CO2Tmt))
+t.test(all_SWC[all_SWC$Tmt=="AD","SWC"],all_SWC[all_SWC$Tmt=="ED","SWC"]) # p = 0.21
+summary(lm(SWC ~ CO2Tmt, filter(all_SWC, H2OTmt == "D"))) # B = 0.86, p = 0.21
