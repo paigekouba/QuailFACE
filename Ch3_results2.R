@@ -5,17 +5,40 @@
 ## load the data fresh with "." suffix; do steps from Ch3_explore and Ch3_LiCOR. Examine colnames
 # need Ch3_LiCOR and Ch3_explore
 
-plot_SWC. <- LiCOR_all[,c("Plot", "SWC")] %>% 
-  group_by(Plot) %>% 
+# plot_SWC. <- LiCOR_all[,c("Plot", "SWC")] %>% 
+#   group_by(Plot) %>% 
+#   summarise(meanSWC=mean(SWC)) %>% 
+#   as.data.frame()
+plot_SWC. <- rbind(df3, df4) %>% 
+  select(ID, Plot, Date, HHMMSS, Ci, Photo, Cond, Tleaf, PARi, VpdL, CO2R, RH_R, RH_S, SWC, Spp) %>% 
+  rbind(select(LiCOR_1, ID, Plot, Date, HHMMSS, Ci, Photo, Cond, Tleaf, PARi, VpdL, CO2R, RH_R, RH_S, SWC, Spp)) %>% 
+  rbind(select(LiCOR_2, ID, Plot, Date, HHMMSS, Ci, Photo, Cond, Tleaf, PARi, VpdL, CO2R, RH_R, RH_S, SWC, Spp)) %>% 
+  left_join(lookup, by = "Plot") %>% 
+  mutate(Tmt = as.factor(Tmt)) %>% 
+  filter(!is.na(Tmt)) %>% 
+  filter(Ci > 0, Photo > 0) %>% 
+  # select(Plot, SWC) %>% 
+  select(Plot, SWC, Date) %>% 
+  group_by(Plot, Date) %>% 
   summarise(meanSWC=mean(SWC)) %>% 
+  group_by(Plot) %>% 
+  summarise(meanSWC=mean(meanSWC)) %>% 
   as.data.frame()
+
+# licor_SWC. <- df_all[,c("Plot", "SWC")] %>%
+#   group_by(Plot) %>%
+#   summarise(licorSWC=mean(SWC)) %>%
+#   as.data.frame()
+# want to redo this so that the codes in survey 4 get the SWC from survey 4; ones from 3 get 3
+
 
 
 LiCOR_df. <- LiCOR_new %>% 
   mutate(WUE = Anet/gs) %>% 
   mutate(CO2Tmt = substring(Tmt,1,1), H2OTmt = substring(Tmt,2,2)) %>% 
   mutate(Code = if_else(nchar(ID) == 4,substr(ID,1,3),substr(ID,1,4))) %>% 
-  left_join(plot_CO2., by = "Plot")
+  left_join(plot_CO2., by = "Plot") %>% 
+  left_join(licor_SWC., by = "Plot")
 
 # biomass2
 # jeez too many steps. get this one after Ch3_explore, it is messy but w/e
@@ -91,7 +114,7 @@ library(car)
 
  final_df <- biomass2. %>% 
   dplyr::select(Plot, Spp, Code, StemWet_g, totmass, rootshoot, rootmass_g, Ht.mm..5, Ht.mm..8, lwc, CO2, meanSWC) %>% 
-  left_join(LiCOR_df.[,c("Code","Anet","gs", "WUE", "HHMMSS")], by = "Code") %>% 
+  left_join(LiCOR_df.[,c("Code","Anet","gs", "WUE", "HHMMSS", "licorSWC")], by = "Code") %>% 
   left_join(lai.[,c("Code","avg_area","perim_per_A","tot_area", "SLA")], by = "Code") %>% 
   left_join(rootimage.[,c("Code","SRL")], by = "Code") %>% 
   left_join(SIF.[,c("Code","d13C")], by = "Code") %>% 
@@ -102,12 +125,15 @@ library(car)
   mutate(H2OTmt = substr(Tmt,2,2), CO2Tmt = substr(Tmt,1,1)) %>% 
    ungroup() %>% 
    mutate(time_scaled = rescale(HHMMSS)) 
+ 
+final_df <- left_join(final_df, licor_SWC.update, by = "Code")
 
 # response variables
 names(final_df)
-# [1] "Plot"        "Spp"         "Code"        "totmass"     "rootshoot"   "rootmass_g"  "Ht.mm..8"    "lwc"        
-# [9] "CO2"         "meanSWC"     "Anet"        "gs"          "WUE"         "avg_area"    "perim_per_A" "tot_area"   
-# [17] "SLA"         "SRL"         "d13C"        "n"           "Tmt"         "H2OTmt"      "CO2Tmt"  
+# [1] "Plot"        "Spp"         "Code"        "StemWet_g"   "totmass"     "rootshoot"   "rootmass_g"  "Ht.mm..5"   
+# [9] "Ht.mm..8"    "lwc"         "CO2"         "meanSWC"     "Anet"        "gs"          "WUE"         "HHMMSS"     
+# [17] "licorSWC"    "avg_area"    "perim_per_A" "tot_area"    "SLA"         "SRL"         "d13C"        "n"    
+# [25] "Tmt"         "H2OTmt"      "CO2Tmt"      "time_scaled" "ID"          "SWC"  
 
 # want to compare full data with filtered(for herbivory)
 
@@ -132,411 +158,467 @@ library(MuMIn)
 plotmeans.V <- final_df_nh %>% 
   filter(Spp == "V") %>% 
   mutate(time_scaled = rescale(HHMMSS)) %>% 
-  group_by(Plot, H2OTmt, CO2Tmt, meanSWC, CO2,) %>% 
-  summarise(across(is.numeric, ~ mean(.x, na.rm=T)))
+  group_by(Plot, H2OTmt, CO2Tmt, meanSWC, CO2) %>% 
+  summarise(across(is.numeric, ~ mean(.x, na.rm=T))) %>% 
+  select(!licorSWC) %>% # drop this one, didn't use anyway
+  rename(licorSWC = SWC) %>% # retain per-measurement SWC values and rename "licorSWC"
+  rename(SWC = meanSWC) # now the per-plot all time mean SWC has the same name in this df as the licor-measurement-specific SWC in the final_df
+# this will be confusing, sorry; need to run all models in a loop with the same predictor variables. "SWC" in the licor models refers to per-measurement, while "meanSWC" in plot-means level models has referred to average of all sampling dates. 
+
 plotmeans.L <- final_df_nh %>% 
   filter(Spp == "L") %>% 
   mutate(time_scaled = rescale(HHMMSS)) %>% 
-  group_by(Plot, H2OTmt, CO2Tmt, meanSWC, CO2,) %>% 
-  summarise(across(is.numeric, ~ mean(.x, na.rm=T)))
+  group_by(Plot, H2OTmt, CO2Tmt, meanSWC, CO2) %>%  # adding SWC, time-of-licor SWC
+  summarise(across(is.numeric, ~ mean(.x, na.rm=T))) %>% 
+  select(!licorSWC) %>% # drop this one, didn't use anyway
+  rename(licorSWC = SWC) %>% # retain per-measurement SWC values and rename "licorSWC"
+  rename(SWC = meanSWC)
 
 # and plot means with non-filtered data, just to see
-plotmeans.V2 <- final_df %>% 
-  filter(Spp == "V") %>% 
-  mutate(time_scaled = rescale(HHMMSS)) %>% 
-  group_by(Plot, H2OTmt, CO2Tmt, meanSWC, CO2,) %>% 
-  summarise(across(is.numeric, ~ mean(.x, na.rm=T)))
-plotmeans.L2 <- final_df %>% 
-  filter(Spp == "L") %>% 
-  mutate(time_scaled = rescale(HHMMSS)) %>% 
-  group_by(Plot, H2OTmt, CO2Tmt, meanSWC, CO2,) %>% 
-  summarise(across(is.numeric, ~ mean(.x, na.rm=T)))
+# plotmeans.V2 <- final_df %>% 
+#   filter(Spp == "V") %>% 
+#   mutate(time_scaled = rescale(HHMMSS)) %>% 
+#   group_by(Plot, H2OTmt, CO2Tmt, meanSWC, CO2,) %>% 
+#   summarise(across(is.numeric, ~ mean(.x, na.rm=T)))
+# plotmeans.L2 <- final_df %>% 
+#   filter(Spp == "L") %>% 
+#   mutate(time_scaled = rescale(HHMMSS)) %>% 
+#   group_by(Plot, H2OTmt, CO2Tmt, meanSWC, CO2,) %>% 
+#   summarise(across(is.numeric, ~ mean(.x, na.rm=T)))
 
-# workflow: AICc of full (intx), reduced (additive) and null (~ 1 or ~(1|Plot). Then, interpret results the old way (summary) and new way (Anova)
+# workflow: AICc of full (intx), reduced (additive) and null (~ 1 or ~(1|Plot). Then, interpret results the old way (summary) 
+# AICc(lm(totmass ~ rescale(CO2) * rescale(SWC), data = plotmeans.V),
+#      lm(totmass ~ rescale(CO2) + rescale(SWC), data = plotmeans.V),
+#      lm(totmass ~ 1, data = plotmeans.V) ,
+#      lm(totmass ~ rescale(CO2) * rescale(SWC), data = plotmeans.L),
+#      lm(totmass ~ rescale(CO2) + rescale(SWC), data = plotmeans.L),
+#      lm(totmass ~ 1, data = plotmeans.L))
+
+# Anet
+AICc(lmer(Anet~rescale(CO2)*rescale(SWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="V")), 
+     lmer(Anet~rescale(CO2)*rescale(SWC) + (1|Plot), data=filter(final_df,Spp=="V")),
+     lmer(Anet~rescale(CO2)+rescale(SWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="V")),
+     lmer(Anet~rescale(CO2)+rescale(SWC) + (1|Plot), data=filter(final_df,Spp=="V")),
+     lmer(Anet~ (1|Plot), data=filter(final_df,Spp=="V")))
+#                                                                                                      df     AICc
+# lmer(Anet ~ rescale(CO2) * rescale(SWC) + time_scaled + (1 | Plot), data = filter(final_df, Spp == "V"), REML = F) 199.9021
+# lmer(Anet ~ rescale(CO2) * rescale(SWC) + (1 | Plot), data = filter(final_df, Spp == "V"), REML = F)               202.0897
+# lmer(Anet ~ rescale(CO2) + rescale(SWC) + time_scaled + (1 | Plot), data = filter(final_df, Spp == "V"), REML = F) 196.6538 !
+# lmer(Anet ~ rescale(CO2) + rescale(SWC) + (1 | Plot), data = filter(final_df, Spp == "V"), REML = F)               199.4203
+# lmer(Anet ~ rescale(SWC) + time_scaled + (1 | Plot), data = filter(final_df, Spp == "V"), REML = F)                201.9527
+# lmer(Anet ~ rescale(SWC) + (1 | Plot), data = filter(final_df, Spp == "V"), REML = F)                              202.3613
+# lmer(Anet ~ (1 | Plot), data = filter(final_df, Spp == "V"))                                                       212.4424
+# lmer(Anet ~ rescale(CO2) * rescale(SWC) + time_scaled + (1 | Plot), data = filter(final_df, Spp=="L"))7 201.4709 !
+# lmer(Anet ~ rescale(CO2) * rescale(SWC) + (1 | Plot), data = filter(final_df, Spp == "L"))            6 205.0818
+# lmer(Anet ~ rescale(CO2) + rescale(SWC) + time_scaled + (1 | Plot), data = filter(final_df, Spp=="L"))6 206.5464
+# lmer(Anet ~ rescale(CO2) + rescale(SWC) + (1 | Plot), data = filter(final_df, Spp == "L"))            5 209.6873
+# lmer(Anet ~ (1 | Plot), data = filter(final_df, Spp == "L"))                                          3 238.3906
+grid.arrange(
+  ggpredict(lmer(Anet~rescale(CO2)*rescale(SWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="V"), REML = F), 
+            terms=c("CO2","SWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="Anet, V *"),
+  ggpredict(lmer(Anet~rescale(CO2)+rescale(SWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="V"), REML = F), 
+            terms=c("CO2","SWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="Anet, V +"),
+  ggpredict(lm(Anet~rescale(CO2)*rescale(SWC)+time_scaled, data=plotmeans.L),
+            terms=c("CO2","SWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="Anet, L *"),
+  ggpredict(lm(Anet~rescale(CO2)+rescale(SWC)+time_scaled, data=plotmeans.L),
+            terms=c("CO2","SWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="Anet, L +") )
+
+lmtest::lrtest(lmer(Anet~rescale(CO2)*rescale(SWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="V"), REML = F), lmer(Anet~rescale(CO2)+rescale(SWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="V"), REML = F))
+lmtest::lrtest(lmer(Anet~rescale(CO2)+rescale(SWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="V"), REML = F), lmer(Anet~(1|Plot), data=filter(final_df,Spp=="V"), REML = F))
+summary(lmer(Anet~rescale(CO2)+rescale(SWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="V"), REML = F))
+Anova(lmer(Anet~rescale(CO2)+rescale(SWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="V"), REML = F))
+#   rescale(CO2)  8.8655  1 10.490 0.0131965 *  
+#   rescale(SWC) 25.8083  1 12.148 0.0002605 ***
+#   time_scaled   4.7224  1 28.994 0.0380844 *  
+plot(lmer(Anet~rescale(CO2)+rescale(SWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="V"), REML = F))
+qqmath(lmer(Anet~rescale(CO2)+rescale(SWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="V"), REML = F))
+shapiro.test(resid(lmer(Anet~rescale(CO2)+rescale(SWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="V")), REML = F)) # W = 0.96187, p-value = 0.2916
+
+lmtest::lrtest(lm(Anet~rescale(CO2)*rescale(SWC)+time_scaled, data=plotmeans.L), lm(Anet~rescale(CO2)+rescale(SWC)+time_scaled, data=plotmeans.L)) # Chisq 7.4256  p = 0.00643
+m9L <- lm(Anet~rescale(CO2)*rescale(SWC)+time_scaled, data=plotmeans.L)
+summary(lm(Anet~rescale(CO2)*rescale(SWC)+time_scaled, data=plotmeans.L))
+Anova(lm(Anet~rescale(CO2)*rescale(SWC)+time_scaled, data=plotmeans.L),test = "Chisq") 
+plot(lm(Anet~rescale(CO2)*rescale(SWC)+time_scaled, data=plotmeans.L))
+qqPlot(lm(Anet~rescale(CO2)*rescale(SWC)+time_scaled, data=plotmeans.L))
+shapiro.test(resid(lm(Anet~rescale(CO2)*rescale(SWC)+time_scaled, data=plotmeans.L))) 
+# W = 0.96421, p-value = 0.7384
+
+# gs
+#                                                                                                        df      AICc
+# lmer(gs ~ rescale(CO2) * rescale(SWC) + time_scaled + (1 | Plot), data = filter(final_df, Spp == "V"), REML = F) -88.74690
+# lmer(gs ~ rescale(CO2) * rescale(SWC) + (1 | Plot), data = filter(final_df, Spp == "V"), REML = F)               -78.38325
+# lmer(gs ~ rescale(CO2) + rescale(SWC) + time_scaled + (1 | Plot), data = filter(final_df, Spp == "V"), REML = F) -90.95246 !
+# lmer(gs ~ rescale(CO2) + rescale(SWC) + (1 | Plot), data = filter(final_df, Spp == "V"), REML = F)               -81.32323
+# lmer(gs ~ rescale(SWC) + time_scaled + (1 | Plot), data = filter(final_df, Spp == "V"), REML = F)                -91.97357
+# lmer(gs ~ rescale(SWC) + (1 | Plot), data = filter(final_df, Spp == "V"), REML = F)                              -83.08519
+# lmer(gs ~ (1 | Plot), data = filter(final_df, Spp == "V"))                                                       -68.87320
+# lmer(gs ~ rescale(CO2) * rescale(SWC) + time_scaled + (1 | Plot), data = filter(final_df, Spp == "L"))  7 -126.4734
+# lmer(gs ~ rescale(CO2) * rescale(SWC) + (1 | Plot), data = filter(final_df, Spp == "L"))                6 -131.3191
+# lmer(gs ~ rescale(CO2) + rescale(SWC) + time_scaled + (1 | Plot), data = filter(final_df, Spp == "L"))  6 -133.7673
+# lmer(gs ~ rescale(CO2) + rescale(SWC) + (1 | Plot), data = filter(final_df, Spp == "L"))                5 -138.4280
+# lmer(gs ~ (1 | Plot), data = filter(final_df, Spp == "L"))                                              3 -128.9129
+
+grid.arrange(
+  ggpredict(lmer(gs~rescale(CO2)*rescale(SWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="V")), 
+            terms=c("CO2","SWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="gs, V *"),
+  ggpredict(lmer(gs~rescale(CO2)+rescale(SWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="V")), 
+            terms=c("CO2","SWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="gs, V +"),
+  ggpredict(lmer(gs~rescale(CO2)*rescale(SWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="L",)), 
+            terms=c("CO2","SWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="gs, L *"),
+  ggpredict(lmer(gs~rescale(CO2)+rescale(SWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="L",)), 
+            terms=c("CO2","SWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="gs, L +") )
+lmtest::lrtest(lmer(gs~rescale(CO2)*rescale(SWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="V"), REML = F), lmer(gs~rescale(CO2)+rescale(SWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="V"), REML = F))
+lmtest::lrtest(lmer(gs~rescale(CO2)+rescale(SWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="V"), REML = F), lmer(gs~(1|Plot), data=filter(final_df,Spp=="V"), REML = F))
+summary(lmer(gs~rescale(CO2)+rescale(SWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="V"), REML =F))
+Anova(lmer(gs~rescale(CO2)+rescale(SWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="V")),  REML = F)
+plot(lmer(gs~rescale(CO2)+rescale(SWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="V"),  REML = F))
+qqmath(lmer(gs~rescale(CO2)+rescale(SWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="V"),  REML = F))
+shapiro.test(resid(lmer(gs~rescale(CO2)+rescale(SWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="V"),  REML = F))) # W = 0.98615, p-value = 0.9404
+
+lmtest::lrtest(lmer(gs~rescale(CO2)*rescale(SWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="L"), REML = F), lmer(gs~rescale(CO2)+rescale(SWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="L"), REML = F))
+lmtest::lrtest(lmer(gs~rescale(CO2)+rescale(SWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="L"), REML = F), lmer(gs~(1|Plot), data=filter(final_df,Spp=="L"), REML = F))
+# lmtest::lrtest(lm(gs~rescale(CO2)*rescale(SWC)+time_scaled, data=plotmeans.L), lm(gs~rescale(CO2)+rescale(SWC)+time_scaled, data=plotmeans.L))
+# lmtest::lrtest(lm(gs~rescale(CO2)+rescale(SWC)+time_scaled, data=plotmeans.L), lm(gs~1, data=plotmeans.L))
+m10L <- lmer(gs~rescale(CO2)+rescale(SWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="L"), REML=F)
+summary(lmer(gs~rescale(CO2)+rescale(SWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="L"), REML=F))
+Anova(lmer(gs~rescale(CO2)+rescale(SWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="L")), test = "Chisq")
+plot(lmer(gs~rescale(CO2)+rescale(SWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="L")))
+qqmath(lmer(gs~rescale(CO2)+rescale(SWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="L")))
+shapiro.test(resid(lmer(gs~rescale(CO2)*rescale(SWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="L")))) # W = 0.98024, p-value = 0.6986
+
+# WUE
+#                                                                                                         df     AICc
+# lmer(WUE~rescale(CO2)*rescale(SWC)+time_scaled+(1 | Plot), data = filter(final_df, Spp == "V"), REML = F) 342.6410
+# lmer(WUE~rescale(CO2)*rescale(SWC)+(1|Plot), data = filter(final_df, Spp=="V"), REML = F)               341.1428
+# lmer(WUE~rescale(CO2)+rescale(SWC)+time_scaled + (1 | Plot), data=filter(final_df, Spp == "V"), REML = F) 339.4176
+# lmer(WUE~rescale(CO2)+rescale(SWC)+(1|Plot), data = filter(final_df, Spp == "V"), REML = F)               338.2818
+# lmer(WUE~rescale(SWC)+time_scaled+(1|Plot), data = filter(final_df, Spp == "V"), REML = F)                339.1313
+# lmer(WUE~rescale(SWC)+(1|Plot), data = filter(final_df,Spp=="V"), REML = F)                              338.0053
+# lmer(WUE~(1|Plot), data = filter(final_df, Spp == "V"))                                                 336.5598 !
+grid.arrange(
+  ggpredict(lmer(WUE~rescale(CO2)*rescale(SWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="V"), REML = F), 
+            terms=c("CO2","SWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="WUE, V *"),
+  ggpredict(lmer(WUE~rescale(CO2)+rescale(SWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="V"), REML = F), 
+            terms=c("CO2","SWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="WUE, V +"),
+  ggpredict(lmer(WUE~rescale(CO2)*rescale(SWC) + (1|Plot), data=filter(final_df,Spp=="L"), REML = F), 
+            terms=c("CO2","SWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="WUE, L *"),
+  ggpredict(lmer(WUE~rescale(CO2)+rescale(SWC) + (1|Plot), data=filter(final_df,Spp=="L"), REML = F), 
+            terms=c("CO2","SWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="WUE, L +") )
+lmtest::lrtest(lmer(WUE~rescale(CO2)*rescale(SWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="V"), REML = F), lmer(WUE~rescale(CO2)+rescale(SWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="V"), REML = F))
+lmtest::lrtest(lmer(WUE~rescale(CO2)+rescale(SWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="V"), REML = F), lmer(WUE~(1|Plot), data=filter(final_df,Spp=="V"), REML = F))
+# Null model wins  Chisq 5.5196  p = 0.1375
+summary(lmer(WUE~rescale(CO2)+rescale(SWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="V")))
+Anova(lmer(WUE~rescale(CO2)+rescale(SWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="V")), test = "F")
+plot(lmer(WUE~rescale(CO2)+rescale(SWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="V")))
+qqmath(lmer(WUE~rescale(CO2)+rescale(SWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="V")))
+shapiro.test(resid(lmer(WUE~rescale(CO2)+rescale(SWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="V")))) # W = 0.97225, p-value = 0.5447
+
+lmtest::lrtest(lmer(WUE~rescale(CO2)*rescale(SWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="L"), REML = F), lmer(WUE~rescale(CO2)+rescale(SWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="L"), REML = F))
+lmtest::lrtest(lmer(WUE~rescale(CO2)+rescale(SWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="L"), REML = F), lmer(WUE~(1|Plot), data=filter(final_df,Spp=="L"), REML = F))
+# Null model wins Chisq 4.2804  p = 0.2327
+m11L <- lmer(WUE~rescale(CO2)+rescale(SWC) + (1|Plot), data=filter(final_df,Spp=="L"))
+summary(lmer(WUE~rescale(CO2)+rescale(SWC) + (1|Plot), data=filter(final_df,Spp=="L")))
+Anova(lmer(WUE~rescale(CO2)+rescale(SWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="L")), REML = F, test = "Chisq")
+plot(lmer(WUE~rescale(CO2)+rescale(SWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="L")))
+qqmath(lmer(WUE~rescale(CO2)+rescale(SWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="L")))
+shapiro.test(resid(lmer(WUE~rescale(CO2)+rescale(SWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="L")))) # W = 0.97522, p-value = 0.5175
 
 # totmass
-#                                                                   df     AICc
-# lm(totmass ~ rescale(CO2) * rescale(meanSWC), data = plotmeans.V)  5 73.56438
-# lm(totmass ~ rescale(CO2) + rescale(meanSWC), data = plotmeans.V)  4 65.57302 !
-# lm(totmass ~ 1, data = plotmeans.V)                                2 64.63016
-# lm(totmass ~ rescale(CO2) * rescale(meanSWC), data = plotmeans.L)  5 111.3463
-# lm(totmass ~ rescale(CO2) + rescale(meanSWC), data = plotmeans.L)  4 107.0700 !
-# lm(totmass ~ 1, data = plotmeans.L)                                2 108.5679
+#                                                                df     AICc
+# lm(totmass ~ rescale(CO2) * rescale(SWC), data = plotmeans.V)  5  72.81457
+# lm(totmass ~ rescale(CO2) + rescale(SWC), data = plotmeans.V)  4  65.20936 !
+# lm(totmass ~ 1, data = plotmeans.V)                            2  64.63016
+# lm(totmass ~ rescale(CO2) * rescale(SWC), data = plotmeans.L)  5 110.97208
+# lm(totmass ~ rescale(CO2) + rescale(SWC), data = plotmeans.L)  4 106.62490 !
+# lm(totmass ~ 1, data = plotmeans.L)                            2 108.56790
 grid.arrange(
-ggpredict(lm(totmass~rescale(CO2)*rescale(meanSWC), data=plotmeans.V), 
-     terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="totmass, V *"),
-ggpredict(lm(totmass~rescale(CO2)+rescale(meanSWC), data=plotmeans.V), 
-     terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="totmass, V +"),
-#ggpredict(lm(totmass~rescale(CO2)*rescale(meanSWC), data=plotmeans.V2), 
-#     terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="totmass, V *, unfiltered"),
-#ggpredict(lm(totmass~rescale(CO2)+rescale(meanSWC), data=plotmeans.V2), 
-#     terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="totmass, V +, unfiltered"),
-ggpredict(lm(totmass~rescale(CO2)*rescale(meanSWC), data=plotmeans.L), 
-     terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="totmass, L *"),
-ggpredict(lm(totmass~rescale(CO2)+rescale(meanSWC), data=plotmeans.L), 
-     terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="totmass, L +"),
-#ggpredict(lm(totmass~rescale(CO2)*rescale(meanSWC), data=plotmeans.L2), 
-#    terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="totmass, L *, unfiltered"),
-#ggpredict(lm(totmass~rescale(CO2)+rescale(meanSWC), data=plotmeans.L2), 
-#    terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="totmass, L +, unfiltered")
+ggpredict(lm(totmass~rescale(CO2)*rescale(SWC), data=plotmeans.V), 
+     terms=c("CO2","SWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="totmass, V *"),
+ggpredict(lm(totmass~rescale(CO2)+rescale(SWC), data=plotmeans.V), 
+     terms=c("CO2","SWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="totmass, V +"),
+ggpredict(lm(totmass~rescale(CO2)*rescale(SWC), data=plotmeans.L), 
+     terms=c("CO2","SWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="totmass, L *"),
+ggpredict(lm(totmass~rescale(CO2)+rescale(SWC), data=plotmeans.L), 
+     terms=c("CO2","SWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="totmass, L +"),
  nrow=2)
-summary(lm(totmass~rescale(CO2)+rescale(meanSWC), data=plotmeans.V)) 
-Anova(lm(totmass~rescale(CO2)+rescale(meanSWC), data=plotmeans.V), test = "F") 
-plot(lm(totmass~rescale(CO2)+rescale(meanSWC), data=plotmeans.V))
-qqPlot(lm(totmass~rescale(CO2)+rescale(meanSWC), data=plotmeans.V))
-shapiro.test(resid(lm(totmass~rescale(CO2)+rescale(meanSWC), data=plotmeans.V))) # W = 0.90013, p-value = 0.2198
+lmtest::lrtest(lm(totmass~rescale(CO2)*rescale(SWC), data=plotmeans.V), lm(totmass~rescale(CO2)+rescale(SWC), data=plotmeans.V))
+lmtest::lrtest(lm(totmass~rescale(CO2)+rescale(SWC), data=plotmeans.V), lm(totmass~1, data=plotmeans.V)) 
+summary(lm(totmass~rescale(CO2)+rescale(SWC), data=plotmeans.V)) 
+Anova(lm(totmass~rescale(CO2)+rescale(SWC), data=plotmeans.V), test = "F") 
+plot(lm(totmass~rescale(CO2)+rescale(SWC), data=plotmeans.V))
+qqPlot(lm(totmass~rescale(CO2)+rescale(SWC), data=plotmeans.V))
+shapiro.test(resid(lm(totmass~rescale(CO2)+rescale(SWC), data=plotmeans.V))) # W = 0.89025, p-value = 0.1707
 
-summary(lm(totmass~rescale(CO2)+rescale(meanSWC), data=plotmeans.L))
-Anova(lm(totmass~rescale(CO2)+rescale(meanSWC), data=plotmeans.L), test = "F")
-plot(lm(totmass~rescale(CO2)+rescale(meanSWC), data=plotmeans.L))
-qqPlot(lm(totmass~rescale(CO2)+rescale(meanSWC), data=plotmeans.L))
-shapiro.test(resid(lm(totmass~rescale(CO2)+rescale(meanSWC), data=plotmeans.L))) # W = 0.93925, p-value = 0.34
+lmtest::lrtest(lm(totmass~rescale(CO2)*rescale(SWC), data=plotmeans.L), lm(totmass~rescale(CO2)+rescale(SWC), data=plotmeans.L))
+lmtest::lrtest(lm(totmass~rescale(CO2)+rescale(SWC), data=plotmeans.L), lm(totmass~1, data=plotmeans.L)) 
+m1L <- lm(totmass~rescale(CO2)+rescale(SWC), data=plotmeans.L)
+summary(lm(totmass~rescale(CO2)+rescale(SWC), data=plotmeans.L))
+Anova(lm(totmass~rescale(CO2)+rescale(SWC), data=plotmeans.L))
+plot(lm(totmass~rescale(CO2)+rescale(SWC), data=plotmeans.L))
+qqPlot(lm(totmass~rescale(CO2)+rescale(SWC), data=plotmeans.L))
+shapiro.test(resid(lm(totmass~rescale(CO2)+rescale(SWC), data=plotmeans.L))) # W = 0.94137, p-value = 0.3661
+
+# rootmass
+# lm(rootmass_g ~ rescale(CO2) * rescale(SWC), data = plotmeans.V)  5 71.33310
+# lm(rootmass_g ~ rescale(CO2) + rescale(SWC), data = plotmeans.V)  4 67.51369 !
+# lm(rootmass_g ~ 1, data = plotmeans.V)                            2 69.63197
+# lm(rootmass_g ~ rescale(CO2) * rescale(SWC), data = plotmeans.L)  5 81.41214
+# lm(rootmass_g ~ rescale(CO2) + rescale(SWC), data = plotmeans.L)  4 77.19455 !
+# lm(rootmass_g ~ 1, data = plotmeans.L)                            2 75.97478 
+grid.arrange(
+  ggpredict(lm(rootmass_g~rescale(CO2)*rescale(SWC), data=plotmeans.V), 
+            terms=c("CO2","SWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="rootmass_g, V *"),
+  ggpredict(lm(rootmass_g~rescale(CO2)+rescale(SWC), data=plotmeans.V), 
+            terms=c("CO2","SWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="rootmass_g, V +"),
+  ggpredict(lm(rootmass_g~rescale(CO2)*rescale(SWC), data=plotmeans.L), 
+            terms=c("CO2","SWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="rootmass_g, L *"),
+  ggpredict(lm(rootmass_g~rescale(CO2)+rescale(SWC), data=plotmeans.L), 
+            terms=c("CO2","SWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="rootmass_g, L +") )
+lmtest::lrtest(lm(rootmass_g~rescale(CO2)*rescale(SWC), data=plotmeans.V), lm(rootmass_g~rescale(CO2)+rescale(SWC), data=plotmeans.V))
+lmtest::lrtest(lm(rootmass_g~rescale(CO2)+rescale(SWC), data=plotmeans.V), lm(rootmass_g~1, data=plotmeans.V)) 
+summary(lm(rootmass_g~rescale(CO2)+rescale(SWC), data=plotmeans.V)) 
+Anova(lm(rootmass_g~rescale(CO2)+rescale(SWC), data=plotmeans.V)) 
+plot(lm(rootmass_g~rescale(CO2)+rescale(SWC), data=plotmeans.V))
+qqPlot(lm(rootmass_g~rescale(CO2)+rescale(SWC), data=plotmeans.V))
+shapiro.test(resid(lm(rootmass_g~rescale(CO2)+rescale(SWC), data=plotmeans.V))) # W = 0.96716, p-value = 0.7908
+
+lmtest::lrtest(lm(rootmass_g~rescale(CO2)*rescale(SWC), data=plotmeans.L), lm(rootmass_g~rescale(CO2)+rescale(SWC), data=plotmeans.L))
+lmtest::lrtest(lm(rootmass_g~rescale(CO2)+rescale(SWC), data=plotmeans.L), lm(rootmass_g~1, data=plotmeans.L))
+# Chisq 5.4935    p = 0.06414 .
+m2L <- lm(rootmass_g~rescale(CO2)+rescale(SWC), data=plotmeans.L)
+summary(lm(rootmass_g~rescale(CO2)+rescale(SWC), data=plotmeans.L)) 
+Anova(lm(rootmass_g~rescale(CO2)+rescale(SWC), data=plotmeans.L)) 
+plot(lm(rootmass_g~rescale(CO2)+rescale(SWC), data=plotmeans.L))
+qqPlot(lm(rootmass_g~rescale(CO2)+rescale(SWC), data=plotmeans.L))
+shapiro.test(resid(lm(rootmass_g~rescale(CO2)+rescale(SWC), data=plotmeans.L))) # W = 0.9654, p-value = 0.7597
+
+# Ht 8
+# lm(Ht.mm..8 ~ rescale(CO2) * rescale(SWC), data = plotmeans.V)  5 137.7383
+# lm(Ht.mm..8 ~ rescale(CO2) + rescale(SWC), data = plotmeans.V)  4 129.2687
+# lm(Ht.mm..8 ~ rescale(SWC), data = plotmeans.V)                 3 124.7039 !
+# lm(Ht.mm..8 ~ 1, data = plotmeans.V)                            2 126.8910 
+# lm(Ht.mm..8 ~ rescale(CO2) * rescale(SWC), data = plotmeans.L)  5 187.9650 !
+# lm(Ht.mm..8 ~ rescale(CO2) + rescale(SWC), data = plotmeans.L)  4 188.4157
+# lm(Ht.mm..8 ~ 1, data = plotmeans.L)                            2 199.4428
+grid.arrange(
+  ggpredict(lm(Ht.mm..8~rescale(CO2)*rescale(SWC), data=plotmeans.V), 
+            terms=c("CO2","SWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="Ht.mm..8, V *"),
+  ggpredict(lm(Ht.mm..8~rescale(CO2)+rescale(SWC), data=plotmeans.V), 
+            terms=c("CO2","SWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="Ht.mm..8, V +"),
+  ggpredict(lm(Ht.mm..8~rescale(CO2)*rescale(SWC), data=plotmeans.L), 
+            terms=c("CO2","SWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="Ht.mm..8, L *"),
+  ggpredict(lm(Ht.mm..8~rescale(CO2)+rescale(SWC), data=plotmeans.L), 
+            terms=c("CO2","SWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="Ht.mm..8, L +"),
+  nrow=2)
+lmtest::lrtest(lm(Ht.mm..8~rescale(CO2)*rescale(SWC), data=plotmeans.V), lm(Ht.mm..8~rescale(CO2)+rescale(SWC), data=plotmeans.V))
+lmtest::lrtest(lm(Ht.mm..8~rescale(CO2)+rescale(SWC), data=plotmeans.V), lm(Ht.mm..8~1, data=plotmeans.V))
+summary(lm(Ht.mm..8~rescale(CO2)+rescale(SWC), data=plotmeans.V)) 
+Anova(lm(Ht.mm..8~rescale(CO2)+rescale(SWC), data=plotmeans.V)) 
+plot(lm(Ht.mm..8~rescale(CO2)+rescale(SWC), data=plotmeans.V))
+qqPlot(lm(Ht.mm..8~rescale(CO2)+rescale(SWC), data=plotmeans.V))
+shapiro.test(resid(lm(Ht.mm..8~rescale(CO2)+rescale(SWC), data=plotmeans.V))) # W = 0.98633, p-value = 0.99
+
+lmtest::lrtest(lm(Ht.mm..8~rescale(CO2)*rescale(SWC), data=plotmeans.L), lm(Ht.mm..8~rescale(CO2)+rescale(SWC), data=plotmeans.L)) # Chisq 4.8144   p = 0.02822 *
+m3L <- lm(Ht.mm..8~rescale(CO2)*rescale(SWC), data=plotmeans.L)
+summary(lm(Ht.mm..8~rescale(CO2)*rescale(SWC), data=plotmeans.L)) 
+Anova(lm(Ht.mm..8~rescale(CO2)*rescale(SWC), data=plotmeans.L)) 
+plot(lm(Ht.mm..8~rescale(CO2)*rescale(SWC), data=plotmeans.L))
+qqPlot(lm(Ht.mm..8~rescale(CO2)*rescale(SWC), data=plotmeans.L))
+shapiro.test(resid(lm(Ht.mm..8~rescale(CO2)*rescale(SWC), data=plotmeans.L))) # W = 0.96865, p-value = 0.8162
+
+# tot_area
+# lm(tot_area ~ rescale(CO2) * rescale(SWC), data = plotmeans.V)  5 188.1339
+# lm(tot_area ~ rescale(CO2) + rescale(SWC), data = plotmeans.V)  4 173.1879
+# lm(tot_area ~ 1, data = plotmeans.V)                            2 158.9249 !
+# lm(tot_area ~ rescale(CO2) * rescale(SWC), data = plotmeans.L)  5 339.1754
+# lm(tot_area ~ rescale(CO2) + rescale(SWC), data = plotmeans.L)  4 334.8203 !
+# lm(tot_area ~ 1, data = plotmeans.L)                            2 334.1268
+grid.arrange(
+  ggpredict(lm(tot_area~rescale(CO2)*rescale(SWC), data=plotmeans.V), 
+            terms=c("CO2","SWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="tot_area, V *"),
+  ggpredict(lm(tot_area~rescale(CO2)+rescale(SWC), data=plotmeans.V), 
+            terms=c("CO2","SWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="tot_area, V +"),
+  ggpredict(lm(tot_area~rescale(CO2)*rescale(SWC), data=plotmeans.L), 
+            terms=c("CO2","SWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="tot_area, L *"),
+  ggpredict(lm(tot_area~rescale(CO2)+rescale(SWC), data=plotmeans.L), 
+            terms=c("CO2","SWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="tot_area, L +"),
+  nrow=2)
+lmtest::lrtest(lm(tot_area~rescale(CO2)*rescale(SWC), data=plotmeans.V), lm(tot_area~rescale(CO2)+rescale(SWC), data=plotmeans.V)) # Chisq 3.7207   p = 0.05374 .
+summary(lm(tot_area~rescale(CO2)*rescale(SWC), data=plotmeans.V)) 
+Anova(lm(tot_area~rescale(CO2)+rescale(SWC), data=plotmeans.V)) 
+plot(lm(tot_area~rescale(CO2)+rescale(SWC), data=plotmeans.V))
+qqPlot(lm(tot_area~rescale(CO2)+rescale(SWC), data=plotmeans.V))
+shapiro.test(resid(lm(tot_area~rescale(CO2)+rescale(SWC), data=plotmeans.V))) # W = 0.88352, p-value = 0.2034
+
+lmtest::lrtest(lm(tot_area~rescale(CO2)*rescale(SWC), data=plotmeans.L), lm(tot_area~rescale(CO2)+rescale(SWC), data=plotmeans.L))
+lmtest::lrtest(lm(tot_area~rescale(CO2)+rescale(SWC), data=plotmeans.L), lm(tot_area~1, data=plotmeans.L))
+m4L <- lm(tot_area~rescale(CO2)+rescale(SWC), data=plotmeans.L)
+summary(lm(tot_area~rescale(CO2)+rescale(SWC), data=plotmeans.L))
+Anova(lm(tot_area~rescale(CO2)+rescale(SWC), data=plotmeans.L))
+plot(lm(tot_area~rescale(CO2)+rescale(SWC), data=plotmeans.L))
+qqPlot(lm(tot_area~rescale(CO2)+rescale(SWC), data=plotmeans.L))
+shapiro.test(resid(lm(tot_area~rescale(CO2)+rescale(SWC), data=plotmeans.L))) # W = 0.97846, p-value = 0.9502
 
 # rootshoot
-#                                                                     df     AICc
-# lm(rootshoot ~ rescale(CO2) * rescale(meanSWC), data = plotmeans.V)  5 40.39952
-# lm(rootshoot ~ rescale(CO2) + rescale(meanSWC), data = plotmeans.V)  4 32.99506
-# lm(rootshoot ~ 1, data = plotmeans.V)                                2 26.74440 !
-# lm(rootshoot ~ rescale(CO2) * rescale(meanSWC), data = plotmeans.L)  5  -7.002381
-# lm(rootshoot ~ rescale(CO2) + rescale(meanSWC), data = plotmeans.L)  4 -11.358826 !
-# lm(rootshoot ~ 1, data = plotmeans.L)                                2  -8.422251
+#                                                                  df     AICc
+# lm(rootshoot ~ rescale(CO2) * rescale(SWC), data = plotmeans.V)  5  40.098178
+# lm(rootshoot ~ rescale(CO2) + rescale(SWC), data = plotmeans.V)  4  32.922536
+# lm(rootshoot ~ 1, data = plotmeans.V)                            2  26.744399 !
+# lm(rootshoot ~ rescale(CO2) * rescale(SWC), data = plotmeans.L)  5  -7.336573
+# lm(rootshoot ~ rescale(CO2) + rescale(SWC), data = plotmeans.L)  4 -11.695431 !
+# lm(rootshoot ~ 1, data = plotmeans.L)                            2  -8.422251
 grid.arrange(
-  ggpredict(lm(rootshoot~rescale(CO2)*rescale(meanSWC), data=plotmeans.V), 
-            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="rootshoot, V *"),
-  ggpredict(lm(rootshoot~rescale(CO2)+rescale(meanSWC), data=plotmeans.V), 
-            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="rootshoot, V +"),
-  ggpredict(lm(rootshoot~rescale(CO2)*rescale(meanSWC), data=plotmeans.L), 
-            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="rootshoot, L *"),
-  ggpredict(lm(rootshoot~rescale(CO2)+rescale(meanSWC), data=plotmeans.L), 
-            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="rootshoot, L +"),  nrow=2)
-summary(lm(rootshoot~rescale(CO2)+rescale(meanSWC), data=plotmeans.V)) 
-Anova(lm(rootshoot~rescale(CO2)+rescale(meanSWC), data=plotmeans.V)) 
-plot(lm(rootshoot~rescale(CO2)+rescale(meanSWC), data=plotmeans.V))
-qqPlot(lm(rootshoot~rescale(CO2)+rescale(meanSWC), data=plotmeans.V))
-shapiro.test(resid(lm(rootshoot~rescale(CO2)+rescale(meanSWC), data=plotmeans.V))) # W = 0.91734, p-value = 0.3353
+  ggpredict(lm(rootshoot~rescale(CO2)*rescale(SWC), data=plotmeans.V), 
+            terms=c("CO2","SWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="rootshoot, V *"),
+  ggpredict(lm(rootshoot~rescale(CO2)+rescale(SWC), data=plotmeans.V), 
+            terms=c("CO2","SWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="rootshoot, V +"),
+  ggpredict(lm(rootshoot~rescale(CO2)*rescale(SWC), data=plotmeans.L), 
+            terms=c("CO2","SWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="rootshoot, L *"),
+  ggpredict(lm(rootshoot~rescale(CO2)+rescale(SWC), data=plotmeans.L), 
+            terms=c("CO2","SWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="rootshoot, L +"),  nrow=2)
+lmtest::lrtest(lm(rootshoot~rescale(CO2)*rescale(SWC), data=plotmeans.V), lm(rootshoot~rescale(CO2)+rescale(SWC), data=plotmeans.V))
+lmtest::lrtest(lm(rootshoot~rescale(CO2)+rescale(SWC), data=plotmeans.V), lm(rootshoot~1, data=plotmeans.V))
+# 4.1076   p =  0.1282 Null model wins
+summary(lm(rootshoot~rescale(CO2)+rescale(SWC), data=plotmeans.V)) 
+Anova(lm(rootshoot~rescale(CO2)+rescale(SWC), data=plotmeans.V)) 
+plot(lm(rootshoot~rescale(CO2)+rescale(SWC), data=plotmeans.V))
+qqPlot(lm(rootshoot~rescale(CO2)+rescale(SWC), data=plotmeans.V))
+shapiro.test(resid(lm(rootshoot~rescale(CO2)+rescale(SWC), data=plotmeans.V))) # W = 0.91843, p-value = 0.344
 
-summary(lm(rootshoot~rescale(CO2)+rescale(meanSWC), data=plotmeans.L)) 
-Anova(lm(rootshoot~rescale(CO2)+rescale(meanSWC), data=plotmeans.L), test = "F") 
-plot(lm(rootshoot~rescale(CO2)+rescale(meanSWC), data=plotmeans.L))
-qqPlot(lm(rootshoot~rescale(CO2)+rescale(meanSWC), data=plotmeans.L))
-shapiro.test(resid(lm(rootshoot~rescale(CO2)+rescale(meanSWC), data=plotmeans.L))) # W = 0.93686, p-value = 0.3123
+lmtest::lrtest(lm(rootshoot~rescale(CO2)*rescale(SWC), data=plotmeans.L), lm(rootshoot~rescale(CO2)+rescale(SWC), data=plotmeans.L))
+lmtest::lrtest(lm(rootshoot~rescale(CO2)+rescale(SWC), data=plotmeans.L), lm(rootshoot~1, data=plotmeans.L))
+m5L <- lm(rootshoot~rescale(CO2)+rescale(SWC), data=plotmeans.L)
+summary(lm(rootshoot~rescale(CO2)+rescale(SWC), data=plotmeans.L)) 
+Anova(lm(rootshoot~rescale(CO2)+rescale(SWC), data=plotmeans.L), test = "F") 
+plot(lm(rootshoot~rescale(CO2)+rescale(SWC), data=plotmeans.L))
+qqPlot(lm(rootshoot~rescale(CO2)+rescale(SWC), data=plotmeans.L))
+shapiro.test(resid(lm(rootshoot~rescale(CO2)+rescale(SWC), data=plotmeans.L))) # W = 0.9268, p-value = 0.2168
 
+# SRL
+# lm(SRL ~ rescale(CO2) * rescale(SWC), data = plotmeans.V)  5 220.3302
+# lm(SRL ~ rescale(CO2) + rescale(SWC), data = plotmeans.V)  4 216.0080
+# lm(SRL ~ 1, data = plotmeans.V)                            2 209.6870 !
+# lm(SRL ~ rescale(CO2) * rescale(SWC), data = plotmeans.L)  5 219.6149 !
+# lm(SRL ~ rescale(CO2) + rescale(SWC), data = plotmeans.L)  4 220.5342 
+# lm(SRL ~ 1, data = plotmeans.L)                            2 219.1741
+grid.arrange(
+  ggpredict(lm(SRL~rescale(CO2)*rescale(SWC), data=plotmeans.V), 
+            terms=c("CO2","SWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="SRL, V *"),
+  ggpredict(lm(SRL~rescale(CO2)+rescale(SWC), data=plotmeans.V), 
+            terms=c("CO2","SWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="SRL, V +"),
+  ggpredict(lm(SRL~rescale(CO2)*rescale(SWC), data=plotmeans.L), 
+            terms=c("CO2","SWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="SRL, L *"),
+  ggpredict(lm(SRL~rescale(CO2)+rescale(SWC), data=plotmeans.L), 
+            terms=c("CO2","SWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="SRL, L +") )
+lmtest::lrtest(lm(SRL~rescale(CO2)*rescale(SWC), data=plotmeans.V), lm(SRL~rescale(CO2)+rescale(SWC), data=plotmeans.V))
+lmtest::lrtest(lm(SRL~rescale(CO2)+rescale(SWC), data=plotmeans.V), lm(SRL~1, data=plotmeans.V))
+# Null model wins, Chisq 0.3923  p = 0.8219
+summary(lm(SRL~rescale(CO2)+rescale(SWC), data=plotmeans.V)) 
+Anova(lm(SRL~rescale(CO2)+rescale(SWC), data=plotmeans.V)) 
+plot(lm(SRL~rescale(CO2)+rescale(SWC), data=plotmeans.V))
+qqPlot(lm(SRL~rescale(CO2)+rescale(SWC), data=plotmeans.V))
+shapiro.test(resid(lm(SRL~rescale(CO2)+rescale(SWC), data=plotmeans.V))) # W = 0.83486, p-value = 0.008222
+
+lmtest::lrtest(lm(SRL~rescale(CO2)*rescale(SWC), data=plotmeans.L), lm(SRL~rescale(CO2)+rescale(SWC), data=plotmeans.L)) # Chisq 5.2829   p = 0.02154
+m6L <- lm(SRL~rescale(CO2)*rescale(SWC), data=plotmeans.L)
+summary(lm(SRL~rescale(CO2)*rescale(SWC), data=plotmeans.L)) 
+Anova(lm(SRL~rescale(CO2)*rescale(SWC), data=plotmeans.L), test = "F") 
+plot(lm(SRL~rescale(CO2)*rescale(SWC), data=plotmeans.L))
+qqPlot(lm(SRL~rescale(CO2)*rescale(SWC), data=plotmeans.L))
+shapiro.test(resid(lm(SRL~rescale(CO2)*rescale(SWC), data=plotmeans.L))) # W = 0.91069, p-value = 0.1194
 
 # lwc
 #                                                               df      AICc
-# lm(lwc ~ rescale(CO2) * rescale(meanSWC), data = plotmeans.V)  5 102.02371
-# lm(lwc ~ rescale(CO2) + rescale(meanSWC), data = plotmeans.V)  4  97.77497 !
-# lm(lwc ~ 1, data = plotmeans.V)                                2  99.44339
-# lm(lwc ~ rescale(CO2) * rescale(meanSWC), data = plotmeans.L)  5 96.51549
-# lm(lwc ~ rescale(CO2) + rescale(meanSWC), data = plotmeans.L)  4 92.78481
-# lm(lwc ~ 1, data = plotmeans.L)                                2 87.86428 !
+# lm(lwc ~ rescale(CO2) * rescale(SWC), data = plotmeans.V)  5 101.60680
+# lm(lwc ~ rescale(CO2) + rescale(SWC), data = plotmeans.V)  4  97.60382 !
+# lm(lwc ~ 1, data = plotmeans.V)                            2  99.44339
+# lm(lwc ~ rescale(CO2) * rescale(SWC), data = plotmeans.L)  5  96.49542
+# lm(lwc ~ rescale(CO2) + rescale(SWC), data = plotmeans.L)  4  92.67017
+# lm(lwc ~ 1, data = plotmeans.L)                            2  87.86428 !
 grid.arrange(
-  ggpredict(lm(lwc~rescale(CO2)*rescale(meanSWC), data=plotmeans.V), 
-            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="lwc, V *"),
-  ggpredict(lm(lwc~rescale(CO2)+rescale(meanSWC), data=plotmeans.V), 
-            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="lwc, V +"),
-  ggpredict(lm(lwc~rescale(CO2)*rescale(meanSWC), data=plotmeans.L), 
-            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="lwc, L *"),
-  ggpredict(lm(lwc~rescale(CO2)+rescale(meanSWC), data=plotmeans.L), 
-            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="lwc, L +") )
-summary(lm(lwc~rescale(CO2)+rescale(meanSWC), data=plotmeans.V)) 
-Anova(lm(lwc~rescale(CO2)+rescale(meanSWC), data=plotmeans.V)) 
-plot(lm(lwc~rescale(CO2)+rescale(meanSWC), data=plotmeans.V))
-qqPlot(lm(lwc~rescale(CO2)+rescale(meanSWC), data=plotmeans.V))
-shapiro.test(resid(lm(lwc~rescale(CO2)+rescale(meanSWC), data=plotmeans.V))) # W = 0.89815, p-value = 0.106
+  ggpredict(lm(lwc~rescale(CO2)*rescale(SWC), data=plotmeans.V), 
+            terms=c("CO2","SWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="lwc, V *"),
+  ggpredict(lm(lwc~rescale(CO2)+rescale(SWC), data=plotmeans.V), 
+            terms=c("CO2","SWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="lwc, V +"),
+  ggpredict(lm(lwc~rescale(CO2)*rescale(SWC), data=plotmeans.L), 
+            terms=c("CO2","SWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="lwc, L *"),
+  ggpredict(lm(lwc~rescale(CO2)+rescale(SWC), data=plotmeans.L), 
+            terms=c("CO2","SWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="lwc, L +") )
+lmtest::lrtest(lm(lwc~rescale(CO2)*rescale(SWC), data=plotmeans.V), lm(lwc~rescale(CO2)+rescale(SWC), data=plotmeans.V))
+lmtest::lrtest(lm(lwc~rescale(CO2)+rescale(SWC), data=plotmeans.V), lm(lwc~1, data=plotmeans.V))
+summary(lm(lwc~rescale(CO2)+rescale(SWC), data=plotmeans.V)) 
+Anova(lm(lwc~rescale(CO2)+rescale(SWC), data=plotmeans.V)) 
+plot(lm(lwc~rescale(CO2)+rescale(SWC), data=plotmeans.V))
+qqPlot(lm(lwc~rescale(CO2)+rescale(SWC), data=plotmeans.V))
+shapiro.test(resid(lm(lwc~rescale(CO2)+rescale(SWC), data=plotmeans.V))) # W = 0.90199, p-value = 0.1205
 
-summary(lm(lwc~rescale(CO2)+rescale(meanSWC), data=plotmeans.L)) 
-Anova(lm(lwc~rescale(CO2)+rescale(meanSWC), data=plotmeans.L)) 
-plot(lm(lwc~rescale(CO2)+rescale(meanSWC), data=plotmeans.L))
-qqPlot(lm(lwc~rescale(CO2)+rescale(meanSWC), data=plotmeans.L))
-shapiro.test(resid(lm(lwc~rescale(CO2)+rescale(meanSWC), data=plotmeans.L))) # W = 0.97913, p-value = 0.9563
-
-# Anet
-#                                                                                                      df     AICc
-# lmer(Anet ~ rescale(CO2) * rescale(meanSWC) + time_scaled + (1|Plot), data = filter(final_df, Spp == "V")) 7 180.7978
-# lmer(Anet ~ rescale(CO2) * rescale(meanSWC) + (1|Plot), data = filter(final_df, Spp == "V"))               6 187.9334
-# lmer(Anet ~ rescale(CO2) + rescale(meanSWC) + time_scaled + (1|Plot), data = filter(final_df, Spp == "V")) 6 184.0331 !
-# lmer(Anet ~ rescale(CO2) + rescale(meanSWC) + (1|Plot), data = filter(final_df, Spp == "V"))               5 192.5006
-# lmer(Anet ~ (1|Plot), data = filter(final_df, Spp == "V"))                                                 3 209.2259
-# lm(Anet ~ rescale(CO2) * rescale(meanSWC) + time_scaled, data = plotmeans.L)  6 80.93713 !
-# lm(Anet ~ rescale(CO2) * rescale(meanSWC), data = plotmeans.L)                5 80.58094
-# lm(Anet ~ rescale(CO2) + rescale(meanSWC) + time_scaled, data = plotmeans.L)  5 82.50817
-# lm(Anet ~ rescale(CO2) + rescale(meanSWC), data = plotmeans.L)                4 81.96787
-# lm(Anet ~ 1, data = plotmeans.L)                                              2 97.49752
-grid.arrange(
-  ggpredict(lmer(Anet~rescale(CO2)*rescale(meanSWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="V" & Code!="7V1")), 
-            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="Anet, V *"),
-  ggpredict(lmer(Anet~rescale(CO2)+rescale(meanSWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="V" & Code!="7V1")), 
-            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="Anet, V +"),
-    ggpredict(lm(Anet~rescale(CO2)*rescale(meanSWC), data=plotmeans.L),
-              terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="Anet, L *"),
-    ggpredict(lm(Anet~rescale(CO2)+rescale(meanSWC), data=plotmeans.L),
-              terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="Anet, L +") )
-#(lm(Anet~rescale(CO2)+rescale(meanSWC), data=plotmeans.V)) 
-#summary(lm(Anet~rescale(CO2)+rescale(meanSWC)+time_scaled, data=plotmeans.V)) 
-# summary(lmer(Anet~rescale(CO2)*rescale(meanSWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="V")))
-# Anova(lmer(Anet~rescale(CO2)*rescale(meanSWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="V")))
-summary(lmer(Anet~rescale(CO2)+rescale(meanSWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="V")))
-Anova(lmer(Anet~rescale(CO2)+rescale(meanSWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="V")), test="F")
-#   rescale(CO2)     14.838  1  0.0001172 ***
-#   rescale(meanSWC) 36.594  1  1.455e-09 ***
-#   time_scaled      10.420  1  0.0012463 **
-
-plot(lmer(Anet~rescale(CO2)+rescale(meanSWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="V")))
-qqmath(lmer(Anet~rescale(CO2)+rescale(meanSWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="V")))
-shapiro.test(resid(lmer(Anet~rescale(CO2)+rescale(meanSWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="V")))) # W = 0.94877, p-value = 0.1225
-
-AICc(lmer(Anet~rescale(CO2)*rescale(meanSWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="V")), 
-     lmer(Anet~rescale(CO2)*rescale(meanSWC) + (1|Plot), data=filter(final_df,Spp=="V")),
-     lmer(Anet~rescale(CO2)+rescale(meanSWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="V")),
-     lmer(Anet~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df,Spp=="V")))
-
-#summary(lm(Anet~rescale(CO2)*rescale(meanSWC), data=plotmeans.L)) 
-summary(lm(Anet~rescale(CO2)*rescale(meanSWC)+time_scaled, data=plotmeans.L)) 
-Anova(lm(Anet~rescale(CO2)*rescale(meanSWC)+time_scaled, data=plotmeans.L)) 
-#summary(lmer(Anet~rescale(CO2)*rescale(meanSWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="L")))
-plot(lmer(Anet~rescale(CO2)+rescale(meanSWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="L")))
-qqmath(lmer(Anet~rescale(CO2)+rescale(meanSWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="L")))
-shapiro.test(resid(lmer(Anet~rescale(CO2)+rescale(meanSWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="L")))) #
-qqPlot(lm(Anet~rescale(CO2)*rescale(meanSWC)+time_scaled, data=plotmeans.L))
-shapiro.test(resid(lm(Anet~rescale(CO2)*rescale(meanSWC)+time_scaled, data=plotmeans.L))) # W = 0.95777, p-value = 0.6217
-
-AICc(lmer(Anet~rescale(CO2)*rescale(meanSWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="L")), lmer(Anet~rescale(CO2)*rescale(meanSWC) + (1|Plot), data=filter(final_df,Spp=="L")),lmer(Anet~rescale(CO2)+rescale(meanSWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="L")),lmer(Anet~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df,Spp=="L")), lm(Anet~rescale(CO2)+rescale(meanSWC), data=plotmeans.L), lm(Anet~rescale(CO2)+rescale(meanSWC)+time_scaled, data=plotmeans.L), lm(Anet~rescale(CO2)*rescale(meanSWC)+time_scaled, data=plotmeans.L), lm(Anet~rescale(CO2)*rescale(meanSWC), data=plotmeans.L))
-
-# gs
-#                                                                                                            df      AICc
-# lmer(gs ~ rescale(CO2) * rescale(meanSWC) + time_scaled + (1 | Plot), data = filter(final_df, Spp == "V"))  7 -58.35602
-# lmer(gs ~ rescale(CO2) * rescale(meanSWC) + (1 | Plot), data = filter(final_df, Spp == "V"))                6 -55.16158
-# lmer(gs ~ rescale(CO2) + rescale(meanSWC) + time_scaled + (1 | Plot), data = filter(final_df, Spp == "V"))  6 -63.40992
-# lmer(gs ~ rescale(CO2) + rescale(meanSWC) + (1 | Plot), data = filter(final_df, Spp == "V"))                5 -59.88700
-# lmer(gs ~ (1 | Plot), data = filter(final_df, Spp == "V"))                                                  3 -63.30670
-# lmer(gs ~ rescale(CO2) * rescale(meanSWC) + time_scaled + (1 | Plot), data = filter(final_df, Spp == "L"))  7 -121.2466
-# lmer(gs ~ rescale(CO2) * rescale(meanSWC) + (1 | Plot), data = filter(final_df, Spp == "L"))                6 -125.5095
-# lmer(gs ~ rescale(CO2) + rescale(meanSWC) + time_scaled + (1 | Plot), data = filter(final_df, Spp == "L"))  6 -125.4599
-# lmer(gs ~ rescale(CO2) + rescale(meanSWC) + (1 | Plot), data = filter(final_df, Spp == "L"))                5 -129.6790
-# lmer(gs ~ (1 | Plot), data = filter(final_df, Spp == "L"))                                                  3 -128.9129 
-#grid.arrange(
-#   ggpredict(lm(gs~rescale(CO2)*rescale(meanSWC), data=plotmeans.V), 
-#             terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="gs, V *"),
-#   ggpredict(lm(gs~rescale(CO2)+rescale(meanSWC), data=plotmeans.V), 
-#             terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="gs, V +"),
-#   ggpredict(lm(gs~rescale(CO2)*rescale(meanSWC), data=plotmeans.L), 
-#             terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="gs, L *"),
-#   ggpredict(lm(gs~rescale(CO2)+rescale(meanSWC), data=plotmeans.L), 
-#             terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="gs, L +") )
-grid.arrange(
-  ggpredict(lmer(gs~rescale(CO2)*rescale(meanSWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="V")), 
-            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="gs, V *"),
-  ggpredict(lmer(gs~rescale(CO2)+rescale(meanSWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="V")), 
-            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="gs, V +"),
-  ggpredict(lmer(gs~rescale(CO2)*rescale(meanSWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="L",)), 
-            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="gs, L *"),
-  ggpredict(lmer(gs~rescale(CO2)+rescale(meanSWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="L",)), 
-            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="gs, L +") )
-#summary(lm(gs~rescale(CO2)+rescale(meanSWC), data=plotmeans.V)) 
-#summary(lm(gs~rescale(CO2)+rescale(meanSWC)+time_scaled, data=plotmeans.V)) 
-summary(lmer(gs~rescale(CO2)+rescale(meanSWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="V")))
-Anova(lmer(gs~rescale(CO2)+rescale(meanSWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="V")),  test="F")
-plot(lmer(gs~rescale(CO2)+rescale(meanSWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="V")))
-qqmath(lmer(gs~rescale(CO2)+rescale(meanSWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="V")))
-shapiro.test(resid(lmer(gs~rescale(CO2)+rescale(meanSWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="V")))) # W = 0.98469, p-value = 0.9113
-
-#summary(lm(gs~rescale(CO2)+rescale(meanSWC), data=plotmeans.L)) 
-#summary(lm(gs~rescale(CO2)*rescale(meanSWC)+time_scaled, data=plotmeans.L)) 
-summary(lmer(gs~rescale(CO2)*rescale(meanSWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="L")))
-Anova(lmer(gs~rescale(CO2)*rescale(meanSWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="L")), test = "F")
-plot(lmer(gs~rescale(CO2)*rescale(meanSWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="L")))
-qqmath(lmer(gs~rescale(CO2)*rescale(meanSWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="L")))
-shapiro.test(resid(lmer(gs~rescale(CO2)*rescale(meanSWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="L")))) # W = 0.98152, p-value = 0.7457
-
-AICc(lm(gs~rescale(CO2)*rescale(meanSWC)+time_scaled, data=plotmeans.L, REML = FALSE),
-     lm(gs~rescale(CO2)*rescale(meanSWC), data=plotmeans.L, REML = FALSE),
-     lm(gs~rescale(CO2)+rescale(meanSWC)+time_scaled, data=plotmeans.L, REML = F),
-     lm(gs~rescale(CO2)+rescale(meanSWC), data=plotmeans.L, REML = F),
-     lm(gs~ 1, data = plotmeans.L, REML = F))
-
-# WUE
-# lmer(WUE ~ rescale(CO2) * rescale(meanSWC) + time_scaled + (1 | Plot), data = filter(final_df, Spp == "V"))  7 298.4672
-# lmer(WUE ~ rescale(CO2) * rescale(meanSWC) + (1 | Plot), data = filter(final_df, Spp == "V"))                6 306.5223
-# lmer(WUE ~ rescale(CO2) + rescale(meanSWC) + time_scaled + (1 | Plot), data = filter(final_df, Spp == "V"))  6 307.2435
-# lmer(WUE ~ rescale(CO2) + rescale(meanSWC) + (1 | Plot), data = filter(final_df, Spp == "V"))                5 315.0561
-# lmer(WUE ~ (1 | Plot), data = filter(final_df, Spp == "V"))                                                  3 329.6529
-
-grid.arrange(
-  ggpredict(lmer(WUE~rescale(CO2)*rescale(meanSWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="V")), 
-            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="WUE, V *"),
-  ggpredict(lmer(WUE~rescale(CO2)+rescale(meanSWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="V")), 
-            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="WUE, V +"),
-  ggpredict(lmer(WUE~rescale(CO2)*rescale(meanSWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="L",)), 
-            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="WUE, L *"),
-  ggpredict(lmer(WUE~rescale(CO2)+rescale(meanSWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="L",)), 
-            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="WUE, L +") )
-#summary(lm(WUE~rescale(CO2)+rescale(meanSWC), data=plotmeans.V)) 
-#summary(lm(WUE~rescale(CO2)+rescale(meanSWC)+time_scaled, data=plotmeans.V)) 
-#summary(lmer(WUE~rescale(CO2)*rescale(meanSWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="V")))
-summary(lmer(WUE~rescale(CO2)+rescale(meanSWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="V")))
-Anova(lmer(WUE~rescale(CO2)+rescale(meanSWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="V")), test = "F")
-plot(lmer(WUE~rescale(CO2)+rescale(meanSWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="V")))
-qqmath(lmer(WUE~rescale(CO2)+rescale(meanSWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="V")))
-shapiro.test(resid(lmer(WUE~rescale(CO2)+rescale(meanSWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="V")))) # W = 0.97932, p-value = 0.7514
-
-
-
-#summary(lm(WUE~rescale(CO2)+rescale(meanSWC), data=plotmeans.L)) 
-#summary(lm(WUE~rescale(CO2)+rescale(meanSWC)+time_scaled, data=plotmeans.L)) 
-summary(lmer(WUE~rescale(CO2)+rescale(meanSWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="L")))
-plot(lmer(WUE~rescale(CO2)+rescale(meanSWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="L")))
-qqmath(lmer(WUE~rescale(CO2)+rescale(meanSWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="L")))
-shapiro.test(resid(lmer(WUE~rescale(CO2)+rescale(meanSWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="L")))) # W = 0.97765, p-value = 0.5721
-
-AICc(lmer(WUE~rescale(CO2)*rescale(meanSWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="L")), lmer(WUE~rescale(CO2)*rescale(meanSWC) + (1|Plot), data=filter(final_df,Spp=="L")),lmer(WUE~rescale(CO2)+rescale(meanSWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="L")),lmer(WUE~rescale(CO2)+rescale(meanSWC) + (1|Plot), data=filter(final_df,Spp=="L")), lm(WUE~rescale(CO2)+rescale(meanSWC), data=plotmeans.L), lm(WUE~rescale(CO2)+rescale(meanSWC)+time_scaled, data=plotmeans.L), lm(WUE~rescale(CO2)*rescale(meanSWC)+time_scaled, data=plotmeans.L), lm(WUE~rescale(CO2)*rescale(meanSWC), data=plotmeans.L))
-
-# tot_area
-# lm(tot_area ~ rescale(CO2) * rescale(meanSWC), data = plotmeans.V)  5 188.47553
-# lm(tot_area ~ rescale(CO2) + rescale(meanSWC), data = plotmeans.V)  4 173.16955
-# lm(tot_area ~ 1, data = plotmeans.V)                                2 158.9249 !
-# lm(tot_area ~ rescale(CO2) * rescale(meanSWC), data = plotmeans.L)  5 339.5168
-# lm(tot_area ~ rescale(CO2) + rescale(meanSWC), data = plotmeans.L)  4 335.2133 !
-# lm(tot_area ~ 1, data = plotmeans.L)                                2 334.1268
-grid.arrange(
-  ggpredict(lm(tot_area~rescale(CO2)*rescale(meanSWC), data=plotmeans.V), 
-            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="tot_area, V *"),
-  ggpredict(lm(tot_area~rescale(CO2)+rescale(meanSWC), data=plotmeans.V), 
-            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="tot_area, V +"),
-  ggpredict(lm(tot_area~rescale(CO2)*rescale(meanSWC), data=plotmeans.L), 
-            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="tot_area, L *"),
-  ggpredict(lm(tot_area~rescale(CO2)+rescale(meanSWC), data=plotmeans.L), 
-            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="tot_area, L +"),
-  nrow=2)
-summary(lm(tot_area~rescale(CO2)+rescale(meanSWC), data=plotmeans.V)) 
-Anova(lm(tot_area~rescale(CO2)+rescale(meanSWC), data=plotmeans.V)) 
-plot(lm(tot_area~rescale(CO2)+rescale(meanSWC), data=plotmeans.V))
-qqPlot(lm(tot_area~rescale(CO2)+rescale(meanSWC), data=plotmeans.V))
-shapiro.test(resid(lm(tot_area~rescale(CO2)+rescale(meanSWC), data=plotmeans.V))) # W = 0.88671, p-value = 0.218
-
-summary(lm(tot_area~rescale(CO2)+rescale(meanSWC), data=plotmeans.L))
-Anova(lm(tot_area~rescale(CO2)+rescale(meanSWC), data=plotmeans.L), test="F")
-plot(lm(tot_area~rescale(CO2)+rescale(meanSWC), data=plotmeans.L))
-qqPlot(lm(tot_area~rescale(CO2)+rescale(meanSWC), data=plotmeans.L))
-shapiro.test(resid(lm(tot_area~rescale(CO2)+rescale(meanSWC), data=plotmeans.L))) # W = 0.98008, p-value = 0.9642
-
-# SRL
-# lm(SRL ~ rescale(CO2) * rescale(meanSWC), data = plotmeans.V)  5 220.3935
-# lm(SRL ~ rescale(CO2) + rescale(meanSWC), data = plotmeans.V)  4 216.0423
-# lm(SRL ~ 1, data = plotmeans.V)                                2 209.6870 1
-# lm(SRL ~ rescale(CO2) * rescale(meanSWC), data = plotmeans.L)  5 219.0240 !
-# lm(SRL ~ rescale(CO2) + rescale(meanSWC), data = plotmeans.L)  4 220.1671
-# lm(SRL ~ 1, data = plotmeans.L)                                2 219.1741
-grid.arrange(
-  ggpredict(lm(SRL~rescale(CO2)*rescale(meanSWC), data=plotmeans.V), 
-            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="SRL, V *"),
-  ggpredict(lm(SRL~rescale(CO2)+rescale(meanSWC), data=plotmeans.V), 
-            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="SRL, V +"),
-  ggpredict(lm(SRL~rescale(CO2)*rescale(meanSWC), data=plotmeans.L), 
-            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="SRL, L *"),
-  ggpredict(lm(SRL~rescale(CO2)+rescale(meanSWC), data=plotmeans.L), 
-            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="SRL, L +") )
-summary(lm(SRL~rescale(CO2)+rescale(meanSWC), data=plotmeans.V)) 
-Anova(lm(SRL~rescale(CO2)+rescale(meanSWC), data=plotmeans.V)) 
-plot(lm(SRL~rescale(CO2)+rescale(meanSWC), data=plotmeans.V))
-qqPlot(lm(SRL~rescale(CO2)+rescale(meanSWC), data=plotmeans.V))
-shapiro.test(resid(lm(SRL~rescale(CO2)+rescale(meanSWC), data=plotmeans.V))) # W = 0.83255, p-value = 0.007623
-
-summary(lm(SRL~rescale(CO2)*rescale(meanSWC), data=plotmeans.L)) 
-Anova(lm(SRL~rescale(CO2)*rescale(meanSWC), data=plotmeans.L), test = "F") 
-plot(lm(SRL~rescale(CO2)*rescale(meanSWC), data=plotmeans.L))
-qqPlot(lm(SRL~rescale(CO2)*rescale(meanSWC), data=plotmeans.L))
-shapiro.test(resid(lm(SRL~rescale(CO2)*rescale(meanSWC), data=plotmeans.L))) # W = 0.90979, p-value = 0.1155
+lmtest::lrtest(lm(lwc~rescale(CO2)*rescale(SWC), data=plotmeans.L), lm(lwc~rescale(CO2)+rescale(SWC), data=plotmeans.L))
+lmtest::lrtest(lm(lwc~rescale(CO2)+rescale(SWC), data=plotmeans.L), lm(lwc~1, data=plotmeans.L))
+# Null model wins  Chisq 1.9074  p = 0.3853
+m7L <- lm(lwc~rescale(CO2)+rescale(SWC), data=plotmeans.L)
+summary(lm(lwc~rescale(CO2)+rescale(SWC), data=plotmeans.L)) 
+Anova(lm(lwc~rescale(CO2)+rescale(SWC), data=plotmeans.L)) 
+plot(lm(lwc~rescale(CO2)+rescale(SWC), data=plotmeans.L))
+qqPlot(lm(lwc~rescale(CO2)+rescale(SWC), data=plotmeans.L))
+shapiro.test(resid(lm(lwc~rescale(CO2)+rescale(SWC), data=plotmeans.L))) # W = 0.97831, p-value = 0.9488
 
 # d13C
-# lm(d13C ~ rescale(CO2) * rescale(meanSWC), data = plotmeans.V)  5 53.35948 
-# lm(d13C ~ rescale(CO2) + rescale(meanSWC), data = plotmeans.V)  4 48.75018 !
-# lm(d13C ~ 1, data = plotmeans.V)                                2 52.71464
-# lm(d13C ~ rescale(CO2) * rescale(meanSWC), data = plotmeans.L)  5 41.14793
-# lm(d13C ~ rescale(CO2) + rescale(meanSWC), data = plotmeans.L)  4 38.36978 !
-# lm(d13C ~ 1, data = plotmeans.L)                                2 40.00270
+# lm(d13C ~ rescale(CO2) * rescale(SWC), data = plotmeans.V)  5 53.68888
+# lm(d13C ~ rescale(CO2) + rescale(SWC), data = plotmeans.V)  4 49.09709 !
+# lm(d13C ~ 1, data = plotmeans.V)                            2 52.71464
+# lm(d13C ~ rescale(CO2) * rescale(SWC), data = plotmeans.L)  5 41.76920
+# lm(d13C ~ rescale(CO2) + rescale(SWC), data = plotmeans.L)  4 38.99320 !
+# lm(d13C ~ 1, data = plotmeans.L)                            2 40.00270
 grid.arrange(
-  ggpredict(lm(d13C~rescale(CO2)*rescale(meanSWC), data=plotmeans.V), 
-            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="d13C, V *"),
-  ggpredict(lm(d13C~rescale(CO2)+rescale(meanSWC), data=plotmeans.V), 
-            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="d13C, V +"),
-  ggpredict(lm(d13C~rescale(CO2)*rescale(meanSWC), data=plotmeans.L), 
-            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="d13C, L *"),
-  ggpredict(lm(d13C~rescale(CO2)+rescale(meanSWC), data=plotmeans.L), 
-            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="d13C, L +") )
-summary(lm(d13C~rescale(CO2)+rescale(meanSWC), data=plotmeans.V)) 
-Anova(lm(d13C~rescale(CO2)+rescale(meanSWC), data=plotmeans.V)) 
-plot(lm(d13C~rescale(CO2)+rescale(meanSWC), data=plotmeans.V))
-qqPlot(lm(d13C~rescale(CO2)+rescale(meanSWC), data=plotmeans.V))
-shapiro.test(resid(lm(d13C~rescale(CO2)+rescale(meanSWC), data=plotmeans.V))) # W = 0.95619, p-value = 0.6265
+  ggpredict(lm(d13C~rescale(CO2)*rescale(SWC), data=plotmeans.V), 
+            terms=c("CO2","SWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="d13C, V *"),
+  ggpredict(lm(d13C~rescale(CO2)+rescale(SWC), data=plotmeans.V), 
+            terms=c("CO2","SWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="d13C, V +"),
+  ggpredict(lm(d13C~rescale(CO2)*rescale(SWC), data=plotmeans.L), 
+            terms=c("CO2","SWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="d13C, L *"),
+  ggpredict(lm(d13C~rescale(CO2)+rescale(SWC), data=plotmeans.L), 
+            terms=c("CO2","SWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="d13C, L +") )
+lmtest::lrtest(lm(d13C~rescale(CO2)*rescale(SWC), data=plotmeans.V), lm(d13C~rescale(CO2)+rescale(SWC), data=plotmeans.V))
+lmtest::lrtest(lm(d13C~rescale(CO2)+rescale(SWC), data=plotmeans.V), lm(d13C~1, data=plotmeans.V))
+summary(lm(d13C~rescale(CO2)+rescale(SWC), data=plotmeans.V)) 
+Anova(lm(d13C~rescale(CO2)+rescale(SWC), data=plotmeans.V)) 
+plot(lm(d13C~rescale(CO2)+rescale(SWC), data=plotmeans.V))
+qqPlot(lm(d13C~rescale(CO2)+rescale(SWC), data=plotmeans.V))
+shapiro.test(resid(lm(d13C~rescale(CO2)+rescale(SWC), data=plotmeans.V))) # W = 0.95545, p-value = 0.614
 
-summary(lm(d13C~rescale(CO2)+rescale(meanSWC), data=plotmeans.L))
-Anova(lm(d13C~rescale(CO2)+rescale(meanSWC), data=plotmeans.L), test="F")
-plot(lm(d13C~rescale(CO2)+rescale(meanSWC), data=plotmeans.L))
-qqPlot(lm(d13C~rescale(CO2)+rescale(meanSWC), data=plotmeans.L))
-shapiro.test(resid(lm(d13C~rescale(CO2)+rescale(meanSWC), data=plotmeans.L))) # W = 0.94774, p-value = 0.4897
-# note intx (not significant) that mirrors gs effect:
-# lm(formula = d13C ~ rescale(CO2) * rescale(meanSWC), data = plotmeans.L)
-# rescale(CO2):rescale(meanSWC)  -1.78170    p = 0.250
+lmtest::lrtest(lm(d13C~rescale(CO2)*rescale(SWC), data=plotmeans.L), lm(d13C~rescale(CO2)+rescale(SWC), data=plotmeans.L))
+lmtest::lrtest(lm(d13C~rescale(CO2)+rescale(SWC), data=plotmeans.L), lm(d13C~1, data=plotmeans.L))
+m8L <- lm(d13C~rescale(CO2)+rescale(SWC), data=plotmeans.L)
+summary(lm(d13C~rescale(CO2)+rescale(SWC), data=plotmeans.L))
+Anova(lm(d13C~rescale(CO2)+rescale(SWC), data=plotmeans.L), test="F")
+plot(lm(d13C~rescale(CO2)+rescale(SWC), data=plotmeans.L))
+qqPlot(lm(d13C~rescale(CO2)+rescale(SWC), data=plotmeans.L))
+shapiro.test(resid(lm(d13C~rescale(CO2)+rescale(SWC), data=plotmeans.L))) # W = 0.95301, p-value = 0.573
 
-# Ht 8
-# lm(Ht.mm..8 ~ rescale(CO2) * rescale(meanSWC), data = plotmeans.V)  5 138.2738
-# lm(Ht.mm..8 ~ rescale(CO2) + rescale(meanSWC), data = plotmeans.V)  4 129.6069
-# lm(Ht.mm..8 ~ 1, data = plotmeans.V)                                2 126.8910 !!!
-# lm(Ht.mm..8 ~ rescale(CO2) * rescale(meanSWC), data = plotmeans.L)  5 188.0261 !
-# lm(Ht.mm..8 ~ rescale(CO2) + rescale(meanSWC), data = plotmeans.L)  4 189.2139
-# lm(Ht.mm..8 ~ 1, data = plotmeans.L)                                2 199.4428
-grid.arrange(
-  ggpredict(lm(Ht.mm..8~rescale(CO2)*rescale(meanSWC), data=plotmeans.V), 
-            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="Ht.mm..8, V *"),
-  ggpredict(lm(Ht.mm..8~rescale(CO2)+rescale(meanSWC), data=plotmeans.V), 
-            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="Ht.mm..8, V +"),
-  ggpredict(lm(Ht.mm..8~rescale(CO2)*rescale(meanSWC), data=plotmeans.L), 
-            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="Ht.mm..8, L *"),
-  ggpredict(lm(Ht.mm..8~rescale(CO2)+rescale(meanSWC), data=plotmeans.L), 
-            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="Ht.mm..8, L +"),
-  nrow=2)
-summary(lm(Ht.mm..8~rescale(CO2)+rescale(meanSWC), data=plotmeans.V)) 
-Anova(lm(Ht.mm..8~rescale(CO2)+rescale(meanSWC), data=plotmeans.V)) 
-plot(lm(Ht.mm..8~rescale(CO2)+rescale(meanSWC), data=plotmeans.V))
-qqPlot(lm(Ht.mm..8~rescale(CO2)+rescale(meanSWC), data=plotmeans.V))
-shapiro.test(resid(lm(Ht.mm..8~rescale(CO2)+rescale(meanSWC), data=plotmeans.V))) # W = 0.98947, p-value = 0.9961
-
-summary(lm(Ht.mm..8~rescale(CO2)*rescale(meanSWC), data=plotmeans.L)) 
-Anova(lm(Ht.mm..8~rescale(CO2)*rescale(meanSWC), data=plotmeans.L), test="F") 
-plot(lm(Ht.mm..8~rescale(CO2)*rescale(meanSWC), data=plotmeans.L))
-qqPlot(lm(Ht.mm..8~rescale(CO2)*rescale(meanSWC), data=plotmeans.L))
-shapiro.test(resid(lm(Ht.mm..8~rescale(CO2)*rescale(meanSWC), data=plotmeans.L))) # W = 0.97135, p-value = 0.8599
-
-# rootmass
-# lm(rootmass_g ~ rescale(CO2) * rescale(meanSWC), data = plotmeans.V)  5 71.86762
-# lm(rootmass_g ~ rescale(CO2) + rescale(meanSWC), data = plotmeans.V)  4 67.81968 !
-# lm(rootmass_g ~ 1, data = plotmeans.V)                                2 69.63197
-# lm(rootmass_g ~ rescale(CO2) * rescale(meanSWC), data = plotmeans.L)  5 81.60029
-# lm(rootmass_g ~ rescale(CO2) + rescale(meanSWC), data = plotmeans.L)  4 77.51149
-# lm(rootmass_g ~ 1, data = plotmeans.L)                                2 75.97478 !
-grid.arrange(
-  ggpredict(lm(rootmass_g~rescale(CO2)*rescale(meanSWC), data=plotmeans.V), 
-            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="rootmass_g, V *"),
-  ggpredict(lm(rootmass_g~rescale(CO2)+rescale(meanSWC), data=plotmeans.V), 
-            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="rootmass_g, V +"),
-  ggpredict(lm(rootmass_g~rescale(CO2)*rescale(meanSWC), data=plotmeans.L), 
-            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="rootmass_g, L *"),
-  ggpredict(lm(rootmass_g~rescale(CO2)+rescale(meanSWC), data=plotmeans.L), 
-            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="rootmass_g, L +") )
-summary(lm(rootmass_g~rescale(CO2)+rescale(meanSWC), data=plotmeans.V)) 
-Anova(lm(rootmass_g~rescale(CO2)+rescale(meanSWC), data=plotmeans.V)) 
-plot(lm(rootmass_g~rescale(CO2)+rescale(meanSWC), data=plotmeans.V))
-qqPlot(lm(rootmass_g~rescale(CO2)+rescale(meanSWC), data=plotmeans.V))
-shapiro.test(resid(lm(rootmass_g~rescale(CO2)+rescale(meanSWC), data=plotmeans.V))) # W = 0.97232, p-value = 0.8746
-
-summary(lm(rootmass_g~rescale(CO2)+rescale(meanSWC), data=plotmeans.L)) 
-Anova(lm(rootmass_g~rescale(CO2)+rescale(meanSWC), data=plotmeans.L)) 
-plot(lm(rootmass_g~rescale(CO2)+rescale(meanSWC), data=plotmeans.L))
-qqPlot(lm(rootmass_g~rescale(CO2)+rescale(meanSWC), data=plotmeans.L))
-shapiro.test(resid(lm(rootmass_g~rescale(CO2)+rescale(meanSWC), data=plotmeans.L))) # W = 0.96603, p-value = 0.7709
 
 #####
+
+# model plots with interaction terms
+grid.arrange(
+  ggpredict(lm(Anet~rescale(CO2)*rescale(SWC)+time_scaled, data=plotmeans.L),
+            terms=c("CO2","SWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="Anet (µmol CO2/m2/s), Live Oak"), 
+  ggpredict(lm(Ht.mm..8~rescale(CO2)*rescale(SWC), data=plotmeans.L), 
+            terms=c("CO2","SWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="Final Ht (mm), Live Oak"),
+  ggpredict(lm(SRL~rescale(CO2)*rescale(SWC), data=plotmeans.L), 
+            terms=c("CO2","SWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="Specifc Root Length (mm/g), Live Oak"),
+  ggpredict(lm(tot_area~rescale(CO2)*rescale(SWC), data=plotmeans.V), 
+            terms=c("CO2","SWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="Total Leaf Area (mm2), Valley Oak"))
+
+# same plots but with all obs (lmer; NB some singular fit (models 1 and 4))
+grid.arrange(
+  ggpredict(lmer(Ht.mm..8~rescale(CO2)*rescale(SWC) +(1|Plot), data=filter(final_df_nh, Spp == "L")), 
+            terms=c("CO2","SWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="Final Ht (mm), Live Oak"),
+  ggpredict(lmer(SRL~rescale(CO2)*rescale(SWC) + (1|Plot), data=filter(final_df, Spp == "L")), 
+            terms=c("CO2","SWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="Specifc Root Length (mm/g), Live Oak"),
+  ggpredict(lmer(Anet~rescale(CO2)*rescale(SWC)+time_scaled +(1|Plot), data=filter(final_df, Spp == "L")),
+            terms=c("CO2","SWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="Anet (µmol CO2/m2/s), Live Oak"),
+  ggpredict(lmer(tot_area~rescale(CO2)*rescale(SWC)+(1|Plot), data=filter(final_df_nh, Spp == "V")), 
+            terms=c("CO2","SWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="Total Leaf Area (mm2), Valley Oak"))
 
 # was June height associated with herbivory, once controlling for water (and species)?
 summary(glm(herb ~ Ht.mm..5+H2OTmt, family = "binomial", data = final_df %>% 
@@ -570,9 +652,9 @@ plus_se <- function(x){
   mean(x, na.rm=TRUE) + (sd(x, na.rm = TRUE)/sqrt(length(x[!is.na(x)])))
 }
 
-# try thinking about it for just one species, just for totmass, just for mean
+# % change with eCO2 figure
 fig2_meanse <- final_df_nh %>% 
-# fig2_meanse <- final_df %>% 
+  # fig2_meanse <- final_df %>% 
   filter(Spp=="L") %>% 
   select(Tmt, totmass, rootshoot, Ht.mm..8, lwc, Anet, gs, WUE, tot_area, SRL, d13C, rootmass_g) %>%
   rename(leaf.area = tot_area) %>% 
@@ -581,8 +663,8 @@ fig2_meanse <- final_df_nh %>%
   rename(final.ht = Ht.mm..8) %>% 
   mutate(d13C = abs(d13C)) %>% 
   group_by(Tmt) %>% 
-  summarise_if(is.numeric, list(y=mean_narm, ymin=minus_se, ymax=plus_se)) %>%
-  t() %>% data.frame() 
+  summarise_if(is.numeric, list(y=mean_narm, ymin=minus_se, ymax=plus_se)) %>% 
+t() %>% data.frame() 
 # this is good! I want the columns to be the Tmts, and I want to move rownames into 2 columns: variable and y*
 
 #names(fig2_meanse) <- fig2_meanse[1,]
@@ -662,9 +744,9 @@ fig2_meanse["lwc_y","EW1"] <- L_lwcd13C["lwc_y","EW1_d13C"]
 fig2_meanse["lwc_ymin","EW1"] <- L_lwcd13C["lwc_ymin","EW1_d13C"]
 fig2_meanse["lwc_ymax","EW1"] <- L_lwcd13C["lwc_ymax","EW1_d13C"]
 
-  #  mutate_if(is.numeric, list(pct_chg = (AD - .x)*100/AD)) %>% View()
+#  mutate_if(is.numeric, list(pct_chg = (AD - .x)*100/AD)) %>% View()
 # get Tmt to be its own column with pivot_longer
-variable_order <- c("tot.mass", "root.mass", "final.ht", "leaf.area", "rootshoot", "SRL", "lwc", "d13C", "Anet", "gs", "WUE")
+variable_order <- c("Anet", "gs", "WUE", "tot.mass", "root.mass", "final.ht", "leaf.area", "rootshoot", "SRL", "lwc", "d13C")
 #variable_order <- c("tot.mass", "root.mass", "final.ht", "leaf.area", "rootshoot", "SRL", "Anet", "gs", "WUE")
 
 # add n= ... + geom_text(data = nequals_licor, aes(x = Tmt, y = 0.01, label = paste0("N = ",n)))
@@ -687,14 +769,14 @@ fig2_nequals[,3] <- rownames(fig2_nequals)
 colnames(fig2_nequals) <- c("D","W", "variable")
 
 fig2L_nh <- fig2_meanse %>% 
-# fig2L <- fig2_meanse %>% 
+  # fig2L <- fig2_meanse %>% 
   rename(Dry = ED1, Watered = EW1) %>% 
   pivot_longer(cols=c("Dry","Watered"), names_to="Treatment", values_to="value") %>% 
   select(variable, y, Treatment, value) %>% 
   # filter(variable != "d13C") %>% 
   # filter(variable != "lwc") %>% 
   pivot_wider(names_from = "y", values_from = "value") %>% 
-ggplot() +
+  ggplot() +
   geom_abline(color= "red", linetype="dashed", slope = 0, intercept= 0) +
   geom_pointrange(aes(x=factor(variable, level=variable_order), y=y, ymin=ymin, ymax=ymax, group=Treatment, color=Treatment, shape=Treatment), size=1, linewidth=1, position=position_dodge(width=0.2)) + scale_color_manual(values=c("red","blue")) + scale_shape_manual(values = c(1,16)) +
   ylim(-105, 217) +
@@ -703,11 +785,11 @@ ggplot() +
   ggtitle("B. Quercus wislizenii (live oak)") +
   ylab("% change with eCO2") + xlab("Plant Response") +
   theme_classic(base_size = 18) 
-  
+
 
 # now for V!
 fig2_meanseV <- final_df_nh %>% 
-#  fig2_meanseV <- final_df %>% 
+  #  fig2_meanseV <- final_df %>% 
   filter(Spp=="V") %>% 
   select(Tmt, totmass, rootmass_g, Ht.mm..8, tot_area, rootshoot, SRL, lwc, d13C, Anet, gs, WUE) %>% 
   # select(Tmt, totmass, rootshoot, Ht.mm..8, lwc, Anet, gs, WUE, tot_area, SRL, d13C, rootmass_g) %>%
@@ -818,7 +900,7 @@ fig2_nequalsV[,3] <- rownames(fig2_nequalsV)
 colnames(fig2_nequalsV) <- c("D","W", "variable")
 
 fig2V_nh <- fig2_meanseV %>% 
-#fig2V <- fig2_meanseV %>% 
+  #fig2V <- fig2_meanseV %>% 
   rename(Dry = ED1, Watered = EW1) %>% 
   pivot_longer(cols=c("Dry","Watered"), names_to="Treatment", values_to="value") %>% 
   select(variable, y, Treatment, value) %>% 
@@ -838,16 +920,3 @@ fig2V_nh <- fig2_meanseV %>%
 # compare filtered versions
 grid.arrange(fig2V_nh, fig2L_nh, nrow=2)
 
-# compare unfiltered versions
-# grid.arrange(fig2V, fig2L, nrow=2) # not that interesting
-
-# model plots with interaction terms
-grid.arrange(
-  ggpredict(lm(Ht.mm..8~rescale(CO2)*rescale(meanSWC), data=plotmeans.L), 
-            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="Final Height (mm)"),
-  ggpredict(lm(SRL~rescale(CO2)*rescale(meanSWC), data=plotmeans.L), 
-            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="Specifc Root Length (mm/g)"),
-  ggpredict(lm(Anet~rescale(CO2)*rescale(meanSWC), data=plotmeans.L),
-            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="Anet (µmol CO2/m2/s)"),
-  ggpredict(lmer(gs~rescale(CO2)*rescale(meanSWC)+time_scaled + (1|Plot), data=filter(final_df,Spp=="L",)), 
-            terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="Stomatal Conductance (mmol H2O/m2/s)"))
