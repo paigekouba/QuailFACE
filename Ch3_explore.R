@@ -137,6 +137,11 @@ names(lookup) <- c("Plot","Tmt")
 
 biomass <- merge(lookup, biomass, by = 'Plot')
 
+biomass2 <- biomass %>% # prediction data with full dataset and extra inventory columns
+  left_join(inventory_thinned[,c(1,7,10,13,17,22,27,32,37)]) %>% 
+  mutate(across(c(StemWet_g, LeafWet_g, LeafDry_g, rootmass_g, Ht.mm..1, Ht.mm..2, Ht.mm..3, Ht.mm..4, Ht.mm..5, Ht.mm..6, Ht.mm..7, Ht.mm..8), na_if, -Inf))  %>% 
+  mutate(H2OTmt = substr(Tmt,2,2))
+
 lai <- lai_raw %>% 
   group_by(Code) %>% 
   summarise(avg_area = mean(Area), perim_per_A = mean(Perim/Area), tot_area = sum(Area), count=n()) %>% 
@@ -432,6 +437,8 @@ inv_all[which(inv_all$Code %in% firstherb$Code),] %>% # (add ! after which( to g
 
 
 # Test to see if herbivory is significantly associated with Spp
+# summary(glm(as.numeric(resprout) ~ rescale(CO2)*rescale(meanSWC), family = "binomial", data = filter(herb_list, Spp=="V"))) rewrite glms/glmer to test herbivory v Spp
+
 # need a 2x2 table where the rows are (herb / no herb), cols are L / V, and cells are counts
 chisq.test(matrix(c(sum(biomass$Spp == "L") - sum(biomass_nh$Spp == "L"), sum(biomass$Spp == "V") - sum(biomass_nh$Spp == "V"), 
        sum(biomass_nh$Spp == "L"), sum(biomass_nh$Spp == "V")), byrow = TRUE, nrow = 2))
@@ -488,7 +495,7 @@ herb_list <- herb_list %>%
   left_join(plot_SWC., by = "Plot") %>% 
   left_join(select(biomass2., Code, rootmass_g), by = "Code")
   
-summary(glm(as.numeric(resprout) ~ rescale(CO2)*rescale(meanSWC), family = "binomial", data = filter(herb_list, Spp=="V"))) # for Vs, marginally significant intx effect on resprouting!!
+summary(glm(as.numeric(resprout) ~ rescale(CO2)*rescale(meanSWC), family = "binomial", data = filter(herb_list, Spp=="V"))) # for Vs, marginally significant intx effect on resprouting!! p = 0.08
 
 ggpredict(glm(as.numeric(resprout) ~ rescale(CO2)*rescale(meanSWC), family = "binomial", data = filter(herb_list, Spp=="V")), 
           terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue"), jitter=0.07) + labs(title="resprouting, V") # what does this mean
