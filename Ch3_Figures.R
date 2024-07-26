@@ -3,7 +3,20 @@
 
 pdf(file = "Ch3_figures_7.12.24.pdf", width=6, height=5)
 # Figures
-grid.arrange(fig2V_nh, fig2L_nh, nrow=2) # mean % change with eCO2 for watered and water-stressed plants
+inv_all_nfh %>% # for seedlings without *full* herbivory, how did height change over the course of the study?
+  group_by(Spp, Tmt, value) %>% 
+  summarise(mean_ht = mean(ht_mm, na.rm = TRUE),se_ht = sd(ht_mm, na.rm = TRUE)/sqrt(n())) %>% 
+  ggplot(aes(x=value, y = mean_ht, group = Tmt)) + 
+  geom_line(aes(color = Tmt), position = position_dodge(20, preserve = "total"), linewidth = 1.2) +
+  geom_pointrange(aes(ymin = mean_ht - se_ht, ymax = mean_ht + se_ht, color = Tmt, shape = Tmt), fill = "white", position = position_dodge(20, preserve = "total"), size = 1.5, linewidth=1) + 
+  scale_color_manual(values = c("#850a01", "#010c85", "#850a01", "#010c85")) +
+  scale_shape_manual(values = c(21,21,16,16)) + 
+  geom_text(data = inv_nequals, aes(x = value, y = as.numeric(as.factor(Tmt))*12-50, color = Tmt, label = paste0("n=",n))) +
+  ylab(label = "Mean Height (mm)") +
+  xlab(label = "Date") +
+  facet_grid(~ Spp, labeller = as_labeller(c("L" = "Q. wislizeni", "V"= "Q. lobata"))) + theme_classic(base_size = 19)
+
+grid.arrange(pct_bootV, pct_bootL, nrow=2) # mean % change with watering for aCO2 and eCO2 conditions
 
 grid.arrange(
   ggpredict(lm(Anet~rescale(CO2)*rescale(SWC)+time_scaled, data=plotmeans.L),
