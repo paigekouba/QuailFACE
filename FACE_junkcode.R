@@ -5898,8 +5898,230 @@ plot(lm(rootmass_g~rescale(CO2)+rescale(meanSWC), data=plotmeans.L))
 qqPlot(lm(rootmass_g~rescale(CO2)+rescale(meanSWC), data=plotmeans.L))
 shapiro.test(resid(lm(rootmass_g~rescale(CO2)+rescale(meanSWC), data=plotmeans.L))) # W = 0.96603, p-value = 0.7709
 
-# original % change with eCO2 figure
-# try thinking about it for just one species, just for totmass, just for mean
+
+
+# compare unfiltered versions
+# grid.arrange(fig2V, fig2L, nrow=2) # not that interesting
+
+# for CI, use equation from Kohavi et al. 2009:
+# CV = sd / µ
+# CI = (PctDiff + 1) * (1 ± 1.96 * sqrt((CVa^2)+(CVb^2)-(1.96^2)*(CVa^2)*(CVb^2))/(1-1.96*(CVa^2))) - 1 
+# CI_lo and CI_hi as a function of PctDiff, CVa, CVb
+# to get from se (reported in table) to sd (used in formula), I will use per-treatment ns, think this is the best I can do
+
+# try it with pracmod (Anet for L)
+pracdf <- as.data.frame(predict_response(pracmod, terms=c("CO2 [415, 594]","SWC [4,42]")))
+pracdf[4,2] - pracdf[2,2] # difference in means: EW - AW = 9.801333
+pracdf[3,2] - pracdf[1,2] # difference in means: ED - AD = 1.230118
+
+100*(pracdf[4,2] - pracdf[2,2])/ pracdf[2,2] # pct change, wet = 115.7227
+100*(pracdf[3,2] - pracdf[1,2])/ pracdf[1,2] # pct change, dry = 39.39981
+
+CI_pct_lo <- function(PctDiff, CVa, CVb){
+  (PctDiff + 1)*(1-1.96*sqrt((CVa^2)+(CVb^2)-(1.96^2)*(CVa^2)*(CVb^2))/(1-1.96*(CVa^2)))-1 
+}
+
+CI_pct_hi <- function(PctDiff, CVa, CVb){
+  (PctDiff+1)*(1+1.96*sqrt((CVa^2)+(CVb^2)-((1.96^2)*(CVa^2)*(CVb^2)))/(1-(1.96*(CVa^2))))-1 
+}
+fig2_nL <- final_df_nh %>% 
+  filter(Spp=="L") %>% 
+  select(Tmt, H2OTmt, totmass, rootshoot, Ht.mm..8, lwc, Anet, gs, WUE, tot_area, SRL, d13C, rootmass_g) %>% 
+  rename(leaf.area = tot_area) %>% 
+  rename(root.mass = rootmass_g) %>% 
+  rename(tot.mass = totmass) %>% 
+  rename(final.ht = Ht.mm..8) %>% 
+  group_by(Tmt, H2OTmt) %>% 
+  summarise_if(is.numeric, ~ sum(!is.na(.x))) %>% 
+  t() %>% data.frame()
+fig2_nL <- fig2_nL[-c(1:2),]
+fig2_nL[,5] <- rownames(fig2_nL)
+colnames(fig2_nL) <- c("AD","AW","ED","EW", "variable")
+
+# CI for % change, wet
+# need PctDiff (see above)
+# need CVa: se of EW * sqrt(n) of EW / mean of EW
+# need CVb: se of AW * sqrt(n) of AW / mean of AW   ..... then later do the same thing for all, except D
+CI_pct_lo(115.7227, pracdf$std.error[4]*sqrt(as.numeric(fig2_nL[5,4]))/pracdf$predicted[4], pracdf$std.error[2]*sqrt(as.numeric(fig2_nL[5,2]))/pracdf$predicted[2]) # -46.50874
+CI_pct_hi(115.7227, pracdf$std.error[4]*sqrt(as.numeric(fig2_nL[5,4]))/pracdf$predicted[4], pracdf$std.error[2]*sqrt(as.numeric(fig2_nL[5,2]))/pracdf$predicted[2]) # 277.9541
+
+# not going to work. Go back to the cross-lots subtraction method, pray for forgiveness. 
+
+## this super did not work. Go back to data means method
+# Fig 2, take 2
+# with final models, use predict_response to make a table of mean ± se per group for variable 
+# for the mean, compare ∆ response (EW - AW) v (ED - AD): column predicted, row 4-2 v 3-1
+
+as.data.frame(predict_response(pracmod, terms=c("CO2 [415, 594]","SWC [4,42]")))
+# do like this, then extract "predicted" and rename with variable name; cbind all 11
+# extract [mean - se] and rename with varmin, cbind all 11; extract [mean + se] and rename varmax, cbind all 11
+# cbind means and mins and maxes, transpose, arrange comparison column for crosswise se
+
+#mod_listV <- c(m1V, m2V, m3V, m4V, m5V, m6V, m7V, m8V, m9V, m10V, m11V)
+mod_listL <- list(m1L, m2L, m3L, m4L, m5L, m6L, m7L, m8L, m9L, m10L, m11L)
+mod_namesL <- c("tot.mass", "root.mass", "final.ht", "leaf.area", "rootshoot", "SRL", "lwc", "d13C", "Anet", "gs", "WUE")
+
+pred_bind <- as.vector(c("AD","AW","ED","EW"))
+for(i in 1:length(mod_listL)){
+  pred <- as.data.frame(predict_response(mod_listL[[i]], terms=c("CO2 [415, 594]","SWC [4,45]")))
+  colnames(pred)[2] <- paste0(mod_namesL[i],"_y")
+  pred_bind <- cbind(pred_bind, pred[2])
+} # if this works, do the same for min and max, then combine
+
+min_bind <- as.vector(c("AD","AW","ED","EW"))
+for(i in 1:length(mod_listL)){
+  pred <- as.data.frame(predict_response(mod_listL[[i]], terms=c("CO2 [415, 594]","SWC [4,45]"))) %>% 
+    mutate(min = predicted - std.error, max = predicted + std.error)
+  colnames(pred)[7] <- paste0(mod_namesL[i],"_ymin")
+  min_bind <- cbind(min_bind, pred[7])
+}
+
+max_bind <- as.vector(c("AD","AW","ED","EW"))
+for(i in 1:length(mod_listL)){
+  pred <- as.data.frame(predict_response(mod_listL[[i]], terms=c("CO2 [415, 594]","SWC [4,45]"))) %>% 
+    mutate(min = predicted - std.error, max = predicted + std.error)
+  colnames(pred)[8] <- paste0(mod_namesL[i],"_ymax")
+  max_bind <- cbind(max_bind, pred[8])
+}
+
+predminmax <- cbind(pred_bind, min_bind[,-1], max_bind[,-1]) %>% 
+  t() %>% data.frame()
+predminmax <- predminmax[-1,]
+predminmax[,5] <- rownames(predminmax)
+colnames(predminmax) <- c("AD","AW","ED","EW","var_y")
+predminmax <- separate(predminmax, var_y, into = c("variable","y"), sep="_")
+
+# percentify the columns with reference to ambient
+predminmax$standardD <- c(predminmax[1:11,1], predminmax[23:33,1], predminmax[12:22,1])
+predminmax$standardW <- c(predminmax[1:11,2], predminmax[23:33,2], predminmax[12:22,2])
+
+predminmax <- predminmax %>% 
+  mutate(across(!c("variable","y"), as.numeric)) %>% 
+  mutate(ED1 = (ED - standardD)*100/standardD) %>%
+  mutate(EW1 = (EW - standardW)*100/standardW)
+
+variable_order <- c("tot.mass", "root.mass", "final.ht", "leaf.area", "rootshoot", "SRL", "lwc", "d13C", "Anet", "gs", "WUE")
+
+fig2_nequals <- final_df_nh %>% 
+  filter(Spp=="L") %>% 
+  select(Tmt, H2OTmt, totmass, rootshoot, Ht.mm..8, lwc, Anet, gs, WUE, tot_area, SRL, d13C, rootmass_g) %>% 
+  # select(Tmt, H2OTmt, totmass, rootshoot, Ht.mm..8, Anet, gs, WUE, tot_area, SRL, rootmass_g) %>% 
+  rename(leaf.area = tot_area) %>% 
+  rename(root.mass = rootmass_g) %>% 
+  rename(tot.mass = totmass) %>% 
+  rename(final.ht = Ht.mm..8) %>% 
+  group_by(Tmt, H2OTmt) %>% 
+  summarise_if(is.numeric, ~ sum(!is.na(.x))) %>% 
+  group_by(H2OTmt) %>% 
+  summarise_if(is.numeric, ~ min(.x)) %>% 
+  t() %>% data.frame()
+fig2_nequals <- fig2_nequals[-1,]
+fig2_nequals[,3] <- rownames(fig2_nequals)
+colnames(fig2_nequals) <- c("D","W", "variable")
+
+fig2L_nh <- predminmax %>% 
+  # fig2L <- fig2_meanse %>% 
+  rename(Dry = ED1, Watered = EW1) %>% 
+  pivot_longer(cols=c("Dry","Watered"), names_to="Treatment", values_to="value") %>% 
+  select(variable, y, Treatment, value) %>% 
+  # filter(variable != "d13C") %>% 
+  # filter(variable != "lwc") %>% 
+  pivot_wider(names_from = "y", values_from = "value") %>% 
+  ggplot() +
+  geom_abline(color= "red", linetype="dashed", slope = 0, intercept= 0) +
+  geom_pointrange(aes(x=factor(variable, level=variable_order), y=y, ymin=ymin, ymax=ymax, group=Treatment, color=Treatment, shape=Treatment), size=1, linewidth=1, position=position_dodge(width=0.2)) + scale_color_manual(values=c("red","blue")) + scale_shape_manual(values = c(1,16)) +
+  #ylim(-105, 217) +
+  geom_text(data = fig2_nequals, aes(x = variable, y = -75, label = paste0("N = ",D)), color="red", size = 4) +
+  geom_text(data = fig2_nequals, aes(x = variable, y = -95, label = paste0("N = ",W)), color="blue", size = 4) +
+  ggtitle("B. Quercus wislizenii (live oak)") +
+  ylab("% change with eCO2") + xlab("Plant Response") +
+  theme_classic(base_size = 18) 
+
+# update d13C (abs, rescale) and lwc (rescale)
+# I think I just have to change this part to get predictions into a df for these two models
+# ** not working right now, come back to this
+# L_lwcd13C <- final_df_nh %>% 
+#   filter(Spp=="L") %>% 
+#   select(Tmt, H2OTmt, lwc, d13C) %>% 
+#   mutate(d13C = abs(d13C)) %>% 
+#   #mutate(overallmin = min(d13C, na.rm=T), overallmax=max(d13C, na.rm=T)) %>% View() # 30.71429, 46.54088; 26.29, 31.09
+#   group_by(Tmt) %>%
+#   summarise_if(is.numeric, list(y=mean_narm, ymin=minus_se, ymax=plus_se)) %>% 
+#   t() %>% data.frame() 
+
+# lwc_df <- as.data.frame(predict_response(mod_listL[[7]], terms=c("CO2 [415, 594]","SWC [4,45]"))) %>% 
+#   mutate(min = predicted - std.error, max = predicted + std.error) %>% 
+#   select(predicted, min, max)
+# 
+# d13C_df <- as.data.frame(predict_response(mod_listL[[8]], terms=c("CO2 [415, 594]","SWC [4,45]"))) %>% 
+#   mutate(predicted=abs(predicted)) %>% 
+#   mutate(min = predicted - std.error, max = predicted + std.error) %>% 
+#   select(predicted, min, max)
+# 
+# lwc_d13C <- cbind(cbind(lwc_df[,1], d13C_df[,1]), cbind(lwc_df[,2], d13C_df[,2]), cbind(lwc_df[,3], d13C_df[,3]))
+# colnames(lwc_d13C) <- c("lwc_y","d13C_y", "lwc_ymin", "d13C_ymin", "lwc_ymax", "d13C_ymax")
+# lwc_d13C <- data.frame(t(lwc_d13C))
+# lwc_d13C[,5] <- rownames(lwc_d13C)
+# colnames(lwc_d13C) <- c("AD","AW","ED","EW","var_y")
+# lwc_d13C <- separate(lwc_d13C, var_y, into = c("variable","y"), sep="_")
+# lwc_d13C$standardW <- c(lwc_d13C[1:2,2], lwc_d13C[5:6,2], lwc_d13C[3:4,2])
+# lwc_d13C$standardD <- c(lwc_d13C[1:2,1], lwc_d13C[5:6,1], lwc_d13C[3:4,1])
+# 
+# lwc_d13C <- lwc_d13C %>% 
+#   mutate(across(!c("variable","y"), as.numeric)) %>% 
+#   mutate(ED1_lwc = (ED - standardD)*100/(46.54088-30.71429)) %>%
+#   mutate(EW1_lwc = (EW - standardW)*100/(46.54088-30.71429)) %>% 
+#   mutate(ED1_d13C = (ED - standardD)*100/(31.09-26.29)) %>%
+#   mutate(EW1_d13C = (EW - standardW)*100/(31.09-26.29))
+# # why is this giving the exact same means for D and W (both lwc and d13C)?
+# 
+# # reverse sign
+# lwc_d13C["d13C_y","ED1_d13C"] <- -lwc_d13C["d13C_y","ED1_d13C"]
+# lwc_d13C["d13C_ymin","ED1_d13C"] <- -lwc_d13C["d13C_ymin","ED1_d13C"]
+# lwc_d13C["d13C_ymax","ED1_d13C"] <- -lwc_d13C["d13C_ymax","ED1_d13C"]
+# 
+# lwc_d13C["d13C_y","EW1_d13C"] <- -lwc_d13C["d13C_y","EW1_d13C"]
+# lwc_d13C["d13C_ymin","EW1_d13C"] <- -lwc_d13C["d13C_ymin","EW1_d13C"]
+# lwc_d13C["d13C_ymax","EW1_d13C"] <- -lwc_d13C["d13C_ymax","EW1_d13C"]
+# 
+# # add corrected d13C to table 
+# predminmax["d13C_y","ED1"] <- lwc_d13C["d13C_y","ED1_d13C"]
+# predminmax["d13C_ymin","ED1"] <- lwc_d13C["d13C_ymin","ED1_d13C"] 
+# predminmax["d13C_ymax","ED1"] <- lwc_d13C["d13C_ymax","ED1_d13C"]
+# 
+# predminmax["d13C_y","EW1"] <- lwc_d13C["d13C_y","EW1_d13C"]
+# predminmax["d13C_ymin","EW1"] <- lwc_d13C["d13C_ymin","EW1_d13C"]
+# predminmax["d13C_ymax","EW1"] <- lwc_d13C["d13C_ymax","EW1_d13C"]
+# 
+# predminmax["lwc_y","ED1"] <- lwc_d13C["lwc_y","ED1_d13C"]
+# predminmax["lwc_ymin","ED1"] <- lwc_d13C["lwc_ymin","ED1_d13C"] 
+# predminmax["lwc_ymax","ED1"] <- lwc_d13C["lwc_ymax","ED1_d13C"]
+# 
+# predminmax["lwc_y","EW1"] <- lwc_d13C["lwc_y","EW1_d13C"]
+# predminmax["lwc_ymin","EW1"] <- lwc_d13C["lwc_ymin","EW1_d13C"]
+# predminmax["lwc_ymax","EW1"] <- lwc_d13C["lwc_ymax","EW1_d13C"]
+
+
+# this is how I was doing Wald F tests
+summary(lm(totmass~rescale(CO2)+rescale(SWC), data=plotmeans.V)) 
+Anova(lm(totmass~rescale(CO2)+rescale(SWC), data=plotmeans.V), test = "F") 
+plot(lm(totmass~rescale(CO2)+rescale(SWC), data=plotmeans.V))
+qqPlot(lm(totmass~rescale(CO2)+rescale(SWC), data=plotmeans.V))
+shapiro.test(resid(lm(totmass~rescale(CO2)+rescale(SWC), data=plotmeans.V))) # W = 0.90013, p-value = 0.2198
+
+# functions
+mean_narm <- function(x){
+  mean(x, na.rm=TRUE)
+}
+
+minus_se <- function(x){
+  mean(x, na.rm=TRUE) - (sd(x, na.rm = TRUE)/sqrt(length(x[!is.na(x)])))
+}
+plus_se <- function(x){
+  mean(x, na.rm=TRUE) + (sd(x, na.rm = TRUE)/sqrt(length(x[!is.na(x)])))
+}
+
+# % change with eCO2 figure
 fig2_meanse <- final_df_nh %>% 
   # fig2_meanse <- final_df %>% 
   filter(Spp=="L") %>% 
@@ -5910,7 +6132,7 @@ fig2_meanse <- final_df_nh %>%
   rename(final.ht = Ht.mm..8) %>% 
   mutate(d13C = abs(d13C)) %>% 
   group_by(Tmt) %>% 
-  summarise_if(is.numeric, list(y=mean_narm, ymin=minus_se, ymax=plus_se)) %>% View()
+  summarise_if(is.numeric, list(y=mean_narm, ymin=minus_se, ymax=plus_se)) %>% 
   t() %>% data.frame() 
 # this is good! I want the columns to be the Tmts, and I want to move rownames into 2 columns: variable and y*
 
@@ -5993,7 +6215,7 @@ fig2_meanse["lwc_ymax","EW1"] <- L_lwcd13C["lwc_ymax","EW1_d13C"]
 
 #  mutate_if(is.numeric, list(pct_chg = (AD - .x)*100/AD)) %>% View()
 # get Tmt to be its own column with pivot_longer
-variable_order <- c("tot.mass", "root.mass", "final.ht", "leaf.area", "rootshoot", "SRL", "lwc", "d13C", "Anet", "gs", "WUE")
+variable_order <- c("Anet", "gs", "WUE", "tot.mass", "root.mass", "final.ht", "leaf.area", "rootshoot", "SRL", "lwc", "d13C")
 #variable_order <- c("tot.mass", "root.mass", "final.ht", "leaf.area", "rootshoot", "SRL", "Anet", "gs", "WUE")
 
 # add n= ... + geom_text(data = nequals_licor, aes(x = Tmt, y = 0.01, label = paste0("N = ",n)))
@@ -6034,185 +6256,26 @@ fig2L_nh <- fig2_meanse %>%
   theme_classic(base_size = 18) 
 
 
-# now for V!
-fig2_meanseV <- final_df_nh %>% 
-  #  fig2_meanseV <- final_df %>% 
-  filter(Spp=="V") %>% 
-  select(Tmt, totmass, rootmass_g, Ht.mm..8, tot_area, rootshoot, SRL, lwc, d13C, Anet, gs, WUE) %>% 
-  # select(Tmt, totmass, rootshoot, Ht.mm..8, lwc, Anet, gs, WUE, tot_area, SRL, d13C, rootmass_g) %>%
-  rename(leaf.area = tot_area) %>% 
-  rename(root.mass = rootmass_g) %>% 
-  rename(tot.mass = totmass) %>% 
-  rename(final.ht = Ht.mm..8) %>% 
-  group_by(Tmt) %>% 
-  summarise_if(is.numeric, list(y=mean_narm, ymin=minus_se, ymax=plus_se)) %>% 
-  t() %>% data.frame()
-# this is good! I want the columns to be the Tmts, and I want to move rownames into 2 columns: variable and y*
-
-fig2_meanseV <- fig2_meanseV[-1,]
-fig2_meanseV[,5] <- rownames(fig2_meanseV)
-colnames(fig2_meanseV) <- c("AD","AW","ED","EW","var_y")
-
-fig2_meanseV <- separate(fig2_meanseV, var_y, into = c("variable","y"), sep="_")
-# still need to percentify the tmt columns with reference to AD
-
-fig2_meanseV$standardD <- c(rep(fig2_meanseV[1:11,1], 3))
-fig2_meanseV$standardD2 <- c(fig2_meanseV[1:11,1], fig2_meanseV[23:33,1], fig2_meanseV[12:22,1])
-fig2_meanseV$standardW <- c(rep(fig2_meanseV[1:11,2], 3))
-fig2_meanseV$standardW2 <- c(fig2_meanseV[1:11,2], fig2_meanseV[23:33,2], fig2_meanseV[12:22,2])
-
-fig2_meanseV <- fig2_meanseV %>% 
-  mutate(across(!c("variable","y"), as.numeric)) %>% 
-  # mutate(ED1 = (ED - standardD)*100/standardD) %>%
-  # mutate(EW1 = (EW - standardW)*100/standardW) # %>% 
-  mutate(ED1 = (ED - standardD2)*100/standardD2) %>%
-  mutate(EW1 = (EW - standardW2)*100/standardW2)
-
-fig2_meanseV["d13C_y","ED1"] <- -fig2_meanseV["d13C_y","ED1"]
-fig2_meanseV["d13C_ymin","ED1"] <- -fig2_meanseV["d13C_ymin","ED1"]
-fig2_meanseV["d13C_ymax","ED1"] <- -fig2_meanseV["d13C_ymax","ED1"]
-
-fig2_meanseV["d13C_y","EW1"] <- -fig2_meanseV["d13C_y","EW1"]
-fig2_meanseV["d13C_ymin","EW1"] <- -fig2_meanseV["d13C_ymin","EW1"]
-fig2_meanseV["d13C_ymax","EW1"] <- -fig2_meanseV["d13C_ymax","EW1"]
-
-V_lwcd13C <- final_df_nh %>% 
-  filter(Spp=="V") %>% 
-  select(Tmt, H2OTmt, lwc, d13C) %>% 
-  mutate(d13C = abs(d13C)) %>% 
-  #mutate(overallmin = min(lwc, na.rm=T), overallmax=max(lwc, na.rm=T)) %>% View() # 14.28571, 50; 26.62, 31.77
-  group_by(Tmt) %>%
-  summarise_if(is.numeric, list(y=mean_narm, ymin=minus_se, ymax=plus_se)) %>% 
-  t() %>% data.frame() 
-
-V_lwcd13C <- V_lwcd13C[-1,]
-V_lwcd13C[,5] <- rownames(V_lwcd13C)
-colnames(V_lwcd13C) <- c("AD","AW","ED","EW","var_y")
-V_lwcd13C <- separate(V_lwcd13C, var_y, into = c("variable","y"), sep="_")
-V_lwcd13C$standardD2 <- c(V_lwcd13C[1:2,1], V_lwcd13C[5:6,1], V_lwcd13C[3:4,1])
-V_lwcd13C$standardW2 <- c(V_lwcd13C[1:2,2], V_lwcd13C[5:6,2], V_lwcd13C[3:4,2])
-
-V_lwcd13C <- V_lwcd13C %>% 
-  mutate(across(!c("variable","y"), as.numeric)) %>% 
-  mutate(ED1_lwc = (ED - standardD2)*100/(50 - 14.28571)) %>%
-  mutate(EW1_lwc = (EW - standardW2)*100/(50 - 14.28571)) %>% 
-  mutate(ED1_d13C = (ED - standardD2)*100/(31.77-26.62)) %>%
-  mutate(EW1_d13C = (EW - standardW2)*100/(31.77-26.62))
-
-# reverse sign
-V_lwcd13C["d13C_y","ED1_d13C"] <- -V_lwcd13C["d13C_y","ED1_d13C"]
-V_lwcd13C["d13C_ymin","ED1_d13C"] <- -V_lwcd13C["d13C_ymin","ED1_d13C"]
-V_lwcd13C["d13C_ymax","ED1_d13C"] <- -V_lwcd13C["d13C_ymax","ED1_d13C"]
-
-V_lwcd13C["d13C_y","EW1_d13C"] <- -V_lwcd13C["d13C_y","EW1_d13C"]
-V_lwcd13C["d13C_ymin","EW1_d13C"] <- -V_lwcd13C["d13C_ymin","EW1_d13C"]
-V_lwcd13C["d13C_ymax","EW1_d13C"] <- -V_lwcd13C["d13C_ymax","EW1_d13C"]
-
-# add corrected d13C to table 
-fig2_meanseV["d13C_y","ED1"] <- V_lwcd13C["d13C_y","ED1_d13C"]
-fig2_meanseV["d13C_ymin","ED1"] <- V_lwcd13C["d13C_ymin","ED1_d13C"] 
-fig2_meanseV["d13C_ymax","ED1"] <- V_lwcd13C["d13C_ymax","ED1_d13C"]
-
-fig2_meanseV["d13C_y","EW1"] <- V_lwcd13C["d13C_y","EW1_d13C"]
-fig2_meanseV["d13C_ymin","EW1"] <- V_lwcd13C["d13C_ymin","EW1_d13C"]
-fig2_meanseV["d13C_ymax","EW1"] <- V_lwcd13C["d13C_ymax","EW1_d13C"]
-
-fig2_meanseV["lwc_y","ED1"] <- V_lwcd13C["lwc_y","ED1_d13C"]
-fig2_meanseV["lwc_ymin","ED1"] <- V_lwcd13C["lwc_ymin","ED1_d13C"] 
-fig2_meanseV["lwc_ymax","ED1"] <- V_lwcd13C["lwc_ymax","ED1_d13C"]
-
-fig2_meanseV["lwc_y","EW1"] <- V_lwcd13C["lwc_y","EW1_d13C"]
-fig2_meanseV["lwc_ymin","EW1"] <- V_lwcd13C["lwc_ymin","EW1_d13C"]
-fig2_meanseV["lwc_ymax","EW1"] <- V_lwcd13C["lwc_ymax","EW1_d13C"]
-
-# remove leaf.area for EW bc n = 2
-fig2_meanseV[fig2_meanseV$variable == "leaf.area", "EW1"] <- NA
-
-fig2_nequalsV <- final_df_nh %>% 
-  filter(Spp=="V") %>% 
-  select(Tmt, H2OTmt, totmass, rootshoot, Ht.mm..8, lwc, Anet, gs, WUE, tot_area, SRL, d13C, rootmass_g) %>% 
-  # select(Tmt, H2OTmt, totmass, rootshoot, Ht.mm..8, Anet, gs, WUE, tot_area, SRL, rootmass_g) %>% 
-  rename(leaf.area = tot_area) %>% 
-  rename(root.mass = rootmass_g) %>% 
-  rename(tot.mass = totmass) %>% 
-  rename(final.ht = Ht.mm..8) %>% 
-  group_by(Tmt, H2OTmt) %>% 
-  summarise_if(is.numeric, ~ sum(!is.na(.x))) %>% 
-  group_by(H2OTmt) %>% 
-  summarise_if(is.numeric, ~ min(.x)) %>% 
-  t() %>% data.frame()
-
-fig2_nequalsV <- fig2_nequalsV[-1,]
-fig2_nequalsV[,3] <- rownames(fig2_nequalsV)
-colnames(fig2_nequalsV) <- c("D","W", "variable")
-
-fig2V_nh <- fig2_meanseV %>% 
-  #fig2V <- fig2_meanseV %>% 
-  rename(Dry = ED1, Watered = EW1) %>% 
-  pivot_longer(cols=c("Dry","Watered"), names_to="Treatment", values_to="value") %>% 
-  select(variable, y, Treatment, value) %>% 
-  # filter(variable != "d13C") %>% 
-  # filter(variable != "lwc") %>% 
-  pivot_wider(names_from = "y", values_from = "value") %>% 
-  ggplot() +
-  geom_abline(color= "red", linetype="dashed", slope = 0, intercept= 0) +
-  geom_pointrange(aes(x=factor(variable, level=variable_order), y=y, ymin=ymin, ymax=ymax, group=Treatment, color=Treatment, shape=Treatment), size=1, linewidth=1, position=position_dodge(width=0.2)) + scale_color_manual(values=c("red","blue")) + scale_shape_manual(values = c(1,16)) +
-  geom_text(data = fig2_nequalsV, aes(x = variable, y = -75, label = paste0("N = ",D)), color="red", size = 4) +
-  geom_text(data = fig2_nequalsV, aes(x = variable, y = -95, label = paste0("N = ",W)), color="blue", size = 4) +
-  ylim(-105, 217) +
-  ggtitle("A. Quercus lobata (valley oak)") +
-  ylab("% change with eCO2") + xlab("Plant Response") +
-  theme_classic(base_size = 18) 
-
-# compare filtered versions
-grid.arrange(fig2V_nh, fig2L_nh, nrow=2)
-
-# compare unfiltered versions
-# grid.arrange(fig2V, fig2L, nrow=2) # not that interesting
-
-# for CI, use equation from Kohavi et al. 2009:
-# CV = sd / µ
-# CI = (PctDiff + 1) * (1 ± 1.96 * sqrt((CVa^2)+(CVb^2)-(1.96^2)*(CVa^2)*(CVb^2))/(1-1.96*(CVa^2))) - 1 
-# CI_lo and CI_hi as a function of PctDiff, CVa, CVb
-# to get from se (reported in table) to sd (used in formula), I will use per-treatment ns, think this is the best I can do
-
-# try it with pracmod (Anet for L)
-pracdf <- as.data.frame(predict_response(pracmod, terms=c("CO2 [415, 594]","SWC [4,42]")))
-pracdf[4,2] - pracdf[2,2] # difference in means: EW - AW = 9.801333
-pracdf[3,2] - pracdf[1,2] # difference in means: ED - AD = 1.230118
-
-100*(pracdf[4,2] - pracdf[2,2])/ pracdf[2,2] # pct change, wet = 115.7227
-100*(pracdf[3,2] - pracdf[1,2])/ pracdf[1,2] # pct change, dry = 39.39981
-
-CI_pct_lo <- function(PctDiff, CVa, CVb){
-  (PctDiff + 1)*(1-1.96*sqrt((CVa^2)+(CVb^2)-(1.96^2)*(CVa^2)*(CVb^2))/(1-1.96*(CVa^2)))-1 
-}
-
-CI_pct_hi <- function(PctDiff, CVa, CVb){
-  (PctDiff+1)*(1+1.96*sqrt((CVa^2)+(CVb^2)-((1.96^2)*(CVa^2)*(CVb^2)))/(1-(1.96*(CVa^2))))-1 
-}
-fig2_nL <- final_df_nh %>% 
+# practice bootstrap
+fig2_boot <- final_df_nh %>% 
+  # fig2_meanse <- final_df %>% 
   filter(Spp=="L") %>% 
-  select(Tmt, H2OTmt, totmass, rootshoot, Ht.mm..8, lwc, Anet, gs, WUE, tot_area, SRL, d13C, rootmass_g) %>% 
+  select(Tmt, totmass, RMF, Ht.mm..8, Anet, gs, WUE, tot_area, SRL, rootmass_g) %>%
   rename(leaf.area = tot_area) %>% 
   rename(root.mass = rootmass_g) %>% 
   rename(tot.mass = totmass) %>% 
-  rename(final.ht = Ht.mm..8) %>% 
-  group_by(Tmt, H2OTmt) %>% 
-  summarise_if(is.numeric, ~ sum(!is.na(.x))) %>% 
-  t() %>% data.frame()
-fig2_nL <- fig2_nL[-c(1:2),]
-fig2_nL[,5] <- rownames(fig2_nL)
-colnames(fig2_nL) <- c("AD","AW","ED","EW", "variable")
+  rename(final.ht = Ht.mm..8)
 
-# CI for % change, wet
-# need PctDiff (see above)
-# need CVa: se of EW * sqrt(n) of EW / mean of EW
-# need CVb: se of AW * sqrt(n) of AW / mean of AW   ..... then later do the same thing for all, except D
-CI_pct_lo(115.7227, pracdf$std.error[4]*sqrt(as.numeric(fig2_nL[5,4]))/pracdf$predicted[4], pracdf$std.error[2]*sqrt(as.numeric(fig2_nL[5,2]))/pracdf$predicted[2]) # -46.50874
-CI_pct_hi(115.7227, pracdf$std.error[4]*sqrt(as.numeric(fig2_nL[5,4]))/pracdf$predicted[4], pracdf$std.error[2]*sqrt(as.numeric(fig2_nL[5,2]))/pracdf$predicted[2]) # 277.9541
+percentage_difference <- function(value, value_two) {   
+  (mean(value, na.rm = T) - mean(value_two, na.rm=T))*100 / mean(value_two, na.rm=T)
+}  
 
-# not going to work. Go back to the cross-lots subtraction method, pray for forgiveness. 
+for(i in 2:9){do.call(c,lapply(1:100, function(boot){
+  a <- sample(unlist(fig2_boot[fig2_boot$Tmt=="AW",i]), replace = T)
+  b <- sample(unlist(fig2_boot[fig2_boot$Tmt=="AD",i]), replace = T)
+  percentage_difference(a,b)
+}))}
+
 
 # NEVER EVER GIVE UP
 # NEVER SURRENDER
