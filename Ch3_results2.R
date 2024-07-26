@@ -37,8 +37,8 @@ LiCOR_df. <- LiCOR_new %>%
   mutate(WUE = Anet/gs) %>% 
   mutate(CO2Tmt = substring(Tmt,1,1), H2OTmt = substring(Tmt,2,2)) %>% 
   mutate(Code = if_else(nchar(ID) == 4,substr(ID,1,3),substr(ID,1,4))) %>% 
-  left_join(plot_CO2., by = "Plot") %>% 
-  left_join(licor_SWC., by = "Plot")
+  left_join(plot_CO2., by = "Plot") # %>% 
+ # left_join(licor_SWC., by = "Plot")
 
 # biomass2
 # jeez too many steps. get this one after Ch3_explore, it is messy but w/e
@@ -46,7 +46,9 @@ LiCOR_df. <- LiCOR_new %>%
 biomass2. <- biomass2
 biomass2.[1,]
 biomass2. <- biomass2. %>% 
-  mutate(rootshoot = rootmass_g/(StemWet_g + LeafWet_g), totmass = rootmass_g + StemWet_g + LeafWet_g, lwc = (LeafWet_g-LeafDry_g)*100/LeafWet_g) %>% 
+   mutate(rootshoot = rootmass_g/(StemWet_g + LeafWet_g), totmass = rootmass_g + StemWet_g + LeafWet_g, lwc = (LeafWet_g-LeafDry_g)*100/LeafWet_g) %>% 
+ # mutate(totmass = rootmass_g + StemWet_g + LeafWet_g, lwc = (LeafWet_g-LeafDry_g)*100/LeafWet_g) %>% 
+#  mutate(RMF = 100*rootmass_g/totmass) %>% 
     # mutate(rootshoot = rootmass_g/(StemWet_expanded + LeafWet_expanded), totmass = rootmass_g + StemWet_expanded + LeafWet_expanded, lwc = (LeafWet_g-LeafDry_g)*100/LeafWet_g) %>% 
   left_join(plot_CO2., by = "Plot") %>% 
   left_join(plot_SWC., by = "Plot") 
@@ -113,8 +115,9 @@ library(car)
 ### combine into one giant, all-inclusive dataset
 
  final_df <- biomass2. %>% 
-  dplyr::select(Plot, Spp, Code, StemWet_g, totmass, rootshoot, rootmass_g, Ht.mm..5, Ht.mm..8, lwc, CO2, meanSWC) %>% 
-  left_join(LiCOR_df.[,c("Code","Anet","gs", "WUE", "HHMMSS", "licorSWC")], by = "Code") %>% 
+  # dplyr::select(Plot, Spp, Code, StemWet_g, totmass, rootshoot, rootmass_g, Ht.mm..5, Ht.mm..8, lwc, CO2, meanSWC) %>% 
+   dplyr::select(Plot, Spp, Code, StemWet_g, totmass, rootshoot, rootmass_g, Ht.mm..5, Ht.mm..8, lwc, CO2, meanSWC) %>% 
+  left_join(LiCOR_df.[,c("Code","Anet","gs", "WUE", "HHMMSS")], by = "Code") %>% 
   left_join(lai.[,c("Code","avg_area","perim_per_A","tot_area", "SLA")], by = "Code") %>% 
   left_join(rootimage.[,c("Code","SRL")], by = "Code") %>% 
   left_join(SIF.[,c("Code","d13C")], by = "Code") %>% 
@@ -153,6 +156,7 @@ library(lmerTest)
 library(scales)
 library(lattice)
 library(MuMIn)
+library(gridExtra)
 
 # Redoing the univariate models with plot means
 plotmeans.V <- final_df_nh %>% 
@@ -160,7 +164,6 @@ plotmeans.V <- final_df_nh %>%
   mutate(time_scaled = rescale(HHMMSS)) %>% 
   group_by(Plot, H2OTmt, CO2Tmt, meanSWC, CO2) %>% 
   summarise(across(is.numeric, ~ mean(.x, na.rm=T))) %>% 
-  select(!licorSWC) %>% # drop this one, didn't use anyway
   rename(licorSWC = SWC) %>% # retain per-measurement SWC values and rename "licorSWC"
   rename(SWC = meanSWC) # now the per-plot all time mean SWC has the same name in this df as the licor-measurement-specific SWC in the final_df
 # this will be confusing, sorry; need to run all models in a loop with the same predictor variables. "SWC" in the licor models refers to per-measurement, while "meanSWC" in plot-means level models has referred to average of all sampling dates. 
@@ -170,7 +173,6 @@ plotmeans.L <- final_df_nh %>%
   mutate(time_scaled = rescale(HHMMSS)) %>% 
   group_by(Plot, H2OTmt, CO2Tmt, meanSWC, CO2) %>%  # adding SWC, time-of-licor SWC
   summarise(across(is.numeric, ~ mean(.x, na.rm=T))) %>% 
-  select(!licorSWC) %>% # drop this one, didn't use anyway
   rename(licorSWC = SWC) %>% # retain per-measurement SWC values and rename "licorSWC"
   rename(SWC = meanSWC)
 
@@ -652,107 +654,10 @@ plus_se <- function(x){
   mean(x, na.rm=TRUE) + (sd(x, na.rm = TRUE)/sqrt(length(x[!is.na(x)])))
 }
 
-# % change with eCO2 figure
-fig2_meanse <- final_df_nh %>% 
-  # fig2_meanse <- final_df %>% 
-  filter(Spp=="L") %>% 
-  select(Tmt, totmass, rootshoot, Ht.mm..8, lwc, Anet, gs, WUE, tot_area, SRL, d13C, rootmass_g) %>%
-  rename(leaf.area = tot_area) %>% 
-  rename(root.mass = rootmass_g) %>% 
-  rename(tot.mass = totmass) %>% 
-  rename(final.ht = Ht.mm..8) %>% 
-  mutate(d13C = abs(d13C)) %>% 
-  group_by(Tmt) %>% 
-  summarise_if(is.numeric, list(y=mean_narm, ymin=minus_se, ymax=plus_se)) %>% 
-t() %>% data.frame() 
-# this is good! I want the columns to be the Tmts, and I want to move rownames into 2 columns: variable and y*
-
-#names(fig2_meanse) <- fig2_meanse[1,]
-fig2_meanse <- fig2_meanse[-1,]
-fig2_meanse[,5] <- rownames(fig2_meanse)
-colnames(fig2_meanse) <- c("AD","AW","ED","EW","var_y")
-
-fig2_meanse <- separate(fig2_meanse, var_y, into = c("variable","y"), sep="_")
-# still need to percentify the tmt columns with reference to AD
-
-fig2_meanse$standardD <- c(rep(fig2_meanse[1:11,1], 3))
-fig2_meanse$standardD2 <- c(fig2_meanse[1:11,1], fig2_meanse[23:33,1], fig2_meanse[12:22,1])
-fig2_meanse$standardW <- c(rep(fig2_meanse[1:11,2], 3))
-fig2_meanse$standardW2 <- c(fig2_meanse[1:11,2], fig2_meanse[23:33,2], fig2_meanse[12:22,2])
-
-fig2_meanse <- fig2_meanse %>% 
-  mutate(across(!c("variable","y"), as.numeric)) %>% 
-  # mutate(ED1 = (ED - standardD)*100/standardD) %>%
-  # mutate(EW1 = (EW - standardW)*100/standardW) # %>% 
-  mutate(ED1 = (ED - standardD2)*100/standardD2) %>%
-  mutate(EW1 = (EW - standardW2)*100/standardW2)
-
-fig2_meanse["d13C_y","ED1"] <- -fig2_meanse["d13C_y","ED1"]
-fig2_meanse["d13C_ymin","ED1"] <- -fig2_meanse["d13C_ymin","ED1"]
-fig2_meanse["d13C_ymax","ED1"] <- -fig2_meanse["d13C_ymax","ED1"]
-
-fig2_meanse["d13C_y","EW1"] <- -fig2_meanse["d13C_y","EW1"]
-fig2_meanse["d13C_ymin","EW1"] <- -fig2_meanse["d13C_ymin","EW1"]
-fig2_meanse["d13C_ymax","EW1"] <- -fig2_meanse["d13C_ymax","EW1"]
-
-L_lwcd13C <- final_df_nh %>% 
-  filter(Spp=="L") %>% 
-  select(Tmt, H2OTmt, lwc, d13C) %>% 
-  mutate(d13C = abs(d13C)) %>% 
-  #mutate(overallmin = min(d13C, na.rm=T), overallmax=max(d13C, na.rm=T)) %>% View() # 30.71429, 46.54088; 26.29, 31.09
-  group_by(Tmt) %>%
-  summarise_if(is.numeric, list(y=mean_narm, ymin=minus_se, ymax=plus_se)) %>% 
-  t() %>% data.frame() 
-
-L_lwcd13C <- L_lwcd13C[-1,]
-L_lwcd13C[,5] <- rownames(L_lwcd13C)
-colnames(L_lwcd13C) <- c("AD","AW","ED","EW","var_y")
-L_lwcd13C <- separate(L_lwcd13C, var_y, into = c("variable","y"), sep="_")
-L_lwcd13C$standardD2 <- c(L_lwcd13C[1:2,1], L_lwcd13C[5:6,1], L_lwcd13C[3:4,1])
-L_lwcd13C$standardW2 <- c(L_lwcd13C[1:2,2], L_lwcd13C[5:6,2], L_lwcd13C[3:4,2])
-
-L_lwcd13C <- L_lwcd13C %>% 
-  mutate(across(!c("variable","y"), as.numeric)) %>% 
-  mutate(ED1_lwc = (ED - standardD2)*100/(46.54088- 30.71429)) %>%
-  mutate(EW1_lwc = (EW - standardW2)*100/(46.54088- 30.71429)) %>% 
-  mutate(ED1_d13C = (ED - standardD2)*100/(31.09-26.29)) %>%
-  mutate(EW1_d13C = (EW - standardW2)*100/(31.09-26.29))
-
-# reverse sign
-L_lwcd13C["d13C_y","ED1_d13C"] <- -L_lwcd13C["d13C_y","ED1_d13C"]
-L_lwcd13C["d13C_ymin","ED1_d13C"] <- -L_lwcd13C["d13C_ymin","ED1_d13C"]
-L_lwcd13C["d13C_ymax","ED1_d13C"] <- -L_lwcd13C["d13C_ymax","ED1_d13C"]
-
-L_lwcd13C["d13C_y","EW1_d13C"] <- -L_lwcd13C["d13C_y","EW1_d13C"]
-L_lwcd13C["d13C_ymin","EW1_d13C"] <- -L_lwcd13C["d13C_ymin","EW1_d13C"]
-L_lwcd13C["d13C_ymax","EW1_d13C"] <- -L_lwcd13C["d13C_ymax","EW1_d13C"]
-
-# add corrected d13C to table 
-fig2_meanse["d13C_y","ED1"] <- L_lwcd13C["d13C_y","ED1_d13C"]
-fig2_meanse["d13C_ymin","ED1"] <- L_lwcd13C["d13C_ymin","ED1_d13C"] 
-fig2_meanse["d13C_ymax","ED1"] <- L_lwcd13C["d13C_ymax","ED1_d13C"]
-
-fig2_meanse["d13C_y","EW1"] <- L_lwcd13C["d13C_y","EW1_d13C"]
-fig2_meanse["d13C_ymin","EW1"] <- L_lwcd13C["d13C_ymin","EW1_d13C"]
-fig2_meanse["d13C_ymax","EW1"] <- L_lwcd13C["d13C_ymax","EW1_d13C"]
-
-fig2_meanse["lwc_y","ED1"] <- L_lwcd13C["lwc_y","ED1_d13C"]
-fig2_meanse["lwc_ymin","ED1"] <- L_lwcd13C["lwc_ymin","ED1_d13C"] 
-fig2_meanse["lwc_ymax","ED1"] <- L_lwcd13C["lwc_ymax","ED1_d13C"]
-
-fig2_meanse["lwc_y","EW1"] <- L_lwcd13C["lwc_y","EW1_d13C"]
-fig2_meanse["lwc_ymin","EW1"] <- L_lwcd13C["lwc_ymin","EW1_d13C"]
-fig2_meanse["lwc_ymax","EW1"] <- L_lwcd13C["lwc_ymax","EW1_d13C"]
-
-#  mutate_if(is.numeric, list(pct_chg = (AD - .x)*100/AD)) %>% View()
-# get Tmt to be its own column with pivot_longer
-variable_order <- c("Anet", "gs", "WUE", "tot.mass", "root.mass", "final.ht", "leaf.area", "rootshoot", "SRL", "lwc", "d13C")
-#variable_order <- c("tot.mass", "root.mass", "final.ht", "leaf.area", "rootshoot", "SRL", "Anet", "gs", "WUE")
-
-# add n= ... + geom_text(data = nequals_licor, aes(x = Tmt, y = 0.01, label = paste0("N = ",n)))
+variable_order <- c("Anet", "gs", "WUE", "tot.mass", "root.mass", "final.ht", "leaf.area", "rootshoot", "SRL")
 fig2_nequals <- final_df_nh %>% 
   filter(Spp=="L") %>% 
-  select(Tmt, H2OTmt, totmass, rootshoot, Ht.mm..8, lwc, Anet, gs, WUE, tot_area, SRL, d13C, rootmass_g) %>% 
+  select(Tmt, H2OTmt, totmass, rootshoot, Ht.mm..8, Anet, gs, WUE, tot_area, SRL, rootmass_g) %>% 
   # select(Tmt, H2OTmt, totmass, rootshoot, Ht.mm..8, Anet, gs, WUE, tot_area, SRL, rootmass_g) %>% 
   rename(leaf.area = tot_area) %>% 
   rename(root.mass = rootmass_g) %>% 
@@ -766,125 +671,11 @@ fig2_nequals <- final_df_nh %>%
 
 fig2_nequals <- fig2_nequals[-1,]
 fig2_nequals[,3] <- rownames(fig2_nequals)
-colnames(fig2_nequals) <- c("D","W", "variable")
-
-fig2L_nh <- fig2_meanse %>% 
-  # fig2L <- fig2_meanse %>% 
-  rename(Dry = ED1, Watered = EW1) %>% 
-  pivot_longer(cols=c("Dry","Watered"), names_to="Treatment", values_to="value") %>% 
-  select(variable, y, Treatment, value) %>% 
-  # filter(variable != "d13C") %>% 
-  # filter(variable != "lwc") %>% 
-  pivot_wider(names_from = "y", values_from = "value") %>% 
-  ggplot() +
-  geom_abline(color= "red", linetype="dashed", slope = 0, intercept= 0) +
-  geom_pointrange(aes(x=factor(variable, level=variable_order), y=y, ymin=ymin, ymax=ymax, group=Treatment, color=Treatment, shape=Treatment), size=1, linewidth=1, position=position_dodge(width=0.2)) + scale_color_manual(values=c("red","blue")) + scale_shape_manual(values = c(1,16)) +
-  ylim(-105, 217) +
-  geom_text(data = fig2_nequals, aes(x = variable, y = -75, label = paste0("N = ",D)), color="red", size = 4) +
-  geom_text(data = fig2_nequals, aes(x = variable, y = -95, label = paste0("N = ",W)), color="blue", size = 4) +
-  ggtitle("B. Quercus wislizenii (live oak)") +
-  ylab("% change with eCO2") + xlab("Plant Response") +
-  theme_classic(base_size = 18) 
-
-
-# now for V!
-fig2_meanseV <- final_df_nh %>% 
-  #  fig2_meanseV <- final_df %>% 
-  filter(Spp=="V") %>% 
-  select(Tmt, totmass, rootmass_g, Ht.mm..8, tot_area, rootshoot, SRL, lwc, d13C, Anet, gs, WUE) %>% 
-  # select(Tmt, totmass, rootshoot, Ht.mm..8, lwc, Anet, gs, WUE, tot_area, SRL, d13C, rootmass_g) %>%
-  rename(leaf.area = tot_area) %>% 
-  rename(root.mass = rootmass_g) %>% 
-  rename(tot.mass = totmass) %>% 
-  rename(final.ht = Ht.mm..8) %>% 
-  group_by(Tmt) %>% 
-  summarise_if(is.numeric, list(y=mean_narm, ymin=minus_se, ymax=plus_se)) %>% 
-  t() %>% data.frame()
-# this is good! I want the columns to be the Tmts, and I want to move rownames into 2 columns: variable and y*
-
-fig2_meanseV <- fig2_meanseV[-1,]
-fig2_meanseV[,5] <- rownames(fig2_meanseV)
-colnames(fig2_meanseV) <- c("AD","AW","ED","EW","var_y")
-
-fig2_meanseV <- separate(fig2_meanseV, var_y, into = c("variable","y"), sep="_")
-# still need to percentify the tmt columns with reference to AD
-
-fig2_meanseV$standardD <- c(rep(fig2_meanseV[1:11,1], 3))
-fig2_meanseV$standardD2 <- c(fig2_meanseV[1:11,1], fig2_meanseV[23:33,1], fig2_meanseV[12:22,1])
-fig2_meanseV$standardW <- c(rep(fig2_meanseV[1:11,2], 3))
-fig2_meanseV$standardW2 <- c(fig2_meanseV[1:11,2], fig2_meanseV[23:33,2], fig2_meanseV[12:22,2])
-
-fig2_meanseV <- fig2_meanseV %>% 
-  mutate(across(!c("variable","y"), as.numeric)) %>% 
-  # mutate(ED1 = (ED - standardD)*100/standardD) %>%
-  # mutate(EW1 = (EW - standardW)*100/standardW) # %>% 
-  mutate(ED1 = (ED - standardD2)*100/standardD2) %>%
-  mutate(EW1 = (EW - standardW2)*100/standardW2)
-
-fig2_meanseV["d13C_y","ED1"] <- -fig2_meanseV["d13C_y","ED1"]
-fig2_meanseV["d13C_ymin","ED1"] <- -fig2_meanseV["d13C_ymin","ED1"]
-fig2_meanseV["d13C_ymax","ED1"] <- -fig2_meanseV["d13C_ymax","ED1"]
-
-fig2_meanseV["d13C_y","EW1"] <- -fig2_meanseV["d13C_y","EW1"]
-fig2_meanseV["d13C_ymin","EW1"] <- -fig2_meanseV["d13C_ymin","EW1"]
-fig2_meanseV["d13C_ymax","EW1"] <- -fig2_meanseV["d13C_ymax","EW1"]
-
-V_lwcd13C <- final_df_nh %>% 
-  filter(Spp=="V") %>% 
-  select(Tmt, H2OTmt, lwc, d13C) %>% 
-  mutate(d13C = abs(d13C)) %>% 
-  #mutate(overallmin = min(lwc, na.rm=T), overallmax=max(lwc, na.rm=T)) %>% View() # 14.28571, 50; 26.62, 31.77
-  group_by(Tmt) %>%
-  summarise_if(is.numeric, list(y=mean_narm, ymin=minus_se, ymax=plus_se)) %>% 
-  t() %>% data.frame() 
-
-V_lwcd13C <- V_lwcd13C[-1,]
-V_lwcd13C[,5] <- rownames(V_lwcd13C)
-colnames(V_lwcd13C) <- c("AD","AW","ED","EW","var_y")
-V_lwcd13C <- separate(V_lwcd13C, var_y, into = c("variable","y"), sep="_")
-V_lwcd13C$standardD2 <- c(V_lwcd13C[1:2,1], V_lwcd13C[5:6,1], V_lwcd13C[3:4,1])
-V_lwcd13C$standardW2 <- c(V_lwcd13C[1:2,2], V_lwcd13C[5:6,2], V_lwcd13C[3:4,2])
-
-V_lwcd13C <- V_lwcd13C %>% 
-  mutate(across(!c("variable","y"), as.numeric)) %>% 
-  mutate(ED1_lwc = (ED - standardD2)*100/(50 - 14.28571)) %>%
-  mutate(EW1_lwc = (EW - standardW2)*100/(50 - 14.28571)) %>% 
-  mutate(ED1_d13C = (ED - standardD2)*100/(31.77-26.62)) %>%
-  mutate(EW1_d13C = (EW - standardW2)*100/(31.77-26.62))
-
-# reverse sign
-V_lwcd13C["d13C_y","ED1_d13C"] <- -V_lwcd13C["d13C_y","ED1_d13C"]
-V_lwcd13C["d13C_ymin","ED1_d13C"] <- -V_lwcd13C["d13C_ymin","ED1_d13C"]
-V_lwcd13C["d13C_ymax","ED1_d13C"] <- -V_lwcd13C["d13C_ymax","ED1_d13C"]
-
-V_lwcd13C["d13C_y","EW1_d13C"] <- -V_lwcd13C["d13C_y","EW1_d13C"]
-V_lwcd13C["d13C_ymin","EW1_d13C"] <- -V_lwcd13C["d13C_ymin","EW1_d13C"]
-V_lwcd13C["d13C_ymax","EW1_d13C"] <- -V_lwcd13C["d13C_ymax","EW1_d13C"]
-
-# add corrected d13C to table 
-fig2_meanseV["d13C_y","ED1"] <- V_lwcd13C["d13C_y","ED1_d13C"]
-fig2_meanseV["d13C_ymin","ED1"] <- V_lwcd13C["d13C_ymin","ED1_d13C"] 
-fig2_meanseV["d13C_ymax","ED1"] <- V_lwcd13C["d13C_ymax","ED1_d13C"]
-
-fig2_meanseV["d13C_y","EW1"] <- V_lwcd13C["d13C_y","EW1_d13C"]
-fig2_meanseV["d13C_ymin","EW1"] <- V_lwcd13C["d13C_ymin","EW1_d13C"]
-fig2_meanseV["d13C_ymax","EW1"] <- V_lwcd13C["d13C_ymax","EW1_d13C"]
-
-fig2_meanseV["lwc_y","ED1"] <- V_lwcd13C["lwc_y","ED1_d13C"]
-fig2_meanseV["lwc_ymin","ED1"] <- V_lwcd13C["lwc_ymin","ED1_d13C"] 
-fig2_meanseV["lwc_ymax","ED1"] <- V_lwcd13C["lwc_ymax","ED1_d13C"]
-
-fig2_meanseV["lwc_y","EW1"] <- V_lwcd13C["lwc_y","EW1_d13C"]
-fig2_meanseV["lwc_ymin","EW1"] <- V_lwcd13C["lwc_ymin","EW1_d13C"]
-fig2_meanseV["lwc_ymax","EW1"] <- V_lwcd13C["lwc_ymax","EW1_d13C"]
-
-# remove leaf.area for EW bc n = 2
-fig2_meanseV[fig2_meanseV$variable == "leaf.area", "EW1"] <- NA
+colnames(fig2_nequals) <- c("aCO2","eCO2", "variable")
 
 fig2_nequalsV <- final_df_nh %>% 
   filter(Spp=="V") %>% 
-  select(Tmt, H2OTmt, totmass, rootshoot, Ht.mm..8, lwc, Anet, gs, WUE, tot_area, SRL, d13C, rootmass_g) %>% 
-  # select(Tmt, H2OTmt, totmass, rootshoot, Ht.mm..8, Anet, gs, WUE, tot_area, SRL, rootmass_g) %>% 
+  select(Tmt, H2OTmt, totmass, rootshoot, Ht.mm..8, Anet, gs, WUE, tot_area, SRL, rootmass_g) %>% 
   rename(leaf.area = tot_area) %>% 
   rename(root.mass = rootmass_g) %>% 
   rename(tot.mass = totmass) %>% 
@@ -897,26 +688,200 @@ fig2_nequalsV <- final_df_nh %>%
 
 fig2_nequalsV <- fig2_nequalsV[-1,]
 fig2_nequalsV[,3] <- rownames(fig2_nequalsV)
-colnames(fig2_nequalsV) <- c("D","W", "variable")
+colnames(fig2_nequalsV) <- c("aCO2","eCO2", "variable")
 
-fig2V_nh <- fig2_meanseV %>% 
-  #fig2V <- fig2_meanseV %>% 
-  rename(Dry = ED1, Watered = EW1) %>% 
-  pivot_longer(cols=c("Dry","Watered"), names_to="Treatment", values_to="value") %>% 
+# percent change with watering figures
+fig2_boot <- final_df_nh %>% 
+  # fig2_meanse <- final_df %>% 
+  filter(Spp=="L") %>% 
+  select(Tmt, totmass, rootshoot, Ht.mm..8, Anet, gs, WUE, tot_area, SRL, rootmass_g) %>%
+  rename(leaf.area = tot_area) %>% 
+  rename(root.mass = rootmass_g) %>% 
+  rename(tot.mass = totmass) %>% 
+  rename(final.ht = Ht.mm..8)
+
+percentage_difference <- function(value, value_two) {   
+  (mean(value, na.rm = T) - mean(value_two, na.rm=T))*100 / mean(value_two, na.rm=T)
+}  
+
+bootmean <- data.frame("AW1" = c(1:9), "EW1" = c(1:9))
+for(i in c(2:10)){ bootmean[(i-1),1] <- mean(
+  do.call(c,lapply(1:1000, function(boot){
+    a <- sample(unlist(fig2_boot[fig2_boot$Tmt=="AW",i])[!is.na(unlist(fig2_boot[fig2_boot$Tmt=="AW",i]))], replace = T)
+    b <- sample(unlist(fig2_boot[fig2_boot$Tmt=="AD",i])[!is.na(unlist(fig2_boot[fig2_boot$Tmt=="AD",i]))], replace = T)
+    percentage_difference(a,b)
+  })))
+
+bootmean[(i-1),2] <- mean(
+  do.call(c,lapply(1:1000, function(boot){
+    a <- sample(unlist(fig2_boot[fig2_boot$Tmt=="EW",i])[!is.na(unlist(fig2_boot[fig2_boot$Tmt=="EW",i]))], replace = T)
+    b <- sample(unlist(fig2_boot[fig2_boot$Tmt=="ED",i])[!is.na(unlist(fig2_boot[fig2_boot$Tmt=="ED",i]))], replace = T)
+    percentage_difference(a,b)
+  })))
+}
+
+bootmin <- data.frame("AW1" = c(1:9), "EW1" = c(1:9))
+for(i in c(2:10)){ x <- do.call(c,lapply(1:1000, function(boot){
+  a <- sample(unlist(fig2_boot[fig2_boot$Tmt=="AW",i])[!is.na(unlist(fig2_boot[fig2_boot$Tmt=="AW",i]))], replace = T)
+  b <- sample(unlist(fig2_boot[fig2_boot$Tmt=="AD",i])[!is.na(unlist(fig2_boot[fig2_boot$Tmt=="AD",i]))], replace = T)
+  percentage_difference(a,b)
+}))
+bootmin[(i-1),1] <- mean(x) - sd(x)
+
+y <- do.call(c,lapply(1:1000, function(boot){
+  a <- sample(unlist(fig2_boot[fig2_boot$Tmt=="EW",i])[!is.na(unlist(fig2_boot[fig2_boot$Tmt=="EW",i]))], replace = T)
+  b <- sample(unlist(fig2_boot[fig2_boot$Tmt=="ED",i])[!is.na(unlist(fig2_boot[fig2_boot$Tmt=="ED",i]))], replace = T)
+  percentage_difference(a,b)
+}))
+bootmin[(i-1),2] <- mean(y) - sd(y)
+}
+
+bootmax <- data.frame("AW1" = c(1:9), "EW1" = c(1:9))
+for(i in c(2:10)){ x <- do.call(c,lapply(1:1000, function(boot){
+  a <- sample(unlist(fig2_boot[fig2_boot$Tmt=="AW",i])[!is.na(unlist(fig2_boot[fig2_boot$Tmt=="AW",i]))], replace = T)
+  b <- sample(unlist(fig2_boot[fig2_boot$Tmt=="AD",i])[!is.na(unlist(fig2_boot[fig2_boot$Tmt=="AD",i]))], replace = T)
+  percentage_difference(a,b)
+}))
+bootmax[(i-1),1] <- mean(x) + sd(x)
+
+y <- do.call(c,lapply(1:1000, function(boot){
+  a <- sample(unlist(fig2_boot[fig2_boot$Tmt=="EW",i])[!is.na(unlist(fig2_boot[fig2_boot$Tmt=="EW",i]))], replace = T)
+  b <- sample(unlist(fig2_boot[fig2_boot$Tmt=="ED",i])[!is.na(unlist(fig2_boot[fig2_boot$Tmt=="ED",i]))], replace = T)
+  percentage_difference(a,b)
+}))
+bootmax[(i-1),2] <- mean(y) + sd(y)
+}
+
+pct_bootL <- cbind(rbind(bootmean, bootmin, bootmax), 
+      data.frame("variable" = rep(c("tot.mass", "rootshoot", "final.ht", "Anet", "gs", "WUE", "leaf.area", "SRL", "root.mass"),3), 
+                 "y" = rep(c("y","ymin","ymax"), each=9))) %>% 
+  rename(aCO2=AW1, eCO2=EW1) %>% 
+  pivot_longer(cols=c("aCO2","eCO2"), names_to="Treatment", values_to="value") %>% 
   select(variable, y, Treatment, value) %>% 
-  # filter(variable != "d13C") %>% 
-  # filter(variable != "lwc") %>% 
   pivot_wider(names_from = "y", values_from = "value") %>% 
   ggplot() +
   geom_abline(color= "red", linetype="dashed", slope = 0, intercept= 0) +
-  geom_pointrange(aes(x=factor(variable, level=variable_order), y=y, ymin=ymin, ymax=ymax, group=Treatment, color=Treatment, shape=Treatment), size=1, linewidth=1, position=position_dodge(width=0.2)) + scale_color_manual(values=c("red","blue")) + scale_shape_manual(values = c(1,16)) +
-  geom_text(data = fig2_nequalsV, aes(x = variable, y = -75, label = paste0("N = ",D)), color="red", size = 4) +
-  geom_text(data = fig2_nequalsV, aes(x = variable, y = -95, label = paste0("N = ",W)), color="blue", size = 4) +
-  ylim(-105, 217) +
-  ggtitle("A. Quercus lobata (valley oak)") +
-  ylab("% change with eCO2") + xlab("Plant Response") +
+  geom_pointrange(aes(x=factor(variable, level=variable_order), y=y, ymin=ymin, ymax=ymax, group=Treatment, color=Treatment, shape=Treatment), size=1, linewidth=1, position=position_dodge(width=0.2)) + scale_color_manual(values=c("darkgray","black")) + scale_shape_manual(values = c(1,16)) +
+  ylim(-85, 350) +
+  geom_text(data = fig2_nequals, aes(x = variable, y = -50, label = paste0("N = ",aCO2)), color="darkgray", size = 4) +
+  geom_text(data = fig2_nequals, aes(x = variable, y = -77, label = paste0("N = ",eCO2)), color="black", size = 4) +
+  ggtitle("B. Quercus wislizeni (live oak)") +
+  ylab("% change with watering") + xlab("Plant Response") +
   theme_classic(base_size = 18) 
 
-# compare filtered versions
-grid.arrange(fig2V_nh, fig2L_nh, nrow=2)
+# now for V
+# percent change with watering figures
+fig2_bootV <- final_df_nh %>% 
+  # fig2_meanse <- final_df %>% 
+  filter(Spp=="V") %>% 
+  select(Tmt, totmass, rootshoot, Ht.mm..8, Anet, gs, WUE, tot_area, SRL, rootmass_g) %>%
+  rename(leaf.area = tot_area) %>% 
+  rename(root.mass = rootmass_g) %>% 
+  rename(tot.mass = totmass) %>% 
+  rename(final.ht = Ht.mm..8)
+
+bootmeanV <- data.frame("AW1" = c(1:9), "EW1" = c(1:9))
+for(i in c(2:10)){ bootmeanV[(i-1),1] <- mean(
+  do.call(c,lapply(1:1000, function(boot){
+    a <- sample(unlist(fig2_bootV[fig2_bootV$Tmt=="AW",i])[!is.na(unlist(fig2_bootV[fig2_bootV$Tmt=="AW",i]))], replace = T)
+    b <- sample(unlist(fig2_bootV[fig2_bootV$Tmt=="AD",i])[!is.na(unlist(fig2_bootV[fig2_bootV$Tmt=="AD",i]))], replace = T)
+    percentage_difference(a,b)
+  })))
+
+bootmeanV[(i-1),2] <- mean(
+  do.call(c,lapply(1:1000, function(boot){
+    a <- sample(unlist(fig2_bootV[fig2_bootV$Tmt=="EW",i])[!is.na(unlist(fig2_bootV[fig2_bootV$Tmt=="EW",i]))], replace = T)
+    b <- sample(unlist(fig2_bootV[fig2_bootV$Tmt=="ED",i])[!is.na(unlist(fig2_bootV[fig2_bootV$Tmt=="ED",i]))], replace = T)
+    percentage_difference(a,b)
+  })))
+}
+
+bootminV <- data.frame("AW1" = c(1:9), "EW1" = c(1:9))
+for(i in c(2:10)){ x <- do.call(c,lapply(1:1000, function(boot){
+  a <- sample(unlist(fig2_bootV[fig2_bootV$Tmt=="AW",i])[!is.na(unlist(fig2_bootV[fig2_bootV$Tmt=="AW",i]))], replace = T)
+  b <- sample(unlist(fig2_bootV[fig2_bootV$Tmt=="AD",i])[!is.na(unlist(fig2_bootV[fig2_bootV$Tmt=="AD",i]))], replace = T)
+  percentage_difference(a,b)
+}))
+bootminV[(i-1),1] <- mean(x) - sd(x)
+
+y <- do.call(c,lapply(1:1000, function(boot){
+  a <- sample(unlist(fig2_bootV[fig2_bootV$Tmt=="EW",i])[!is.na(unlist(fig2_bootV[fig2_bootV$Tmt=="EW",i]))], replace = T)
+  b <- sample(unlist(fig2_bootV[fig2_bootV$Tmt=="ED",i])[!is.na(unlist(fig2_bootV[fig2_bootV$Tmt=="ED",i]))], replace = T)
+  percentage_difference(a,b)
+}))
+bootminV[(i-1),2] <- mean(y) - sd(y)
+}
+
+bootmaxV <- data.frame("AW1" = c(1:9), "EW1" = c(1:9))
+for(i in c(2:10)){ x <- do.call(c,lapply(1:1000, function(boot){
+  a <- sample(unlist(fig2_bootV[fig2_bootV$Tmt=="AW",i])[!is.na(unlist(fig2_bootV[fig2_bootV$Tmt=="AW",i]))], replace = T)
+  b <- sample(unlist(fig2_bootV[fig2_bootV$Tmt=="AD",i])[!is.na(unlist(fig2_bootV[fig2_bootV$Tmt=="AD",i]))], replace = T)
+  percentage_difference(a,b)
+}))
+bootmaxV[(i-1),1] <- mean(x) + sd(x)
+
+y <- do.call(c,lapply(1:1000, function(boot){
+  a <- sample(unlist(fig2_bootV[fig2_bootV$Tmt=="EW",i])[!is.na(unlist(fig2_bootV[fig2_bootV$Tmt=="EW",i]))], replace = T)
+  b <- sample(unlist(fig2_bootV[fig2_bootV$Tmt=="ED",i])[!is.na(unlist(fig2_bootV[fig2_bootV$Tmt=="ED",i]))], replace = T)
+  percentage_difference(a,b)
+}))
+bootmaxV[(i-1),2] <- mean(y) + sd(y)
+}
+
+pct_bootV <- cbind(rbind(bootmeanV, bootminV, bootmaxV), 
+      data.frame("variable" = rep(c("tot.mass", "rootshoot", "final.ht", "Anet", "gs", "WUE", "leaf.area", "SRL", "root.mass"),3), 
+                 "y" = rep(c("y","ymin","ymax"), each=9))) %>% 
+  rename(aCO2=AW1, eCO2=EW1) %>% 
+  pivot_longer(cols=c("aCO2","eCO2"), names_to="Treatment", values_to="value") %>% 
+  select(variable, y, Treatment, value) %>% 
+  pivot_wider(names_from = "y", values_from = "value") %>% 
+  ggplot() +
+  geom_abline(color= "red", linetype="dashed", slope = 0, intercept= 0) +
+  geom_pointrange(aes(x=factor(variable, level=variable_order), y=y, ymin=ymin, ymax=ymax, group=Treatment, color=Treatment, shape=Treatment), size=1, linewidth=1, position=position_dodge(width=0.2)) + scale_color_manual(values=c("darkgray","black")) + scale_shape_manual(values = c(1,16)) +
+  ylim(-85, 350) +
+  geom_text(data = fig2_nequalsV, aes(x = variable, y = -50, label = paste0("N = ",aCO2)), color="darkgray", size = 4) +
+  geom_text(data = fig2_nequalsV, aes(x = variable, y = -77, label = paste0("N = ",eCO2)), color="black", size = 4) +
+  ggtitle("A. Quercus lobata (valley oak)") +
+  ylab("% change with watering") + xlab("Plant Response") +
+  theme_classic(base_size = 18) 
+
+grid.arrange(pct_bootV, pct_bootL, nrow=2)
+
+# Anet vs gs
+
+final_df %>% 
+  filter(Spp=="L") %>% 
+  select(gs, Anet, Tmt) %>% 
+  group_by(Tmt) %>% 
+  summarise_if(is.numeric, list(y=mean_narm, ymin=minus_se, ymax=plus_se)) %>% 
+  ggplot(aes(x=gs_y, y=Anet_y, fill=Tmt)) + 
+  geom_errorbar(aes(x=gs_y, ymin = Anet_ymin, ymax = Anet_ymax, color=Tmt), width = 0.001) +
+  geom_errorbarh(aes(y=Anet_y, xmin = gs_ymin, xmax = gs_ymax, color=Tmt), height = 0.2) +
+  geom_point(aes(color=Tmt, shape=Tmt), size = 4) +
+  scale_shape_manual(values = c(21, 21, 16, 16)) +
+  scale_fill_manual(values =c ("white","white","white","white")) +
+  xlab(label = "Stomatal Conductance (mol H2O/m2/s)") +
+  ylab(label = "Photosynthesis (µmol CO2/m2/s)") +
+  labs(title="Q. wislizeni") +
+  scale_x_continuous(expand = c(0,0), limits=c(0,0.25)) + scale_y_continuous(expand = c(0,0), limits=c(0,25)) +
+  scale_color_manual(values = c("red", "blue", "red", "blue")) + theme_classic(base_size = 19)
+
+
+final_df %>% 
+  filter(Spp=="V") %>% 
+  select(gs, Anet, Tmt) %>% 
+  group_by(Tmt) %>% 
+  summarise_if(is.numeric, list(y=mean_narm, ymin=minus_se, ymax=plus_se)) %>% 
+  ggplot(aes(x=gs_y, y=Anet_y, fill=Tmt)) + 
+  geom_errorbar(aes(x=gs_y, ymin = Anet_ymin, ymax = Anet_ymax, color=Tmt), width = 0.001) +
+  geom_errorbarh(aes(y=Anet_y, xmin = gs_ymin, xmax = gs_ymax, color=Tmt), height = 0.2) +
+  geom_point(aes(color=Tmt, shape=Tmt), size = 4) +
+  scale_shape_manual(values = c(21, 21, 16, 16)) +
+  scale_fill_manual(values =c ("white","white","white","white")) +
+  xlab(label = "Stomatal Conductance (mol H2O/m2/s)") +
+  ylab(label = "Photosynthesis (µmol CO2/m2/s)") +
+  labs(title="Q. lobata") +
+  scale_x_continuous(expand = c(0,0), limits=c(0,0.25)) + scale_y_continuous(expand = c(0,0), limits=c(0,25)) +
+  scale_color_manual(values = c("red", "blue", "red", "blue")) + theme_classic(base_size = 19)
+  
 
