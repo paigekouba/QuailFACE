@@ -516,4 +516,36 @@ ggpredict(glm(as.numeric(resprout) ~ rootmass_g*CO2, family = "binomial", data =
 
 # can you get mortality rate, or longitudinal data?
 
-# for fun now go redo the ht_mm graph with dia_mm
+mort_df <- inventory_raw %>% 
+  filter(Code!="4V3c") %>%
+  filter(Code != "16V1a") %>%
+  filter(G. == "Y" & Thinned. != "8/26") %>%  # want ones that grew in but were not thinned
+  select(Code, Spp, Plot, c(paste0("Cond..",1:8))) %>% 
+  mutate(Plot = as.character(Plot)) %>% 
+  rowwise() %>% 
+  mutate(condmin = min(Cond..1, Cond..2, Cond..3, Cond..4, Cond..5, Cond..6, Cond..7, Cond..8, na.rm = T)) %>% 
+  mutate(mortality = as.numeric(condmin == 1 & Cond..8 %in% c(1, NA))) %>%
+  left_join(lookup, by = "Plot") %>% 
+  left_join(plot_CO2., by = "Plot") %>% 
+  left_join(plot_SWC., by = "Plot")
+
+summary(glm(mortality ~ rescale(CO2), family = "binomial", data = mort_df)) 
+summary(glmer(mortality ~ rescale(CO2) +(1|Plot), family = "binomial", data = mort_df)) 
+
+ggpredict(glm(mortality ~ rescale(CO2), family = "binomial", data = mort_df), 
+          terms=c("CO2"))%>% plot(rawdata=T,ci=T,colors=c("red","blue"), jitter=0.05) + labs(title="mortality")
+
+ggplot(mort_df, aes(x=CO2, y=mortality)) +
+  geom_point() + geom_smooth(mapping = aes(x=CO2, y=mortality), method = "glm", formula = "y ~ x")
+
+# need a 2x2 table where the rows are (mort / no mort), cols are eCO2 / aCO2, and cells are counts
+chisq.test(matrix(
+  c(sum(mort_df$mortality == 1 & (mort_df$Tmt == "AD" | mort_df$Tmt == "AW")), 
+    sum(mort_df$mortality == 1 & (mort_df$Tmt == "ED" | mort_df$Tmt == "EW")),
+    sum(mort_df$mortality == 0 & (mort_df$Tmt == "AD" | mort_df$Tmt == "AW")), 
+    sum(mort_df$mortality == 0 & (mort_df$Tmt == "ED" | mort_df$Tmt == "EW"))),   byrow = TRUE, nrow = 2))
+# X-squared = 3.6779, df = 1, p-value = 0.05514
+
+ggpredict(lmer(Root.Length.Diameter.Range.2.mm~rescale(CO2)+rescale(meanSWC)+(1|Plot), data=filter(rootimage., Spp=="L")), 
+          terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="root depth, L *")
+summary(lmer(Root.Length.Diameter.Range.2.mm~rescale(CO2)+rescale(meanSWC)+(1|Plot), data=filter(rootimage., Spp=="L")))
