@@ -389,7 +389,7 @@ LiCOR_new <- left_join(LiCOR_all, newLiCOR, by = "ID") %>%
   group_by(ID) %>% 
   mutate(n=n()) %>% 
   filter(n>2) %>% 
-  summarise(across(c(HHMMSS:SWC,Ci.y,gs,Anet), ~ mean(.x, na.rm = TRUE))) %>% 
+  summarise(across(c(HHMMSS:RH_S,Ci.y,gs,Anet), ~ mean(.x, na.rm = TRUE))) %>% 
   ungroup() %>% 
   mutate(Plot = if_else(nchar(ID) == 4, substr(ID,1,1), substr(ID,1,2)), Spp = str_sub(ID, - 3, - 3))  %>%
   left_join(lookup, by = "Plot") # add Tmt codes
