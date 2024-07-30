@@ -529,11 +529,16 @@ mort_df <- inventory_raw %>%
   left_join(plot_CO2., by = "Plot") %>% 
   left_join(plot_SWC., by = "Plot")
 
+summary(glm(mortality ~ rescale(CO2)*rescale(meanSWC), family = "binomial", data = mort_df)) 
+summary(glm(mortality ~ rescale(CO2)+rescale(meanSWC), family = "binomial", data = mort_df)) 
 summary(glm(mortality ~ rescale(CO2), family = "binomial", data = mort_df)) 
 summary(glmer(mortality ~ rescale(CO2) +(1|Plot), family = "binomial", data = mort_df)) 
 
 ggpredict(glm(mortality ~ rescale(CO2), family = "binomial", data = mort_df), 
           terms=c("CO2"))%>% plot(rawdata=T,ci=T,colors=c("red","blue"), jitter=0.05) + labs(title="mortality")
+
+ggpredict(glm(mortality ~ rescale(CO2)+rescale(meanSWC), family = "binomial", data = mort_df), 
+          terms=c("CO2", "meanSWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue"), jitter=0.05) + labs(title="mortality")
 
 ggplot(mort_df, aes(x=CO2, y=mortality)) +
   geom_point() + geom_smooth(mapping = aes(x=CO2, y=mortality), method = "glm", formula = "y ~ x")
