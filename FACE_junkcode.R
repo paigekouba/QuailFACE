@@ -6255,12 +6255,340 @@ fig2L_nh <- fig2_meanse %>%
   ylab("% change with eCO2") + xlab("Plant Response") +
   theme_classic(base_size = 18) 
 
-
-# practice bootstrap
-fig2_boot <- final_df_nh %>% 
+# % change with eCO2 figure
+fig2_meanse <- final_df_nh %>% 
   # fig2_meanse <- final_df %>% 
   filter(Spp=="L") %>% 
   select(Tmt, totmass, RMF, Ht.mm..8, Anet, gs, WUE, tot_area, SRL, rootmass_g) %>%
+  rename(leaf.area = tot_area) %>% 
+  rename(root.mass = rootmass_g) %>% 
+  rename(tot.mass = totmass) %>% 
+  rename(final.ht = Ht.mm..8) %>%
+  group_by(Tmt) %>% 
+  summarise_if(is.numeric, list(y=mean_narm, ymin=minus_se, ymax=plus_se)) %>% 
+  t() %>% data.frame() 
+# this is good! I want the columns to be the Tmts, and I want to move rownames into 2 columns: variable and y*
+
+#names(fig2_meanse) <- fig2_meanse[1,]
+fig2_meanse <- fig2_meanse[-1,]
+fig2_meanse[,5] <- rownames(fig2_meanse)
+colnames(fig2_meanse) <- c("AD","AW","ED","EW","var_y")
+
+fig2_meanse <- separate(fig2_meanse, var_y, into = c("variable","y"), sep="_")
+# still need to percentify the tmt columns with reference to AD
+
+# fig2_meanse$standardD2 <- c(fig2_meanse[1:9,1], fig2_meanse[19:27,1], fig2_meanse[10:18,1])
+# fig2_meanse$standardW2 <- c(fig2_meanse[1:9,2], fig2_meanse[19:27,2], fig2_meanse[10:18,2])
+# instead of comparing ED to standardD and EW to standardW, want to compare AW to standardA and EW to standardE
+fig2_meanse$standardA <- c(fig2_meanse[1:9,1], fig2_meanse[19:27,1], fig2_meanse[10:18,1])
+fig2_meanse$standardE <- c(fig2_meanse[1:9,3], fig2_meanse[19:27,3], fig2_meanse[10:18,3])
+# want to come back and redo the CI by bootstrapping
+
+fig2_meanse <- fig2_meanse %>% 
+  mutate(across(!c("variable","y"), as.numeric)) %>% 
+  mutate(EW1 = (EW - standardE)*100/standardE) %>%
+  mutate(AW1 = (AW - standardA)*100/standardA)
+
+#  mutate_if(is.numeric, list(pct_chg = (AD - .x)*100/AD)) %>% View()
+# get Tmt to be its own column with pivot_longer
+variable_order <- c("Anet", "gs", "WUE", "tot.mass", "root.mass", "final.ht", "leaf.area", "RMF", "SRL")
+#variable_order <- c("tot.mass", "root.mass", "final.ht", "leaf.area", "rootshoot", "SRL", "Anet", "gs", "WUE")
+
+# add n= ... + geom_text(data = nequals_licor, aes(x = Tmt, y = 0.01, label = paste0("N = ",n)))
+fig2_nequals <- final_df_nh %>% 
+  filter(Spp=="L") %>% 
+  select(Tmt, CO2Tmt, totmass, RMF, Ht.mm..8, Anet, gs, WUE, tot_area, SRL, rootmass_g) %>% 
+  # select(Tmt, H2OTmt, totmass, rootshoot, Ht.mm..8, Anet, gs, WUE, tot_area, SRL, rootmass_g) %>% 
+  rename(leaf.area = tot_area) %>% 
+  rename(root.mass = rootmass_g) %>% 
+  rename(tot.mass = totmass) %>% 
+  rename(final.ht = Ht.mm..8) %>% 
+  group_by(Tmt, CO2Tmt) %>% 
+  summarise_if(is.numeric, ~ sum(!is.na(.x))) %>% 
+  group_by(CO2Tmt) %>% 
+  summarise_if(is.numeric, ~ min(.x)) %>% 
+  t() %>% data.frame()
+
+fig2_nequals <- fig2_nequals[-1,]
+fig2_nequals[,3] <- rownames(fig2_nequals)
+colnames(fig2_nequals) <- c("aCO2","eCO2", "variable")
+
+fig2L_nh <- fig2_meanse %>% 
+  # fig2L <- fig2_meanse %>% 
+  rename(aCO2 = AW1, eCO2 = EW1) %>% 
+  pivot_longer(cols=c("aCO2","eCO2"), names_to="Treatment", values_to="value") %>% 
+  select(variable, y, Treatment, value) %>% 
+  # filter(variable != "d13C") %>% 
+  # filter(variable != "lwc") %>% 
+  pivot_wider(names_from = "y", values_from = "value") %>% 
+  ggplot() +
+  geom_abline(color= "red", linetype="dashed", slope = 0, intercept= 0) +
+  geom_pointrange(aes(x=factor(variable, level=variable_order), y=y, ymin=ymin, ymax=ymax, group=Treatment, color=Treatment, shape=Treatment), size=1, linewidth=1, position=position_dodge(width=0.2)) + scale_color_manual(values=c("darkgray","black")) + scale_shape_manual(values = c(1,16)) +
+  ylim(-85, 350) +
+  geom_text(data = fig2_nequals, aes(x = variable, y = -50, label = paste0("N = ",aCO2)), color="darkgray", size = 4) +
+  geom_text(data = fig2_nequals, aes(x = variable, y = -77, label = paste0("N = ",eCO2)), color="black", size = 4) +
+  ggtitle("B. Quercus wislizenii (live oak)") +
+  ylab("% change with watering") + xlab("Plant Response") +
+  theme_classic(base_size = 18) 
+
+
+# now for V!
+fig2_meanseV <- final_df_nh %>% 
+  # fig2_meanse <- final_df %>% 
+  filter(Spp=="V") %>% 
+  select(Tmt, totmass, RMF, Ht.mm..8, Anet, gs, WUE, tot_area, SRL, rootmass_g) %>%
+  rename(leaf.area = tot_area) %>% 
+  rename(root.mass = rootmass_g) %>% 
+  rename(tot.mass = totmass) %>% 
+  rename(final.ht = Ht.mm..8) %>% 
+  group_by(Tmt) %>% 
+  summarise_if(is.numeric, list(y=mean_narm, ymin=minus_se, ymax=plus_se)) %>% 
+  t() %>% data.frame() 
+# this is good! I want the columns to be the Tmts, and I want to move rownames into 2 columns: variable and y*
+
+#names(fig2_meanse) <- fig2_meanse[1,]
+fig2_meanseV <- fig2_meanseV[-1,]
+fig2_meanseV[,5] <- rownames(fig2_meanseV)
+colnames(fig2_meanseV) <- c("AD","AW","ED","EW","var_y")
+
+fig2_meanseV <- separate(fig2_meanseV, var_y, into = c("variable","y"), sep="_")
+# still need to percentify the tmt columns with reference to AD
+
+# fig2_meanseV$standardD2 <- c(fig2_meanseV[1:9,1], fig2_meanseV[19:27,1], fig2_meanseV[10:18,1])
+# fig2_meanseV$standardW2 <- c(fig2_meanseV[1:9,2], fig2_meanseV[19:27,2], fig2_meanseV[10:18,2])
+# instead of comparing ED to standardD and EW to standardW, want to compare AW to standardA and EW to standardE
+fig2_meanseV$standardA <- c(fig2_meanseV[1:9,1], fig2_meanseV[19:27,1], fig2_meanseV[10:18,1])
+fig2_meanseV$standardE <- c(fig2_meanseV[1:9,3], fig2_meanseV[19:27,3], fig2_meanseV[10:18,3])
+# want to come back and redo the CI by bootstrapping
+
+fig2_meanseV <- fig2_meanseV %>% 
+  mutate(across(!c("variable","y"), as.numeric)) %>% 
+  mutate(EW1 = (EW - standardE)*100/standardE) %>%
+  mutate(AW1 = (AW - standardA)*100/standardA)
+
+# add n= ... + geom_text(data = nequals_licor, aes(x = Tmt, y = 0.01, label = paste0("N = ",n)))
+fig2_nequalsV <- final_df_nh %>% 
+  filter(Spp=="V") %>% 
+  select(Tmt, H2OTmt, totmass, RMF, Ht.mm..8, Anet, gs, WUE, tot_area, SRL, rootmass_g) %>% 
+  # select(Tmt, H2OTmt, totmass, rootshoot, Ht.mm..8, Anet, gs, WUE, tot_area, SRL, rootmass_g) %>% 
+  rename(leaf.area = tot_area) %>% 
+  rename(root.mass = rootmass_g) %>% 
+  rename(tot.mass = totmass) %>% 
+  rename(final.ht = Ht.mm..8) %>% 
+  group_by(Tmt, H2OTmt) %>% 
+  summarise_if(is.numeric, ~ sum(!is.na(.x))) %>% 
+  group_by(H2OTmt) %>% 
+  summarise_if(is.numeric, ~ min(.x)) %>% 
+  t() %>% data.frame()
+
+fig2_nequalsV <- fig2_nequalsV[-1,]
+fig2_nequalsV[,3] <- rownames(fig2_nequalsV)
+colnames(fig2_nequalsV) <- c("aCO2","eCO2", "variable")
+
+fig2V_nh <- fig2_meanseV %>% 
+  # fig2L <- fig2_meanseV %>% 
+  rename(aCO2 = AW1, eCO2 = EW1) %>% 
+  pivot_longer(cols=c("aCO2","eCO2"), names_to="Treatment", values_to="value") %>% 
+  select(variable, y, Treatment, value) %>% 
+  # filter(variable != "d13C") %>% 
+  # filter(variable != "lwc") %>% 
+  pivot_wider(names_from = "y", values_from = "value") %>% 
+  ggplot() +
+  geom_abline(color= "red", linetype="dashed", slope = 0, intercept= 0) +
+  geom_pointrange(aes(x=factor(variable, level=variable_order), y=y, ymin=ymin, ymax=ymax, group=Treatment, color=Treatment, shape=Treatment), size=1, linewidth=1, position=position_dodge(width=0.2)) + scale_color_manual(values=c("darkgray","black")) + scale_shape_manual(values = c(1,16)) +
+  ylim(-85, 350) +
+  geom_text(data = fig2_nequalsV, aes(x = variable, y = -50, label = paste0("N = ",aCO2)), color="darkgray", size = 4) +
+  geom_text(data = fig2_nequalsV, aes(x = variable, y = -77, label = paste0("N = ",eCO2)), color="black", size = 4) +
+  ggtitle("B. Quercus lobata (valley oak)") +
+  ylab("% change with watering") + xlab("Plant Response") +
+  theme_classic(base_size = 18) 
+
+# compare filtered versions
+grid.arrange(fig2V_nh, fig2L_nh, nrow=2)
+
+
+
+## z-score change with watering
+
+# percent change with watering figures
+fig2_boot <- final_df_nh %>% 
+  # fig2_meanse <- final_df %>% 
+  filter(Spp=="L") %>% 
+  select(Tmt, totmass, rootshoot, Ht.mm..8, Anet, gs, WUE, tot_area, SRL, rootmass_g) %>%
+  rename(leaf.area = tot_area) %>% 
+  rename(root.mass = rootmass_g) %>% 
+  rename(tot.mass = totmass) %>% 
+  rename(final.ht = Ht.mm..8)
+
+# percentage_difference <- function(value, value_two) {   
+#   (mean(value, na.rm = T) - mean(value_two, na.rm=T))*100 / mean(value_two, na.rm=T)
+# }  
+# instead of a percent difference caused by watering, I now want to standardize all the responses as z scores
+# then find the ∆z with watering
+
+zscore <- function(x){
+  (x - mean(x, na.rm = T))/sd(x, na.rm = T)
+}
+
+fig2_boot <- fig2_boot %>% mutate_if(is.numeric, list(z = zscore)) 
+
+# start with the mean of ∆z with watering
+zmean <- data.frame("AW1" = c(1:9), "EW1" = c(1:9)) # initialize results df
+for(i in c(2:10)){zmean[(i-1),1] <-          # this is saying each of the 9 variables gets 1 row, and this is defining the first column in the results df
+  # the top part is to get the mean ∆z, with watering, for aCO2 
+  mean(
+    do.call(c,lapply(1:1000, function(boot){
+      a <- sample(unlist(fig2_boot[fig2_boot$Tmt=="AW",i+9])[!is.na(unlist(fig2_boot[fig2_boot$Tmt=="AW",i+9]))], replace = T)
+      b <- sample(unlist(fig2_boot[fig2_boot$Tmt=="AD",i+9])[!is.na(unlist(fig2_boot[fig2_boot$Tmt=="AD",i+9]))], replace = T)
+      mean(a)-mean(b)
+    })))
+  # the second part is to get the mean ∆z, with watering, for eCO2 
+zmean[(i-1),2] <- mean(
+  do.call(c,lapply(1:1000, function(boot){
+    a <- sample(unlist(fig2_boot[fig2_boot$Tmt=="EW",i+9])[!is.na(unlist(fig2_boot[fig2_boot$Tmt=="EW",i+9]))], replace = T)
+    b <- sample(unlist(fig2_boot[fig2_boot$Tmt=="ED",i+9])[!is.na(unlist(fig2_boot[fig2_boot$Tmt=="ED",i+9]))], replace = T)
+    mean(a)-mean(b)
+   })))
+  }
+
+# then mean - sd
+zmin <- data.frame("AW1" = c(1:9), "EW1" = c(1:9)) # initialize results df
+for(i in c(2:10)){ x <- do.call(c,lapply(1:1000, function(boot){
+      a <- sample(unlist(fig2_boot[fig2_boot$Tmt=="AW",i+9])[!is.na(unlist(fig2_boot[fig2_boot$Tmt=="AW",i+9]))], replace = T)
+      b <- sample(unlist(fig2_boot[fig2_boot$Tmt=="AD",i+9])[!is.na(unlist(fig2_boot[fig2_boot$Tmt=="AD",i+9]))], replace = T)
+      mean(a)-mean(b)
+    }))
+  zmin[(i-1),1] <- mean(x) - sd(x)
+  
+  y <- do.call(c,lapply(1:1000, function(boot){
+    a <- sample(unlist(fig2_boot[fig2_boot$Tmt=="EW",i+9])[!is.na(unlist(fig2_boot[fig2_boot$Tmt=="EW",i+9]))], replace = T)
+    b <- sample(unlist(fig2_boot[fig2_boot$Tmt=="ED",i+9])[!is.na(unlist(fig2_boot[fig2_boot$Tmt=="ED",i+9]))], replace = T)
+    mean(a)-mean(b)
+  }))
+  zmin[(i-1),2] <- mean(y) - sd(y)
+}
+
+# then mean + sd
+zmax <- data.frame("AW1" = c(1:9), "EW1" = c(1:9)) # initialize results df
+for(i in c(2:10)){ x <- do.call(c,lapply(1:1000, function(boot){
+  a <- sample(unlist(fig2_boot[fig2_boot$Tmt=="AW",i+9])[!is.na(unlist(fig2_boot[fig2_boot$Tmt=="AW",i+9]))], replace = T)
+  b <- sample(unlist(fig2_boot[fig2_boot$Tmt=="AD",i+9])[!is.na(unlist(fig2_boot[fig2_boot$Tmt=="AD",i+9]))], replace = T)
+  mean(a)-mean(b)
+}))
+zmax[(i-1),1] <- mean(x) + sd(x)
+
+y <- do.call(c,lapply(1:1000, function(boot){
+  a <- sample(unlist(fig2_boot[fig2_boot$Tmt=="EW",i+9])[!is.na(unlist(fig2_boot[fig2_boot$Tmt=="EW",i+9]))], replace = T)
+  b <- sample(unlist(fig2_boot[fig2_boot$Tmt=="ED",i+9])[!is.na(unlist(fig2_boot[fig2_boot$Tmt=="ED",i+9]))], replace = T)
+  mean(a)-mean(b)
+}))
+zmax[(i-1),2] <- mean(y) + sd(y)
+}
+
+z_bootL <- cbind(rbind(zmean, zmin, zmax), 
+                   data.frame("variable" = rep(c("tot.mass", "rootshoot", "final.ht", "Anet", "gs", "WUE", "leaf.area", "SRL", "root.mass"),3), 
+                              "y" = rep(c("y","ymin","ymax"), each=9))) %>% 
+  rename(aCO2=AW1, eCO2=EW1) %>% 
+  pivot_longer(cols=c("aCO2","eCO2"), names_to="Treatment", values_to="value") %>% 
+  select(variable, y, Treatment, value) %>% 
+  pivot_wider(names_from = "y", values_from = "value") %>% 
+  ggplot() +
+  geom_abline(color= "red", linetype="dashed", slope = 0, intercept= 0) +
+  geom_pointrange(aes(x=factor(variable, level=variable_order), y=y, ymin=ymin, ymax=ymax, group=Treatment, color=Treatment, shape=Treatment), size=1, linewidth=1, position=position_dodge(width=0.2)) + scale_color_manual(values=c("darkgray","black")) + scale_shape_manual(values = c(1,16)) +
+  ylim(-2.1, 2.1) +
+  geom_text(data = fig2_nequals, aes(x = variable, y = -1.8, label = paste0("N = ",aCO2)), color="darkgray", size = 4) +
+  geom_text(data = fig2_nequals, aes(x = variable, y = -2, label = paste0("N = ",eCO2)), color="black", size = 4) +
+  ggtitle("B. Quercus wislizeni (live oak)") +
+  ylab("change with watering") + xlab("Plant Response") +
+  theme_classic(base_size = 18) 
+
+# now for V!
+fig2_bootV <- final_df_nh %>% 
+  # fig2_meanse <- final_df %>% 
+  filter(Spp=="V") %>% 
+  select(Tmt, totmass, rootshoot, Ht.mm..8, Anet, gs, WUE, tot_area, SRL, rootmass_g) %>%
+  rename(leaf.area = tot_area) %>% 
+  rename(root.mass = rootmass_g) %>% 
+  rename(tot.mass = totmass) %>% 
+  rename(final.ht = Ht.mm..8)
+
+fig2_bootV <- fig2_bootV %>% mutate_if(is.numeric, list(z = zscore))
+
+# start with the mean of ∆z with watering
+zmeanV <- data.frame("AW1" = c(1:9), "EW1" = c(1:9)) # initialize results df
+for(i in c(2:10)){zmeanV[(i-1),1] <-          # this is saying each of the 9 variables gets 1 row, and this is defining the first column in the results df
+  # the top part is to get the mean ∆z, with watering, for aCO2 
+  mean(
+    do.call(c,lapply(1:1000, function(boot){
+      a <- sample(unlist(fig2_bootV[fig2_bootV$Tmt=="AW",i+9])[!is.na(unlist(fig2_bootV[fig2_bootV$Tmt=="AW",i+9]))], replace = T)
+      b <- sample(unlist(fig2_bootV[fig2_bootV$Tmt=="AD",i+9])[!is.na(unlist(fig2_bootV[fig2_bootV$Tmt=="AD",i+9]))], replace = T)
+      mean(a)-mean(b)
+    })))
+# the second part is to get the mean ∆z, with watering, for eCO2 
+zmeanV[(i-1),2] <- mean(
+  do.call(c,lapply(1:1000, function(boot){
+    a <- sample(unlist(fig2_bootV[fig2_bootV$Tmt=="EW",i+9])[!is.na(unlist(fig2_bootV[fig2_bootV$Tmt=="EW",i+9]))], replace = T)
+    b <- sample(unlist(fig2_bootV[fig2_bootV$Tmt=="ED",i+9])[!is.na(unlist(fig2_bootV[fig2_bootV$Tmt=="ED",i+9]))], replace = T)
+    mean(a)-mean(b)
+  })))
+}
+
+# then mean - sd
+zminV <- data.frame("AW1" = c(1:9), "EW1" = c(1:9)) # initialize results df
+for(i in c(2:10)){ x <- do.call(c,lapply(1:1000, function(boot){
+  a <- sample(unlist(fig2_bootV[fig2_bootV$Tmt=="AW",i+9])[!is.na(unlist(fig2_bootV[fig2_bootV$Tmt=="AW",i+9]))], replace = T)
+  b <- sample(unlist(fig2_bootV[fig2_bootV$Tmt=="AD",i+9])[!is.na(unlist(fig2_bootV[fig2_bootV$Tmt=="AD",i+9]))], replace = T)
+  mean(a)-mean(b)
+}))
+zminV[(i-1),1] <- mean(x) - sd(x)
+
+y <- do.call(c,lapply(1:1000, function(boot){
+  a <- sample(unlist(fig2_bootV[fig2_bootV$Tmt=="EW",i+9])[!is.na(unlist(fig2_bootV[fig2_bootV$Tmt=="EW",i+9]))], replace = T)
+  b <- sample(unlist(fig2_bootV[fig2_bootV$Tmt=="ED",i+9])[!is.na(unlist(fig2_bootV[fig2_bootV$Tmt=="ED",i+9]))], replace = T)
+  mean(a)-mean(b)
+}))
+zminV[(i-1),2] <- mean(y) - sd(y)
+}
+
+# then mean + sd
+zmaxV <- data.frame("AW1" = c(1:9), "EW1" = c(1:9)) # initialize results df
+for(i in c(2:10)){ x <- do.call(c,lapply(1:1000, function(boot){
+  a <- sample(unlist(fig2_bootV[fig2_bootV$Tmt=="AW",i+9])[!is.na(unlist(fig2_bootV[fig2_bootV$Tmt=="AW",i+9]))], replace = T)
+  b <- sample(unlist(fig2_bootV[fig2_bootV$Tmt=="AD",i+9])[!is.na(unlist(fig2_bootV[fig2_bootV$Tmt=="AD",i+9]))], replace = T)
+  mean(a)-mean(b)
+}))
+zmaxV[(i-1),1] <- mean(x) + sd(x)
+
+y <- do.call(c,lapply(1:1000, function(boot){
+  a <- sample(unlist(fig2_bootV[fig2_bootV$Tmt=="EW",i+9])[!is.na(unlist(fig2_bootV[fig2_bootV$Tmt=="EW",i+9]))], replace = T)
+  b <- sample(unlist(fig2_bootV[fig2_bootV$Tmt=="ED",i+9])[!is.na(unlist(fig2_bootV[fig2_bootV$Tmt=="ED",i+9]))], replace = T)
+  mean(a)-mean(b)
+}))
+zmaxV[(i-1),2] <- mean(y) + sd(y)
+}
+
+z_bootV <- cbind(rbind(zmeanV, zminV, zmaxV), 
+                 data.frame("variable" = rep(c("tot.mass", "rootshoot", "final.ht", "Anet", "gs", "WUE", "leaf.area", "SRL", "root.mass"),3), 
+                            "y" = rep(c("y","ymin","ymax"), each=9))) %>% 
+  rename(aCO2=AW1, eCO2=EW1) %>% 
+  pivot_longer(cols=c("aCO2","eCO2"), names_to="Treatment", values_to="value") %>% 
+  select(variable, y, Treatment, value) %>% 
+  pivot_wider(names_from = "y", values_from = "value") %>% 
+  ggplot() +
+  geom_abline(color= "red", linetype="dashed", slope = 0, intercept= 0) +
+  geom_pointrange(aes(x=factor(variable, level=variable_order), y=y, ymin=ymin, ymax=ymax, group=Treatment, color=Treatment, shape=Treatment), size=1, linewidth=1, position=position_dodge(width=0.2)) + scale_color_manual(values=c("darkgray","black")) + scale_shape_manual(values = c(1,16)) +
+  ylim(-2.1, 2.6) +
+  geom_text(data = fig2_nequalsV, aes(x = variable, y = -1.8, label = paste0("N = ",aCO2)), color="darkgray", size = 4) +
+  geom_text(data = fig2_nequalsV, aes(x = variable, y = -2, label = paste0("N = ",eCO2)), color="black", size = 4) +
+  ggtitle("B. Quercus lobata (valley oak)") +
+  ylab("change with watering") + xlab("Plant Response") +
+  theme_classic(base_size = 18) 
+
+# percent change with watering figures
+fig2_boot <- final_df_nh %>% 
+  # fig2_meanse <- final_df %>% 
+  filter(Spp=="L") %>% 
+  select(Tmt, totmass, rootshoot, Ht.mm..8, Anet, gs, WUE, tot_area, SRL, rootmass_g) %>%
   rename(leaf.area = tot_area) %>% 
   rename(root.mass = rootmass_g) %>% 
   rename(tot.mass = totmass) %>% 
@@ -6270,12 +6598,148 @@ percentage_difference <- function(value, value_two) {
   (mean(value, na.rm = T) - mean(value_two, na.rm=T))*100 / mean(value_two, na.rm=T)
 }  
 
-for(i in 2:9){do.call(c,lapply(1:100, function(boot){
-  a <- sample(unlist(fig2_boot[fig2_boot$Tmt=="AW",i]), replace = T)
-  b <- sample(unlist(fig2_boot[fig2_boot$Tmt=="AD",i]), replace = T)
-  percentage_difference(a,b)
-}))}
+bootmean <- data.frame("AW1" = c(1:9), "EW1" = c(1:9))
+for(i in c(2:10)){ bootmean[(i-1),1] <- mean(
+  do.call(c,lapply(1:1000, function(boot){
+    a <- sample(unlist(fig2_boot[fig2_boot$Tmt=="AW",i])[!is.na(unlist(fig2_boot[fig2_boot$Tmt=="AW",i]))], replace = T)
+    b <- sample(unlist(fig2_boot[fig2_boot$Tmt=="AD",i])[!is.na(unlist(fig2_boot[fig2_boot$Tmt=="AD",i]))], replace = T)
+    percentage_difference(a,b)
+  })))
 
+bootmean[(i-1),2] <- mean(
+  do.call(c,lapply(1:1000, function(boot){
+    a <- sample(unlist(fig2_boot[fig2_boot$Tmt=="EW",i])[!is.na(unlist(fig2_boot[fig2_boot$Tmt=="EW",i]))], replace = T)
+    b <- sample(unlist(fig2_boot[fig2_boot$Tmt=="ED",i])[!is.na(unlist(fig2_boot[fig2_boot$Tmt=="ED",i]))], replace = T)
+    percentage_difference(a,b)
+  })))
+}
+
+bootmin <- data.frame("AW1" = c(1:9), "EW1" = c(1:9))
+for(i in c(2:10)){ x <- do.call(c,lapply(1:1000, function(boot){
+  a <- sample(unlist(fig2_boot[fig2_boot$Tmt=="AW",i])[!is.na(unlist(fig2_boot[fig2_boot$Tmt=="AW",i]))], replace = T)
+  b <- sample(unlist(fig2_boot[fig2_boot$Tmt=="AD",i])[!is.na(unlist(fig2_boot[fig2_boot$Tmt=="AD",i]))], replace = T)
+  percentage_difference(a,b)
+}))
+bootmin[(i-1),1] <- mean(x) - sd(x)
+
+y <- do.call(c,lapply(1:1000, function(boot){
+  a <- sample(unlist(fig2_boot[fig2_boot$Tmt=="EW",i])[!is.na(unlist(fig2_boot[fig2_boot$Tmt=="EW",i]))], replace = T)
+  b <- sample(unlist(fig2_boot[fig2_boot$Tmt=="ED",i])[!is.na(unlist(fig2_boot[fig2_boot$Tmt=="ED",i]))], replace = T)
+  percentage_difference(a,b)
+}))
+bootmin[(i-1),2] <- mean(y) - sd(y)
+}
+
+bootmax <- data.frame("AW1" = c(1:9), "EW1" = c(1:9))
+for(i in c(2:10)){ x <- do.call(c,lapply(1:1000, function(boot){
+  a <- sample(unlist(fig2_boot[fig2_boot$Tmt=="AW",i])[!is.na(unlist(fig2_boot[fig2_boot$Tmt=="AW",i]))], replace = T)
+  b <- sample(unlist(fig2_boot[fig2_boot$Tmt=="AD",i])[!is.na(unlist(fig2_boot[fig2_boot$Tmt=="AD",i]))], replace = T)
+  percentage_difference(a,b)
+}))
+bootmax[(i-1),1] <- mean(x) + sd(x)
+
+y <- do.call(c,lapply(1:1000, function(boot){
+  a <- sample(unlist(fig2_boot[fig2_boot$Tmt=="EW",i])[!is.na(unlist(fig2_boot[fig2_boot$Tmt=="EW",i]))], replace = T)
+  b <- sample(unlist(fig2_boot[fig2_boot$Tmt=="ED",i])[!is.na(unlist(fig2_boot[fig2_boot$Tmt=="ED",i]))], replace = T)
+  percentage_difference(a,b)
+}))
+bootmax[(i-1),2] <- mean(y) + sd(y)
+}
+
+pct_bootL <- cbind(rbind(bootmean, bootmin, bootmax), 
+                   data.frame("variable" = rep(c("tot.mass", "rootshoot", "final.ht", "Anet", "gs", "WUE", "leaf.area", "SRL", "root.mass"),3), 
+                              "y" = rep(c("y","ymin","ymax"), each=9))) %>% 
+  rename(aCO2=AW1, eCO2=EW1) %>% 
+  pivot_longer(cols=c("aCO2","eCO2"), names_to="Treatment", values_to="value") %>% 
+  select(variable, y, Treatment, value) %>% 
+  pivot_wider(names_from = "y", values_from = "value") %>% 
+  ggplot() +
+  geom_abline(color= "red", linetype="dashed", slope = 0, intercept= 0) +
+  geom_pointrange(aes(x=factor(variable, level=variable_order), y=y, ymin=ymin, ymax=ymax, group=Treatment, color=Treatment, shape=Treatment), size=1, linewidth=1, position=position_dodge(width=0.2)) + scale_color_manual(values=c("darkgray","black")) + scale_shape_manual(values = c(1,16)) +
+  ylim(-85, 350) +
+  geom_text(data = fig2_nequals, aes(x = variable, y = -50, label = paste0("N = ",aCO2)), color="darkgray", size = 4) +
+  geom_text(data = fig2_nequals, aes(x = variable, y = -77, label = paste0("N = ",eCO2)), color="black", size = 4) +
+  ggtitle("B. Quercus wislizeni (live oak)") +
+  ylab("% change with watering") + xlab("Plant Response") +
+  theme_classic(base_size = 18) 
+
+# now for V
+# percent change with watering figures
+fig2_bootV <- final_df_nh %>% 
+  # fig2_meanse <- final_df %>% 
+  filter(Spp=="V") %>% 
+  select(Tmt, totmass, rootshoot, Ht.mm..8, Anet, gs, WUE, tot_area, SRL, rootmass_g) %>%
+  rename(leaf.area = tot_area) %>% 
+  rename(root.mass = rootmass_g) %>% 
+  rename(tot.mass = totmass) %>% 
+  rename(final.ht = Ht.mm..8)
+
+bootmeanV <- data.frame("AW1" = c(1:9), "EW1" = c(1:9))
+for(i in c(2:10)){ bootmeanV[(i-1),1] <- mean(
+  do.call(c,lapply(1:1000, function(boot){
+    a <- sample(unlist(fig2_bootV[fig2_bootV$Tmt=="AW",i])[!is.na(unlist(fig2_bootV[fig2_bootV$Tmt=="AW",i]))], replace = T)
+    b <- sample(unlist(fig2_bootV[fig2_bootV$Tmt=="AD",i])[!is.na(unlist(fig2_bootV[fig2_bootV$Tmt=="AD",i]))], replace = T)
+    percentage_difference(a,b)
+  })))
+
+bootmeanV[(i-1),2] <- mean(
+  do.call(c,lapply(1:1000, function(boot){
+    a <- sample(unlist(fig2_bootV[fig2_bootV$Tmt=="EW",i])[!is.na(unlist(fig2_bootV[fig2_bootV$Tmt=="EW",i]))], replace = T)
+    b <- sample(unlist(fig2_bootV[fig2_bootV$Tmt=="ED",i])[!is.na(unlist(fig2_bootV[fig2_bootV$Tmt=="ED",i]))], replace = T)
+    percentage_difference(a,b)
+  })))
+}
+
+bootminV <- data.frame("AW1" = c(1:9), "EW1" = c(1:9))
+for(i in c(2:10)){ x <- do.call(c,lapply(1:1000, function(boot){
+  a <- sample(unlist(fig2_bootV[fig2_bootV$Tmt=="AW",i])[!is.na(unlist(fig2_bootV[fig2_bootV$Tmt=="AW",i]))], replace = T)
+  b <- sample(unlist(fig2_bootV[fig2_bootV$Tmt=="AD",i])[!is.na(unlist(fig2_bootV[fig2_bootV$Tmt=="AD",i]))], replace = T)
+  percentage_difference(a,b)
+}))
+bootminV[(i-1),1] <- mean(x) - sd(x)
+
+y <- do.call(c,lapply(1:1000, function(boot){
+  a <- sample(unlist(fig2_bootV[fig2_bootV$Tmt=="EW",i])[!is.na(unlist(fig2_bootV[fig2_bootV$Tmt=="EW",i]))], replace = T)
+  b <- sample(unlist(fig2_bootV[fig2_bootV$Tmt=="ED",i])[!is.na(unlist(fig2_bootV[fig2_bootV$Tmt=="ED",i]))], replace = T)
+  percentage_difference(a,b)
+}))
+bootminV[(i-1),2] <- mean(y) - sd(y)
+}
+
+bootmaxV <- data.frame("AW1" = c(1:9), "EW1" = c(1:9))
+for(i in c(2:10)){ x <- do.call(c,lapply(1:1000, function(boot){
+  a <- sample(unlist(fig2_bootV[fig2_bootV$Tmt=="AW",i])[!is.na(unlist(fig2_bootV[fig2_bootV$Tmt=="AW",i]))], replace = T)
+  b <- sample(unlist(fig2_bootV[fig2_bootV$Tmt=="AD",i])[!is.na(unlist(fig2_bootV[fig2_bootV$Tmt=="AD",i]))], replace = T)
+  percentage_difference(a,b)
+}))
+bootmaxV[(i-1),1] <- mean(x) + sd(x)
+
+y <- do.call(c,lapply(1:1000, function(boot){
+  a <- sample(unlist(fig2_bootV[fig2_bootV$Tmt=="EW",i])[!is.na(unlist(fig2_bootV[fig2_bootV$Tmt=="EW",i]))], replace = T)
+  b <- sample(unlist(fig2_bootV[fig2_bootV$Tmt=="ED",i])[!is.na(unlist(fig2_bootV[fig2_bootV$Tmt=="ED",i]))], replace = T)
+  percentage_difference(a,b)
+}))
+bootmaxV[(i-1),2] <- mean(y) + sd(y)
+}
+
+pct_bootV <- cbind(rbind(bootmeanV, bootminV, bootmaxV), 
+                   data.frame("variable" = rep(c("tot.mass", "rootshoot", "final.ht", "Anet", "gs", "WUE", "leaf.area", "SRL", "root.mass"),3), 
+                              "y" = rep(c("y","ymin","ymax"), each=9))) %>% 
+  rename(aCO2=AW1, eCO2=EW1) %>% 
+  pivot_longer(cols=c("aCO2","eCO2"), names_to="Treatment", values_to="value") %>% 
+  select(variable, y, Treatment, value) %>% 
+  pivot_wider(names_from = "y", values_from = "value") %>% View()
+ggplot() +
+  geom_abline(color= "red", linetype="dashed", slope = 0, intercept= 0) +
+  geom_pointrange(aes(x=factor(variable, level=variable_order), y=y, ymin=ymin, ymax=ymax, group=Treatment, color=Treatment, shape=Treatment), size=1, linewidth=1, position=position_dodge(width=0.2)) + scale_color_manual(values=c("darkgray","black")) + scale_shape_manual(values = c(1,16)) +
+  ylim(-85, 350) +
+  geom_text(data = fig2_nequalsV, aes(x = variable, y = -50, label = paste0("N = ",aCO2)), color="darkgray", size = 4) +
+  geom_text(data = fig2_nequalsV, aes(x = variable, y = -77, label = paste0("N = ",eCO2)), color="black", size = 4) +
+  ggtitle("A. Quercus lobata (valley oak)") +
+  ylab("% change with watering") + xlab("Plant Response") +
+  theme_classic(base_size = 18) 
+
+grid.arrange(pct_bootV, pct_bootL, nrow=2)
 
 # NEVER EVER GIVE UP
 # NEVER SURRENDER
