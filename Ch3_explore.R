@@ -532,6 +532,7 @@ mort_df <- inventory_raw %>%
 summary(glm(mortality ~ rescale(CO2)*rescale(meanSWC), family = "binomial", data = mort_df)) 
 summary(glm(mortality ~ rescale(CO2)+rescale(meanSWC), family = "binomial", data = mort_df)) 
 summary(glm(mortality ~ rescale(CO2), family = "binomial", data = mort_df)) 
+summary(glm(mortality ~ rescale(meanSWC), family = "binomial", data = mort_df)) 
 summary(glmer(mortality ~ rescale(CO2) +(1|Plot), family = "binomial", data = mort_df)) 
 
 ggpredict(glm(mortality ~ rescale(CO2), family = "binomial", data = mort_df), 
