@@ -110,7 +110,7 @@ SIF.[1,]
 # testing for normality of distribution 
 # this is not what you need; you need to test the distribution of residuals of the model, and their variance
 library(car)
-
+library(scales)
 
 ### combine into one giant, all-inclusive dataset
 
@@ -775,12 +775,12 @@ z_bootL <- cbind(rbind(zmean, zmin, zmax),
   ggplot() +
   geom_abline(color= "red", linetype="dashed", slope = 0, intercept= 0) +
   geom_pointrange(aes(x=factor(variable, level=variable_order), y=y, ymin=ymin, ymax=ymax, group=Treatment, color=Treatment, shape=Treatment), size=1, linewidth=1, position=position_dodge(width=0.2)) + scale_color_manual(values=c("darkgray","black")) + scale_shape_manual(values = c(1,16)) +
-  ylim(-2.1, 2.6) +
-  geom_text(data = fig2_nequals, aes(x = variable, y = -1.75, label = paste0("n = ",aCO2)), color="darkgray", size = 4) +
-  geom_text(data = fig2_nequals, aes(x = variable, y = -2, label = paste0("n = ",eCO2)), color="black", size = 4) +
+  ylim(-2.2, 2.6) +
+  geom_text(data = fig2_nequals, aes(x = variable, y = -1.75, label = paste0("n = ",aCO2)), color="darkgray", size = 5) +
+  geom_text(data = fig2_nequals, aes(x = variable, y = -2.1, label = paste0("n = ",eCO2)), color="black", size = 5) +
   ggtitle("B. Quercus wislizeni (live oak)") +
   ylab("change with watering") + xlab("Plant Response") +
-  theme_classic(base_size = 18) 
+  theme_classic(base_size = 20) 
 
 # now for V!
 fig2_bootV <- final_df_nh %>% 
@@ -857,12 +857,12 @@ z_bootV <- cbind(rbind(zmeanV, zminV, zmaxV),
   ggplot() +
   geom_abline(color= "red", linetype="dashed", slope = 0, intercept= 0) +
   geom_pointrange(aes(x=factor(variable, level=variable_order), y=y, ymin=ymin, ymax=ymax, group=Treatment, color=Treatment, shape=Treatment), size=1, linewidth=1, position=position_dodge(width=0.2)) + scale_color_manual(values=c("darkgray","black")) + scale_shape_manual(values = c(1,16)) +
-  ylim(-2.1, 2.6) +
-  geom_text(data = fig2_nequalsV, aes(x = variable, y = -1.75, label = paste0("n = ",aCO2)), color="darkgray", size = 4) +
-  geom_text(data = fig2_nequalsV, aes(x = variable, y = -2, label = paste0("n = ",eCO2)), color="black", size = 4) +
+  ylim(-2.2, 2.6) +
+  geom_text(data = fig2_nequalsV, aes(x = variable, y = -1.75, label = paste0("n = ",aCO2)), color="darkgray", size = 5) +
+  geom_text(data = fig2_nequalsV, aes(x = variable, y = -2.1, label = paste0("n = ",eCO2)), color="black", size = 5) +
   ggtitle("A. Quercus lobata (valley oak)") + xlab("") +
   ylab("change with watering") + 
-  theme_classic(base_size = 18) 
+  theme_classic(base_size = 20) 
 
 grid.arrange(z_bootV, z_bootL, nrow=2)
 
