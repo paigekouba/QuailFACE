@@ -6741,5 +6741,147 @@ ggplot() +
 
 grid.arrange(pct_bootV, pct_bootL, nrow=2)
 
+temp_df %>% 
+  pivot_longer(A:L, names_to = "spot", values_to = "temperature") %>% 
+  mutate(time = hms::parse_hm(time)) %>% 
+  mutate(sample = rep(1:8,each=96)) %>% View()
+ggplot() +
+  geom_boxplot(aes(x=as.factor(sample), y=temperature, color=screen)) 
+
+
+temp_diff <- temp_df %>% 
+  pivot_longer(A:L, names_to = "spot", values_to = "temperature") %>% 
+  mutate(time = hms::parse_hm(time)) %>% 
+  mutate(sample = rep(1:8,each=96)) %>% 
+  select(!time) %>% 
+  group_by(sample, Plot, spot) %>% 
+  # group_by(sample, Plot, CO2Tmt, screen) %>% 
+  # summarise_if(is.numeric, list(y=mean_narm, ymin=minus_se, ymax=plus_se)) %>% 
+  pivot_wider(names_from = screen, values_from = temperature) %>% 
+  mutate(diff = o - i) %>% 
+  group_by(Plot, sample) %>% 
+  summarise(mean_i = mean(i), mean_o = mean(o)) # t = -0.7146, df = 61.635, p-value = 0.4776; mean of x mean of y 40.36198  43.29245 
+# ggplot(temp_diff) + geom_density(aes(x=temperature, group =screen, color=screen))
+#  ggplot(temp_diff) + geom_boxplot(aes(x=sample, y=mean_i, group=sample)) + geom_boxplot(aes(x=sample, y=mean_o, group=sample))
+ggplot(temp_diff) + geom_boxplot(aes(x=sample, y=diff, group=sample))
+
+# Welch Two Sample t-test
+# 
+# data:  temp_diff$mean_i and temp_diff$mean_o
+# t = -0.7146, df = 61.635, p-value = 0.4776
+# alternative hypothesis: true difference in means is not equal to 0
+# 95 percent confidence interval:
+#   -11.128863   5.267926
+# sample estimates:
+#   mean of x mean of y 
+# 40.36198  43.29245 
+# 100*abs(40.36198 - 43.29245)/43.29245
+# [1] 6.769009
+
+PAR_diff <- PAR_df %>% 
+  pivot_longer(A:L, names_to = "spot", values_to = "PAR") %>% 
+  mutate(time = hms::parse_hm(time)) %>% 
+  mutate(sample = rep(1:8,each=96)) %>% 
+  select(!time) %>% 
+  group_by(sample, Plot, spot) %>% 
+  # group_by(sample, Plot, CO2Tmt, screen) %>% 
+  # summarise_if(is.numeric, list(y=mean_narm, ymin=minus_se, ymax=plus_se)) %>% 
+  pivot_wider(names_from = screen, values_from = PAR) %>% 
+  mutate(diff = o - i) %>% 
+  group_by(Plot, sample) %>% 
+  summarise(mean_i = mean(i), mean_o = mean(o))
+ggplot(PAR_diff) + geom_boxplot(aes(x=sample, y=mean_i, group=sample)) + geom_boxplot(aes(x=sample, y=mean_o, group=sample))
+ggplot(PAR_diff) + geom_boxplot(aes(x=sample, y=mean_i*100/mean_o, group=sample)) 
+# Welch Two Sample t-test
+# 
+# data:  PAR_diff$mean_i and PAR_diff$mean_o
+# t = -0.58992, df = 61.913, p-value = 0.5574
+# alternative hypothesis: true difference in means is not equal to 0
+# 95 percent confidence interval:
+#   -425.8269  231.7681
+# sample estimates:
+#   mean of x mean of y 
+# 666.6964  763.7258 
+# 
+# > 666.6964/763.7258
+# [1] 0.8729526
+
+#  summarise(meanT = mean(temperature), sdT = sd(temperature), seT = sd(temperature)/sqrt(n)) %>% 
+
+typeof(hms::parse_hm(PAR_df$time))
+
+PAR_df %>% 
+  pivot_longer(A:L, names_to = "spot", values_to = "PAR") %>% 
+  mutate(time = hms::parse_hm(time)) %>% 
+  group_by(Plot, CO2Tmt) %>% 
+  ggplot() +
+  geom_point(aes(x= time, y=PAR, color=screen))
+
+PAR_df %>% 
+  pivot_longer(A:L, names_to = "spot", values_to = "PAR") %>% 
+  mutate(time = hms::parse_hm(time)) %>% 
+  mutate(sample = rep(1:8,each=96)) %>% 
+  ggplot() +
+  geom_boxplot(aes(x=as.factor(sample), y=PAR, color=screen)) 
+
+temp_df %>% 
+  pivot_longer(A:L, names_to = "spot", values_to = "temperature") %>% 
+  mutate(time = hms::parse_hm(time)) %>% 
+  mutate(sampletime = format(as.POSIXlt(as.POSIXct('2000-1-1', "UTC") + 
+                                          round(as.numeric(time)/3600)*3600),
+                             format = "%H:%M:%S")) %>% 
+  mutate(sample = rep(1:8,each=96)) %>% 
+  ggplot(aes(x= sampletime, y=temperature, fill=screen)) +
+  geom_boxplot()
+
+# good one
+PAR_df %>% 
+  pivot_longer(A:L, names_to = "spot", values_to = "PAR") %>% 
+  mutate(time = hms::parse_hm(time)) %>% 
+  mutate(sampletime = format(as.POSIXlt(as.POSIXct('2000-1-1', "UTC") + 
+                                          round(as.numeric(time)/3600)*3600),
+                             format = "%H:%M:%S")) %>% 
+  mutate(sample = rep(1:8,each=96)) %>% 
+  group_by(screen) %>% 
+  ggplot(aes(x= sampletime, y=PAR, fill=screen)) +
+  geom_boxplot() +
+  stat_pvalue_manual()
+
+# new idea for microclimate: bootstrap mean ±se of [inside] - [outside] (lower T, shading), for each of 8 timesteps
+# start with the mean of ∆z with watering
+Tmean <- data.frame("mean.diff" = c(1:8)) # initialize results df
+for(i in c(1:8)){Tmean[(i),1] <-          # this is saying each of the 8 sampletimes gets 1 row, and this is defining the first column in the results df
+  mean(
+    do.call(c,lapply(1:1000, function(boot){
+      outside <- sample(unlist(temp_df2[temp_df2$sample==i,]$outside)[!is.na(unlist(temp_df2[temp_df2$sample==i,]$outside))], replace = T)
+      inside <- sample(unlist(temp_df2[temp_df2$sample==i,]$inside)[!is.na(unlist(temp_df2[temp_df2$sample==i,]$inside))], replace = T)
+      mean(inside) - mean(outside)
+    })))
+}
+
+# then mean - sd
+Tmin <- data.frame("min.diff" = c(1:8))  # initialize results df
+for(i in c(1:8)){ x <- do.call(c,lapply(1:1000, function(boot){
+  outside <- sample(unlist(temp_df2[temp_df2$sample==i,]$outside)[!is.na(unlist(temp_df2[temp_df2$sample==i,]$outside))], replace = T)
+  inside <- sample(unlist(temp_df2[temp_df2$sample==i,]$inside)[!is.na(unlist(temp_df2[temp_df2$sample==i,]$inside))], replace = T)
+  mean(inside) - mean(outside) 
+    }))
+Tmin[i,1] <- mean(x) - sd(x)
+}
+
+# then mean + sd
+Tmax <- data.frame("max.diff" = c(1:8))  # initialize results df
+for(i in c(1:8)){ x <- do.call(c,lapply(1:1000, function(boot){
+  outside <- sample(unlist(temp_df2[temp_df2$sample==i,]$outside)[!is.na(unlist(temp_df2[temp_df2$sample==i,]$outside))], replace = T)
+  inside <- sample(unlist(temp_df2[temp_df2$sample==i,]$inside)[!is.na(unlist(temp_df2[temp_df2$sample==i,]$inside))], replace = T)
+  mean(inside) - mean(outside) 
+}))
+Tmax[i,1] <- mean(x) + sd(x)
+}
+
+Tboot <- cbind(Tmean, Tmin, Tmax, "sample"=c(1:8))
+
+right_join(Tboot, temp_df2[,c("sample","sampletime")], by = "sample")[!duplicated(right_join(Tboot, temp_df2[,c("sample","sampletime")], by = "sample")),]
+
 # NEVER EVER GIVE UP
 # NEVER SURRENDER
