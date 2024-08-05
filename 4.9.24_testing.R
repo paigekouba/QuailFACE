@@ -25,13 +25,13 @@ post4.9.24_daytime %>%
 
 # Fig 1
 daytimeCO2_4.9to4.19 <- ggplot(post4.9.24_daytime, aes(x=DeltaObs))+
-  geom_density()+
-  geom_vline(aes(xintercept = mean(DeltaObs)),color = "red", linetype="dashed", size=1)+
+  geom_density(size=2)+
+  geom_vline(aes(xintercept = mean(DeltaObs)),color = "red", linetype="dashed", size=1.5)+
   labs(title="Daytime CO2 Elevation: 4/9-4/19/24", 
        x= "∆ CO2 (ppm)",
        y= "Density") +
   scale_y_continuous(expand = c(0,0), limits=c(0,0.0087)) +
-  theme_classic()
+  theme_classic(base_size=20)
 
 post4.9.24_daytime <- post4.9.24 %>% 
   filter(PARuE > 50) 
@@ -119,8 +119,8 @@ above_boxplots <- above_4.9.24 %>% # box plots
 
 above_pointrange <- above_means %>% # box plots
   ggplot() +
-  annotate("rect", xmin=0, xmax=4.3, ymin=0, ymax=Inf, alpha=0.5) +
-  geom_pointrange(data=above_means, aes(x= position, y=mean, ymin=mean-sd, ymax=mean+sd)) + coord_flip() + 
+  annotate("rect", xmin=1, xmax=4.3, ymin=0, ymax=Inf, alpha=0.5) +
+  geom_pointrange(data=above_means, aes(x= position, y=mean, ymin=mean-sd, ymax=mean+sd), size=1, linewidth=1) + coord_flip() + 
   geom_hline(yintercept=200,color = "red", linetype="dashed", size=1) +
   ylab("∆CO2") + xlab("Height Above Plot Center") +   theme_classic(base_size = 20)
 
@@ -409,12 +409,12 @@ between_boxplots <- between_4.10.24 %>% # box plots
 
 between_pointrange <- avg_between_4.10.24 %>% 
   ggplot(aes(x=factor(position), y=mean)) +
-  geom_pointrange(data = avg_between_4.10.24, aes(ymin=(mean - sd), ymax = (mean + sd), color = as.factor(eCO2))) +
+  geom_pointrange(data = avg_between_4.10.24, aes(ymin=(mean - sd), ymax = (mean + sd), color = as.factor(eCO2)), size=1, linewidth=1) +
   scale_color_discrete(type=c("darkgray", "black")) +
-  labs(title = "∆CO2 Across All Plots, April 10-19, 2024") +
+  labs(title = "∆CO2 Across All Plots, April 10, 2024") +
   xlab("Plot") + ylab("∆CO2 (ppm)") +
   labs(color="CO2 Treatment") +
-  theme_classic()
+  theme_classic(base_size=20)
 
 ggplot(avg_between, aes(factor(Plot, levels = c("1","2","3","4","5","6","7","8","9","10","11","12","13","14","15","16")), mDeltaTest)) +
   geom_point() +
@@ -459,12 +459,12 @@ avg_veg_4.10.24 <- veg_4.10.24 %>%
   ungroup()
 veg_pointrange <- avg_veg_4.10.24 %>% 
   ggplot(aes(x=factor(position), y=mean)) +
-  geom_pointrange(data = avg_veg_4.10.24, aes(ymin=(mean - sd), ymax = (mean + sd))) +
+  geom_pointrange(data = avg_veg_4.10.24, aes(ymin=(mean - sd), ymax = (mean + sd)), size=1, linewidth=1) +
   geom_hline(yintercept=200,color = "red", linetype="dashed", size=1) +
   labs(title = "∆CO2 for Varying Vegetation Height") +
   xlab("Vegetation Height & Sampling Height") + ylab("∆CO2 (ppm)") +
   labs(color="CO2 Treatment") +
-  theme_classic(base_size = 18) +
+  theme_classic(base_size = 19) +
   theme(axis.text.x = element_text(angle = 45, hjust=1))
 
 ## here is where I will look at the microclimate effects of the screens
@@ -472,92 +472,147 @@ veg_pointrange <- avg_veg_4.10.24 %>%
 PAR_df <- read.csv("/Users/paigekouba/Documents/UC_Davis/2021_Winter/Quals/Proposal/Chapter 1/TinyFACE/GitHub/QuailFACE/RawData/tinyFACE_PAR.csv")
 temp_df <- read.csv("/Users/paigekouba/Documents/UC_Davis/2021_Winter/Quals/Proposal/Chapter 1/TinyFACE/GitHub/QuailFACE/RawData/tinyFACE_T.csv")
 
-typeof(hms::parse_hm(PAR_df$time))
+temp_df %>% 
+  pivot_longer(A:L, names_to = "spot", values_to = "temperature") %>% 
+  mutate(time = hms::parse_hm(time)) %>% 
+  mutate(sampletime = format(as.POSIXlt(as.POSIXct('2000-1-1', "UTC") + 
+                                          round(as.numeric(time)/3600)*3600),
+                             format = "%H:%M:%S")) %>% 
+  mutate(sample = rep(1:8,each=96)) %>% 
+  ggplot(aes(x= sampletime, y=temperature, fill=screen)) +
+  geom_violin(draw_quantiles = c(0.25, 0.5, 0.75), position = position_dodge(.4, preserve = "total")) #+ facet_grid(~screen)
+
+install.packages("rstatix")
+library(rstatix)
 
 PAR_df %>% 
   pivot_longer(A:L, names_to = "spot", values_to = "PAR") %>% 
   mutate(time = hms::parse_hm(time)) %>% 
-  group_by(Plot, CO2Tmt) %>% 
-  ggplot() +
-  geom_point(aes(x= time, y=PAR, color=screen))
+  mutate(sampletime = format(as.POSIXlt(as.POSIXct('2000-1-1', "UTC") + 
+                                          round(as.numeric(time)/3600)*3600),
+                             format = "%H:%M:%S")) %>% 
+  mutate(sample = rep(1:8,each=96)) %>% 
+  group_by(screen) %>% 
+  ggplot(aes(x= sampletime, y=PAR, fill=screen)) +
+  geom_boxplot() 
+  
+temp_df %>% 
+    pivot_longer(A:L, names_to = "spot", values_to = "temperature") %>% 
+    mutate(time = hms::parse_hm(time)) %>% 
+    mutate(sampletime = format(as.POSIXlt(as.POSIXct('2000-1-1', "UTC") + 
+                                            round(as.numeric(time)/3600)*3600),
+                               format = "%H:%M:%S")) %>% 
+    mutate(sample = rep(1:8,each=96)) %>% 
+  ggplot(aes(x= sampletime, y=temperature, fill=screen)) +
+    geom_boxplot() +
+  stat_compare_means(aes(group=screen), label = "p.signif", method= "t.test", paired = TRUE)
 
-PAR_df %>% 
+
+temp_df2 <- temp_df %>% 
+  pivot_longer(A:L, names_to = "spot", values_to = "temperature") %>% 
+  mutate(time = hms::parse_hm(time)) %>% 
+  mutate(sampletime = format(as.POSIXlt(as.POSIXct('2000-1-1', "UTC") + 
+                                          round(as.numeric(time)/3600)*3600),
+                             format = "%H:%M:%S")) %>% 
+  mutate(sample = rep(1:8,each=96)) %>% 
+  pivot_wider(names_from = "screen", values_from = "temperature") %>% 
+  rename(inside = i, outside = o)
+
+PAR_df2 <- PAR_df %>% 
   pivot_longer(A:L, names_to = "spot", values_to = "PAR") %>% 
   mutate(time = hms::parse_hm(time)) %>% 
+  mutate(sampletime = format(as.POSIXlt(as.POSIXct('2000-1-1', "UTC") + 
+                                          round(as.numeric(time)/3600)*3600),
+                             format = "%H:%M:%S")) %>% 
   mutate(sample = rep(1:8,each=96)) %>% 
-  ggplot() +
-  geom_boxplot(aes(x=as.factor(sample), y=PAR, color=screen)) 
+  pivot_wider(names_from = "screen", values_from = "PAR") %>% 
+  rename(inside = i, outside = o)
 
-temp_df %>% 
-  pivot_longer(A:L, names_to = "spot", values_to = "temperature") %>% 
-  mutate(time = hms::parse_hm(time)) %>% 
-  group_by(Plot, CO2Tmt) %>% 
-  ggplot() +
-  geom_point(aes(x= time, y=temperature, color=screen))
+# new idea for microclimate: bootstrap mean ±se of [inside] - [outside] (lower T, shading), for each of 8 timesteps
+# start with the mean of ∆z with watering
+Tmean <- data.frame("mean.diff" = c(1:8)) # initialize results df
+for(i in c(1:8)){Tmean[(i),1] <-          # this is saying each of the 8 sampletimes gets 1 row, and this is defining the first column in the results df
+  mean(
+    do.call(c,lapply(1:1000, function(boot){
+      outside <- sample(unlist(temp_df2[temp_df2$sample==i,]$outside)[!is.na(unlist(temp_df2[temp_df2$sample==i,]$outside))], replace = T)
+      inside <- sample(unlist(temp_df2[temp_df2$sample==i,]$inside)[!is.na(unlist(temp_df2[temp_df2$sample==i,]$inside))], replace = T)
+      mean(inside) - mean(outside)
+    })))
+}
 
-temp_df %>% 
-  pivot_longer(A:L, names_to = "spot", values_to = "temperature") %>% 
-  mutate(time = hms::parse_hm(time)) %>% 
-  mutate(sample = rep(1:8,each=96)) %>% 
-  ggplot() +
-  geom_boxplot(aes(x=as.factor(sample), y=temperature, color=screen)) 
+# then mean - sd
+Tmin <- data.frame("min.diff" = c(1:8))  # initialize results df
+for(i in c(1:8)){ x <- do.call(c,lapply(1:1000, function(boot){
+  outside <- sample(unlist(temp_df2[temp_df2$sample==i,]$outside)[!is.na(unlist(temp_df2[temp_df2$sample==i,]$outside))], replace = T)
+  inside <- sample(unlist(temp_df2[temp_df2$sample==i,]$inside)[!is.na(unlist(temp_df2[temp_df2$sample==i,]$inside))], replace = T)
+  mean(inside) - mean(outside) 
+}))
+Tmin[i,1] <- mean(x) - sd(x)
+}
 
+# then mean + sd
+Tmax <- data.frame("max.diff" = c(1:8))  # initialize results df
+for(i in c(1:8)){ x <- do.call(c,lapply(1:1000, function(boot){
+  outside <- sample(unlist(temp_df2[temp_df2$sample==i,]$outside)[!is.na(unlist(temp_df2[temp_df2$sample==i,]$outside))], replace = T)
+  inside <- sample(unlist(temp_df2[temp_df2$sample==i,]$inside)[!is.na(unlist(temp_df2[temp_df2$sample==i,]$inside))], replace = T)
+  mean(inside) - mean(outside) 
+}))
+Tmax[i,1] <- mean(x) + sd(x)
+}
 
-temp_diff <- temp_df %>% 
-  pivot_longer(A:L, names_to = "spot", values_to = "temperature") %>% 
-  mutate(time = hms::parse_hm(time)) %>% 
-  mutate(sample = rep(1:8,each=96)) %>% 
-  select(!time) %>% 
-  group_by(sample, Plot, spot) %>% 
-  # group_by(sample, Plot, CO2Tmt, screen) %>% 
-  # summarise_if(is.numeric, list(y=mean_narm, ymin=minus_se, ymax=plus_se)) %>% 
-  pivot_wider(names_from = screen, values_from = temperature) %>% 
-  mutate(diff = o - i) %>% 
-  group_by(Plot, sample) %>% 
-  summarise(mean_i = mean(i), mean_o = mean(o)) # t = -0.7146, df = 61.635, p-value = 0.4776; mean of x mean of y 40.36198  43.29245 
-# ggplot(temp_diff) + geom_density(aes(x=temperature, group =screen, color=screen))
-#  ggplot(temp_diff) + geom_boxplot(aes(x=sample, y=mean_i, group=sample)) + geom_boxplot(aes(x=sample, y=mean_o, group=sample))
-ggplot(temp_diff) + geom_boxplot(aes(x=sample, y=diff, group=sample))
+Tboot <- cbind(Tmean, Tmin, Tmax, "sample"=c(1:8))
 
-# Welch Two Sample t-test
-# 
-# data:  temp_diff$mean_i and temp_diff$mean_o
-# t = -0.7146, df = 61.635, p-value = 0.4776
-# alternative hypothesis: true difference in means is not equal to 0
-# 95 percent confidence interval:
-#   -11.128863   5.267926
-# sample estimates:
-#   mean of x mean of y 
-# 40.36198  43.29245 
-# 100*abs(40.36198 - 43.29245)/43.29245
-# [1] 6.769009
+Tboot2 <- right_join(Tboot, temp_df2[,c("sample","sampletime")], by = "sample")[!duplicated(right_join(Tboot, temp_df2[,c("sample","sampletime")], by = "sample")),]
 
-PAR_diff <- PAR_df %>% 
-  pivot_longer(A:L, names_to = "spot", values_to = "PAR") %>% 
-  mutate(time = hms::parse_hm(time)) %>% 
-  mutate(sample = rep(1:8,each=96)) %>% 
-  select(!time) %>% 
-  group_by(sample, Plot, spot) %>% 
-  # group_by(sample, Plot, CO2Tmt, screen) %>% 
-  # summarise_if(is.numeric, list(y=mean_narm, ymin=minus_se, ymax=plus_se)) %>% 
-  pivot_wider(names_from = screen, values_from = PAR) %>% 
-  mutate(diff = o - i) %>% 
-  group_by(Plot, sample) %>% 
-  summarise(mean_i = mean(i), mean_o = mean(o))
-ggplot(PAR_diff) + geom_boxplot(aes(x=sample, y=mean_i, group=sample)) + geom_boxplot(aes(x=sample, y=mean_o, group=sample))
-ggplot(PAR_diff) + geom_boxplot(aes(x=sample, y=mean_i*100/mean_o, group=sample)) 
-# Welch Two Sample t-test
-# 
-# data:  PAR_diff$mean_i and PAR_diff$mean_o
-# t = -0.58992, df = 61.913, p-value = 0.5574
-# alternative hypothesis: true difference in means is not equal to 0
-# 95 percent confidence interval:
-#   -425.8269  231.7681
-# sample estimates:
-#   mean of x mean of y 
-# 666.6964  763.7258 
-# 
-# > 666.6964/763.7258
-# [1] 0.8729526
+ggplot(Tboot2) +
+  geom_pointrange(aes(x=sampletime, y=mean.diff, ymin=min.diff, ymax=max.diff))
 
-#  summarise(meanT = mean(temperature), sdT = sd(temperature), seT = sd(temperature)/sqrt(n)) %>% 
+# for PAR now
+PARmean <- data.frame("mean.diff" = c(1:8)) # initialize results df
+for(i in c(1:8)){PARmean[(i),1] <-          # this is saying each of the 8 sampletimes gets 1 row, and this is defining the first column in the results df
+  mean(
+    do.call(c,lapply(1:1000, function(boot){
+      outside <- sample(unlist(PAR_df2[PAR_df2$sample==i,]$outside)[!is.na(unlist(PAR_df2[PAR_df2$sample==i,]$outside))], replace = T)
+      inside <- sample(unlist(PAR_df2[PAR_df2$sample==i,]$inside)[!is.na(unlist(PAR_df2[PAR_df2$sample==i,]$inside))], replace = T)
+      mean(inside) - mean(outside)
+    })))
+}
+
+# then mean - sd
+PARmin <- data.frame("min.diff" = c(1:8))  # initialize results df
+for(i in c(1:8)){ x <- do.call(c,lapply(1:1000, function(boot){
+  outside <- sample(unlist(PAR_df2[PAR_df2$sample==i,]$outside)[!is.na(unlist(PAR_df2[PAR_df2$sample==i,]$outside))], replace = T)
+  inside <- sample(unlist(PAR_df2[PAR_df2$sample==i,]$inside)[!is.na(unlist(PAR_df2[PAR_df2$sample==i,]$inside))], replace = T)
+  mean(inside) - mean(outside) 
+}))
+PARmin[i,1] <- mean(x) - sd(x)
+}
+
+# then mean + sd
+PARmax <- data.frame("max.diff" = c(1:8))  # initialize results df
+for(i in c(1:8)){ x <- do.call(c,lapply(1:1000, function(boot){
+  outside <- sample(unlist(PAR_df2[PAR_df2$sample==i,]$outside)[!is.na(unlist(PAR_df2[PAR_df2$sample==i,]$outside))], replace = T)
+  inside <- sample(unlist(PAR_df2[PAR_df2$sample==i,]$inside)[!is.na(unlist(PAR_df2[PAR_df2$sample==i,]$inside))], replace = T)
+  mean(inside) - mean(outside) 
+}))
+PARmax[i,1] <- mean(x) + sd(x)
+}
+
+PARboot <- cbind(PARmean, PARmin, PARmax, "sample"=c(1:8))
+
+PARboot2 <- right_join(PARboot, PAR_df2[,c("sample","sampletime")], by = "sample")[!duplicated(right_join(PARboot, PAR_df2[,c("sample","sampletime")], by = "sample")),]
+
+ggplot(PARboot2) +
+  geom_pointrange(aes(x=sampletime, y=mean.diff, ymin=min.diff, ymax=max.diff))
+
+mean(Tboot2$mean.diff)/mean(temp_df2$outside, na.rm=T) #  -0.0678969
+max(abs(Tboot2$mean.diff))/mean(temp_df2$outside, na.rm=T) # 0.1924403
+
+# > mean(Tboot2$mean.diff)/mean(temp_df2$outside, na.rm=T)
+# [1] -0.0678969
+# > mean(PARboot2$mean.diff)
+# [1] -96.92717
+# > mean(PARboot2$mean.diff)/mean(PAR_df2$outside, na.rm=T)
+# [1] -0.1269136
+# > max(abs(PARboot2$mean.diff))/mean(PAR_df2$outside, na.rm=T)
+# [1] 0.2851753
