@@ -85,3 +85,117 @@ lmer_totmass <- lmer(totmass ~ rescale(CO2)*rescale(meanSWC) + Anet + (1|Plot), 
 psem_totmass <- psem(lmer_gs, lmer_Anet, lmer_totmass)
 summary(psem_totmass)
 plot(psem_totmass)
+
+# add a categorical variable for herbivory Y/N
+
+# want this structure:
+
+# CO2                          total mass OR root mass
+# CO2 x SWC                             Anet
+# SWC               herbivory            gs
+
+final_df2 <- final_df %>% 
+  mutate(herbivory = as.numeric(Code %in% c(firstfullherb$Code,"8L2", "6V2"))) %>% 
+  filter(!(is.na(Anet))) %>% 
+  select(gs, CO2, meanSWC, Anet, herbivory, rootmass_g, totmass, Plot)
+
+glm_herbivory <- glm(herbivory ~ rescale(CO2)*rescale(meanSWC), data=final_df2, family=binomial)
+lmer_gs <- lmer(gs ~ rescale(CO2)*rescale(meanSWC) + (1|Plot), data=final_df2)
+lmer_Anet <- lmer(Anet ~ rescale(CO2)*rescale(meanSWC) + gs + (1|Plot), data=final_df2)
+# lmer_rootmass <- lmer(rootmass_g ~ rescale(CO2)*rescale(meanSWC) + Anet + herbivory + (1|Plot), data=final_df2)
+lmer_rootmass <- lmer(rootmass_g ~ rescale(CO2)*rescale(meanSWC) + Anet + herbivory + (1|Plot), data=final_df2)
+psem_rootmass <- psem(lmer_gs, glm_herbivory, lmer_Anet, lmer_rootmass)
+summary(psem_rootmass)
+plot(psem_rootmass)
+
+psem_rootmass <- psem(
+  lmer_gs,
+  lmer_Anet,
+  glm_herbivory,
+  lmer_rootmass,
+  CO2 %~~% CO2,
+  meanSWC %~~% meanSWC
+)
+
+summary(psem_rootmass, trace = TRUE)
+
+# try without rescales
+glm_herbivory <- glm(herbivory ~ CO2*meanSWC, data=final_df2, family=binomial)
+lmer_gs <- lmer(gs ~ CO2*meanSWC + (1|Plot), data=final_df2)
+lmer_Anet <- lmer(Anet ~ CO2*meanSWC + gs + (1|Plot), data=final_df2)
+# lmer_rootmass <- lmer(rootmass_g ~ CO2*meanSWC + Anet + herbivory + (1|Plot), data=final_df2)
+lmer_rootmass <- lmer(rootmass_g ~ CO2*meanSWC + Anet + herbivory + (1|Plot), data=final_df2)
+psem_rootmass <- psem(lmer_gs, glm_herbivory, lmer_Anet, lmer_rootmass)
+summary(psem_rootmass, standardize = "scale")
+plot(psem_rootmass)
+
+glm_herbivory <- glm(herbivory ~ CO2*meanSWC, data=final_df2, family=binomial)
+lmer_gs <- lmer(gs ~ CO2*meanSWC + (1|Plot), data=final_df2)
+lmer_Anet <- lmer(Anet ~ CO2*meanSWC + gs + (1|Plot), data=final_df2)
+# lmer_rootmass <- lmer(rootmass_g ~ CO2*meanSWC + Anet + herbivory + (1|Plot), data=final_df2)
+lmer_totmass <- lmer(totmass ~ CO2*meanSWC + Anet + herbivory + (1|Plot), data=final_df2)
+psem_totmass <- psem(lmer_gs, glm_herbivory, lmer_Anet, lmer_totmass)
+summary(psem_totmass, standardize = "scale")
+plot(psem_totmass)
+
+final_df3 <- final_df %>% 
+  mutate(herbivory = as.numeric(Code %in% c(firstfullherb$Code,"8L2", "6V2"))) %>% 
+  select(gs, CO2, meanSWC, Anet, herbivory, rootmass_g, totmass, Plot, Spp, Ht.mm..8, StemWet_g, time_scaled, H2OTmt, CO2Tmt, SWC)
+
+glm_herbivory <- glm(herbivory ~ meanSWC, data=final_df3, family=binomial)
+lmer_gs <- lmer(gs ~ CO2*meanSWC + time_scaled + (1|Plot), data=final_df3)
+lmer_Anet <- lmer(Anet ~ CO2*meanSWC + time_scaled + gs + (1|Plot), data=final_df3)
+lmer_rootmass <- lmer(rootmass_g ~ CO2*meanSWC + Anet + herbivory + Spp + (1|Plot), data=final_df3)
+lmer_totmass <- lmer(totmass ~ CO2*meanSWC + Anet + herbivory + (1|Plot), data=final_df3)
+lmer_final.ht <- lmer(Ht.mm..8 ~ CO2*meanSWC + Anet + herbivory + (1|Plot), data=final_df3)
+psem_totmass <- psem(lmer_gs, glm_herbivory, lmer_Anet, lmer_totmass)
+summary(psem_totmass, standardize = "scale")
+plot(psem_totmass)
+
+psem_rootmass <- psem(lmer_gs, glm_herbivory, lmer_Anet, lmer_rootmass)
+summary(psem_rootmass, standardize = "scale")
+plot(psem_rootmass)
+
+psem_final.ht <- psem(lmer_gs, glm_herbivory, lmer_Anet, lmer_final.ht)
+summary(psem_final.ht, standardize = "scale")
+plot(psem_final.ht)
+
+# what if you drop interactions if not significant?
+glm_herbivory <- glm(herbivory ~ SWC, data=final_df3, family=binomial)
+lmer_gs <- lmer(gs ~ CO2+SWC + (1|Plot), data=final_df3)
+lmer_Anet <- lmer(Anet ~ CO2*SWC + gs + (1|Plot), data=final_df3)
+lmer_rootmass <- lmer(rootmass_g ~ CO2+SWC + Anet + herbivory + (1|Plot), data=final_df3)
+lmer_totmass <- lmer(totmass ~ CO2+SWC + Anet + herbivory + (1|Plot), data=final_df3)
+lmer_final.ht <- lmer(Ht.mm..8 ~ CO2+SWC + Anet + herbivory + (1|Plot), data=final_df3)
+psem_totmass <- psem(lmer_gs, glm_herbivory, lmer_Anet, lmer_totmass)
+summary(psem_totmass, standardize = "scale")
+plot(psem_totmass)
+
+psem_rootmass <- psem(lmer_gs, glm_herbivory, lmer_Anet, lmer_rootmass)
+summary(psem_rootmass, standardize = "scale")
+plot(psem_rootmass)
+
+psem_final.ht <- psem(lmer_gs, glm_herbivory, lmer_Anet, lmer_final.ht)
+summary(psem_final.ht, standardize = "scale")
+plot(psem_final.ht)
+
+# subset by species?
+glm_herbivory <- glm(herbivory ~ meanSWC, data=filter(final_df3, Spp == "L"), family=binomial)
+lmer_gs <- lmer(gs ~ CO2+meanSWC + (1|Plot), data=filter(final_df3, Spp == "L"))
+lmer_Anet <- lmer(Anet ~ CO2*meanSWC + gs + (1|Plot), data=filter(final_df3, Spp == "L"))
+lmer_rootmass <- lmer(rootmass_g ~ CO2+meanSWC + Anet + herbivory + (1|Plot), data=filter(final_df3, Spp == "L"))
+lmer_totmass <- lmer(totmass ~ CO2+meanSWC + Anet + herbivory + (1|Plot), data=filter(final_df3, Spp == "L"))
+lmer_final.ht <- lmer(Ht.mm..8 ~ CO2+meanSWC + Anet + herbivory + (1|Plot), data=filter(final_df3, Spp == "L"))
+psem_totmass <- psem(lmer_gs, glm_herbivory, lmer_Anet, lmer_totmass)
+summary(psem_totmass, standardize = "scale")
+plot(psem_totmass)
+
+psem_rootmass <- psem(lmer_gs, glm_herbivory, lmer_Anet, lmer_rootmass)
+summary(psem_rootmass, standardize = "scale")
+plot(psem_rootmass)
+
+psem_final.ht <- psem(lmer_gs, glm_herbivory, lmer_Anet, lmer_final.ht)
+summary(psem_final.ht, standardize = "scale")
+plot(psem_final.ht)
+
+# categorical predictors?
