@@ -1,16 +1,16 @@
-# Monday 9/23/24
-# TinyFACE: a low-cost field experiment for elevated CO2 research on plants
+# Monday 5/5/25
+# TinyCO2: High-performance, low-cost CO2 enrichment for field-grown plants
 
-# The following code demonstrates the performance of the TinyFACE eCO2 system for short-stature plants.
+# The following code demonstrates the performance of the TinyCO2 eCO2 system for short-stature plants.
 # Tests were conducted on bare soil except where otherwise noted.
 
 library(tidyverse)
 library(interp)
 
 # Load the data: CO2 performance, light penetration data, temperature data
-testing <- read_csv("/Users/paigekouba/Documents/UC_Davis/2021_Winter/Quals/Proposal/Chapter 1/TinyFACE/GitHub/QuailFACE/TinyFACE_performance.csv")
-PAR_df <- read.csv("/Users/paigekouba/Documents/UC_Davis/2021_Winter/Quals/Proposal/Chapter 1/TinyFACE/GitHub/QuailFACE/RawData/tinyFACE_PAR.csv")
-temp_df <- read.csv("/Users/paigekouba/Documents/UC_Davis/2021_Winter/Quals/Proposal/Chapter 1/TinyFACE/GitHub/QuailFACE/RawData/tinyFACE_T.csv")
+# testing <- read_csv([INSERT FILE LOCATION]"TinyFACE_performance.csv")
+# PAR_df <- read.csv([INSERT FILE LOCATION]"tinyFACE_PAR.csv")
+# temp_df <- read.csv([INSERT FILE LOCATION]"tinyFACE_T.csv")
 
 attr(testing$TIMESTAMP, "tzone") # starts out as UTC, though clock time is correct
 # force_tz keeps the clock time but reassigns the tz to be accurate
@@ -319,7 +319,7 @@ avg_veg_4.10.24 <- veg_4.10.24 %>%
   summarise(mean = mean(DeltaTest), sd = sd(DeltaTest)) %>% 
   ungroup()
 
-# Fig 7: mean and sd of CO2 concentration with varying heights of elevation: short (10 cm), medium (25–35 cm), and tall (50–60 cm).
+# Fig S2: mean and sd of CO2 concentration with varying heights of elevation: short (10 cm), medium (25–35 cm), and tall (50–60 cm).
 avg_veg_4.10.24 %>% 
   ggplot(aes(x=factor(position), y=mean)) +
   geom_pointrange(data = avg_veg_4.10.24, aes(ymin=(mean - sd), ymax = (mean + sd)), size=1, linewidth=1) +
@@ -334,7 +334,7 @@ avg_veg_4.10.24 %>%
 20*mean(testing_daytime$FlowMFC)/5000 # 20L/min max * FlowMFC (mV) / 5000 mV max = 3.968844 L/min average
 3.968844*1440 # L/min * min/d = 5715.135 L/d when PAR > 50
 5715.135*0.001836 # L/d * kg/L = 10.49299 kg/d
-10.49299/4 # kg/d / 4m2 plot area = 2.623248 kg/m2/d when PAR > 50
+10.49299/4.96 # kg/d / 4.96m2 plot area = 2.115522 kg/m2/d when PAR > 50
 # cf Leadley, 6.10 kg/d/m2 (24h) ~3.05 kg/d/m2 during daylight
 # nrow(post4.9.24_daytime)*20/60 # = 7146.7 min PAR > 50
 # nrow(post4.9.24)*20/60 # = 14889.67 min total
@@ -343,7 +343,7 @@ avg_veg_4.10.24 %>%
 20*mean(testing$FlowMFC)/5000 # 20L/min max * FlowMFC (mV) / 5000 mV max = 2.479395 L/min average
 2.479395*1440 # L/min * min/d = 3570.329 L/d 
 3570.329*0.001836 # L/d * kg/L = 6.555124 kg/d
-6.555124/4 # kg/d / 4m2 plot area = 1.638781 kg/m2/d 
+6.555124/4.96 # kg/d / 4.96m2 plot area = 1.321598 kg/m2/d 
 # cf Leadley, 6.10 kg/d/m2 (24h) 
 
 # Finally, testing microclimate effects
