@@ -1,6 +1,20 @@
 # Fri 5/30/25
 # figures for GRS Talk
 
+# plan right now is to use:
+# hypothesis plots
+# dot plots with imputed data (Q. wislizeni)
+
+# cross plots (with 1:1 line), to show that WUE is slightly increased, but not more for dry plants
+# poster only, probably
+
+# z score plot showing *change with CO2*: distance from 0 is [change from now to 2050], and only blue dots get Anet boost of large size. (but what about the mass variables?)
+
+# DAG ?
+
+# something to wrap up. 
+
+
 # 1: ht change over time
 # find Codes for seedlings with any herbivory and drop after the date of first herbivory
 inv_all_nh0 <- right_join(firstherb, inv_all, by = "Code") 
@@ -101,6 +115,21 @@ library(ggeffects)
 ggpredict(lm(Anet~rescale(CO2)*rescale(meanSWC)+time_scaled, data=filter(df_final, Spp=="L")),
              terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="Anet (µmol CO2/m2/s), Live Oak")
 summary(lm(Anet~rescale(CO2)*rescale(meanSWC)+time_scaled, data=filter(df_final, Spp=="L")))
+# missing plot as a random effect!!
+
+ggpredict(lmer(Anet~rescale(CO2)*rescale(meanSWC)+(1|Plot), data=filter(df_final, Spp=="L")),
+          terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue")) + labs(title="Anet (µmol CO2/m2/s), Live Oak")
+summary(lmer(Anet~rescale(CO2)*rescale(meanSWC)+(1|Plot), data=filter(df_final, Spp=="L")))
+# is Singular!
+
+# resprouting fig
+ggpredict(glmer(as.factor(resprout)~(CO2Tmt)*(H2OTmt) + (1|Plot), family="binomial", data=as.data.frame(herb_list[herb_list$Spp =="V",])), 
+          terms=c("CO2Tmt","H2OTmt"))%>% plot(rawdata=T,ci=T,colors=c("red","blue"), jitter=0.1) + labs(title="resprouting (Q. lobata)") # categorical
+summary(glmer(as.factor(resprout)~(CO2Tmt)*(H2OTmt) + (1|Plot), family="binomial", data=as.data.frame(herb_list[herb_list$Spp =="V",])))
+
+ggpredict(glmer(as.factor(resprout)~rescale(CO2)*rescale(meanSWC) + (1|Plot), family="binomial", data=as.data.frame(herb_list[herb_list$Spp =="V",])), 
+          terms=c("CO2","meanSWC [4,42]"))%>% plot(rawdata=T,ci=T,colors=c("red","blue"), jitter=0.1) + labs(title="resprouting (Q. lobata)")
+summary(glmer(as.factor(resprout)~rescale(CO2)*rescale(meanSWC) + (1|Plot), family="binomial", data=as.data.frame(herb_list[herb_list$Spp =="V",])))
 
 # 3: ∆ with watering
 
@@ -308,9 +337,56 @@ z_bootV <- cbind(rbind(zmeanV, zminV, zmaxV),
   ylim(-2.2, 2.6) +
   geom_text(data = fig2_nequalsV, aes(x = variable, y = -1.75, label = paste0("n = ",aCO2)), color="darkgray", size = 5) +
   geom_text(data = fig2_nequalsV, aes(x = variable, y = -2.1, label = paste0("n = ",eCO2)), color="black", size = 5) +
-  ggtitle("B. Quercus douglasii (blue oak)") +
+  ggtitle("B. Quercus lobata (valley oak)") +
   ylab("change with watering") + xlab("Plant Response") +
   theme_classic(base_size = 20) 
 
 # 4: SEMs for totmass, mortality, resprouting
+names(df_final) # what to work with
+# [1] "Plot"        "Tmt"         "Code"        "Spp"         "StemWet_g"   "LeafWet_g"   "LeafDry_g"   "longcode"   
+# [9] "max_ht"      "max_dia"     "rootmass_g"  "mortality"   "shortcode"   "resprout"    "H2OTmt"      "totmass"    
+# [17] "mDeltaTest"  "CO2"         "meanSWC"     "Anet"        "gs"          "WUE"         "HHMMSS"      "time_scaled"
 
+df_final_z <- df_final %>% 
+   mutate_if(is.numeric, list(z = zscore)) %>% 
+   mutate(Spp_num = as.numeric(Spp=="V")) %>% 
+   mutate(herbivory = as.numeric(Code %in% firstfullherb$Code))
+
+# totmass: use max_ht instead? ~ CO2, meanSWC, Anet, Spp
+max_ht.psem <- psem(
+  # max_ht is predicted by CO2, meanSWC, Anet, Spp, herbivory
+  lm(max_ht_z ~ CO2_z + meanSWC_z + Anet_z + Spp_num + herbivory, na.action = na.omit, df_final_z),
+  lm(Anet_z ~ CO2_z + meanSWC_z + Spp_num, na.action = na.omit, df_final_z),
+  glm(herbivory ~ Spp_num + meanSWC_z, family = "binomial", na.action = na.omit, df_final_z)
+)
+summary(max_ht.psem)
+plot(max_ht.psem)
+
+totmass.psem <- psem(
+  # max_ht is predicted by CO2, meanSWC, Anet, Spp, herbivory
+  lm(totmass_z ~ CO2_z + meanSWC_z + Anet_z + Spp_num + herbivory, na.action = na.omit, df_final_z),
+  lm(Anet_z ~ CO2_z*meanSWC_z + Spp_num, na.action = na.omit, df_final_z),
+  glm(herbivory ~ Spp_num + meanSWC_z, family = "binomial", na.action = na.omit, df_final_z)
+)
+summary(totmass.psem)
+plot(totmass.psem)
+
+# mortality: use Spp, herbivory, CO2, meanSWC
+mort.psem <- psem(
+  # max_ht is predicted by Spp, herbivory, CO2, meanSWC
+  glm(mortality ~ CO2_z+meanSWC_z + Spp_num + herbivory, family = "binomial", na.action = na.omit, df_final_z),
+  glm(herbivory ~ Spp_num + meanSWC_z, family = "binomial", na.action = na.omit, df_final_z)
+)
+summary(mort.psem)
+plot(mort.psem)
+
+
+# resprouting: for [herbivory subset], use CO2, meanSWC, rootmass_g
+resprout.psem <- psem(
+  glm(resprout ~ CO2_z  + rootmass_g, family = "binomial", 
+      na.action = na.omit, filter(df_final_z, herbivory==1)),
+  lm(rootmass_g ~ CO2_z , na.action = na.omit, filter(df_final_z, herbivory==1))
+)
+summary(resprout.psem)
+plot(resprout.psem)
+summary(glm(resprout ~ CO2, family = "binomial", filter(df_final_z, herbivory==1)))
