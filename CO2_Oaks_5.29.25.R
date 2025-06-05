@@ -4,6 +4,7 @@
 # Step 1: get reference ∆CO2 value per plot, using all-time CO2 data and 10/9/23 testing
 library(tidyverse)
 library(lubridate)
+library(dplyr)
 
 # load 20s CO2 data from June 2022 to March 2024
 CO2_6.8.22_5.24.23_20s <- read_csv("/Users/paigekouba/Documents/UC_Davis/2021_Winter/Quals/Proposal/Chapter 1/TinyFACE/CO2_control/CR3000_3.28.24/6.8.22_5.24.23_20s.csv", skip = 4, col_names = c("TIMESTAMP",	"RECORD",	"BattV_Avg",	"CO2signal",	"CO2ref",	"CO2elev",	"CO2test",	"DeltaObs",	"DeltaSet",	"LicorSig2",	"FlowMFC",	"AirTC",	"RH",	"WS_ms",	"PARuE",	"TurnCO2On",	"SpanObs",	"SpanAct",	"ZeroObs",	"ZeroAct"))
@@ -400,27 +401,11 @@ firstfullherb <- rbind(firstfullherb, new_ones) # 46 seedlings had stem herbivor
 biomass_raw <- read.csv("/Users/paigekouba/Documents/UC_Davis/2021_Winter/Quals/Proposal/Chapter 1/TinyFACE/GitHub/QuailFACE/RawData/Biomass_final.csv")
 rootmass_raw <- read.csv("/Users/paigekouba/Documents/UC_Davis/2021_Winter/Quals/Proposal/Chapter 1/TinyFACE/GitHub/QuailFACE/RawData/Root_mass.csv")
 rootmass <- rootmass_raw %>% 
-  filter(!is.na(rootmass_g)) %>% 
+ # filter(!is.na(rootmass_g)) %>% 
   filter(Code!="4V3c") %>% # remove "4V3c" to avoid duplicate code
   filter(Code != "16V1a") %>% # thinned but grew back
   mutate(Code = if_else(nchar(Code)==4,substr(Code,1,3),substr(Code,1,4))) # shortcode
 
-biomass <- biomass_raw %>% 
-  dplyr::select(Code, StemWet_g, LeafWet_g, LeafDry_g) %>% 
-  mutate(Code = if_else(nchar(Code)==4,substr(Code,1,3),substr(Code,1,4))) %>%  # removes the a or b from the end of the seedling ID ("Code")
-  group_by(Code) %>% 
-  summarise_if(is.numeric, ~ max(.x, na.rm = TRUE)) %>% # group by shortened Code and collapse values in case of a/b confusion
-  ungroup() %>% 
-  merge(dplyr::select(rootmass, Code, Plot, Spp, SeedMass.g., Cond..7, rootmass_g), all.x=F, all.y=T)  %>% 
-  mutate(across(c(StemWet_g, LeafWet_g, LeafDry_g), na_if, -Inf))
-
-lookup <- data.frame(as.character(c(1:16)), c("AW","ED","AD","EW",
-                                              "AW","ED","EW","AD",
-                                              "ED","AW","EW","AD",
-                                              "ED","AW","EW","AD"))
-names(lookup) <- c("Plot","Tmt")
-
-biomass <- merge(lookup, biomass, by = 'Plot')
 
 # add inventory data for heights
 inventory_raw <- read.csv("/Users/paigekouba/Documents/UC_Davis/2021_Winter/Quals/Proposal/Chapter 1/TinyFACE/GitHub/QuailFACE/RawData/Inventory8.csv")
@@ -529,7 +514,7 @@ inv_all_nfh <- inv_all_nfh0 %>%
 inv_nequals <- inv_all_nfh %>%
   filter(!is.na(dia)) %>% 
   group_by(Spp, Tmt, value) %>%
-  # tally()
+   tally()
 
 inv_all_nfh %>% # for seedlings without *full* herbivory, how did height change over the course of the study?
   group_by(Spp, Tmt, value) %>% 
@@ -569,25 +554,6 @@ inv_all[which(!(inv_all$Code %in% firstfullherb$Code)),] %>% # how did dia chang
   scale_shape_manual(values = c(16,16,17,17)) +
   facet_grid(~ Spp) + theme_classic(base_size = 19)
 
-biomass2 <- biomass %>% # biomass data with full dataset and extra inventory columns
-  left_join(inventory_thinned[,c("Code","Ht.mm..1", "Ht.mm..2", "Ht.mm..3", "Ht.mm..4", "Ht.mm..5", "Ht.mm..6", "Ht.mm..7", "Ht.mm..8")]) %>% 
-  mutate(across(c(StemWet_g, LeafWet_g, LeafDry_g, rootmass_g, Ht.mm..1, Ht.mm..2, Ht.mm..3, Ht.mm..4, Ht.mm..5, Ht.mm..6, Ht.mm..7, Ht.mm..8), na_if, -Inf))  %>% 
-  mutate(H2OTmt = substr(Tmt,2,2)) %>% 
-  mutate(totmass = rootmass_g + StemWet_g + LeafWet_g) %>% 
-  left_join(plot_CO2, by = "Plot") %>% 
-  left_join(plot_SWC, by = "Plot") 
-
-# all combined
-final_df <- biomass2 %>% 
-  dplyr::select(Plot, Spp, Code, StemWet_g, totmass, Ht.mm..5, Ht.mm..8, CO2, meanSWC) %>% 
-  left_join(LiCOR_df[,c("Code","Anet","gs", "WUE", "HHMMSS")], by = "Code") %>% 
-  group_by(Plot, Spp) %>% 
-  mutate(n = n()) %>% 
-  left_join(lookup, by = "Plot") %>% 
-  mutate(H2OTmt = substr(Tmt,2,2), CO2Tmt = substr(Tmt,1,1)) %>% 
-  ungroup() %>% 
-  mutate(time_scaled = rescale(HHMMSS)) 
-
 # resprouting behavior
 # get full list of resprouters
 resprout <- c("2V5", "8V2", "11V1", "11V6", "2V5", "2V6", "3V1", "3V5", "4V4", "7V6", "8V3", "10L3", "11V1","11V2","11V3","11V4","11V6", "13V2", "14V3", "14V5", "15V2", "16V3", "2V2", "2V5", "2V6", "3V1", "3V5", "4V3", "4V4", "7V5", "8V3", "10L3", "10V4", "11V1","11V2","11V3","11V4","11V6", "13V2", "14V1","14V3","14V4","14V5","14V6", "14L4", "15V2", "16V3", "2V2", "2V5", "2V6", "3V1", "3V5", "4V3", "4V4", "4V3c", "7V1","7V2","7V6", "8V2", "8V3", "10L3", "10V4", "11V1","11V2","11V3","11V4","11V6", "13V2", "14V1c","14V3","14V4","14V5","14V6", "14L4", "15V2", "16V3","1V3", "1V5", "2V5", "2V6", "3V1", "3V5", "7V1", "7V6", "7L3", "8V2", "8V3", "13V2", "14V1c", "14V3", "14V5", "14V6", "16V3")
@@ -599,16 +565,35 @@ herb_list <- firstherb %>%
   mutate(H2OTmt = substr(Tmt,2,2)) %>% 
   mutate(CO2Tmt = substr(Tmt,1,1))
 
-# mortality data
+# # mortality data
+# mort_df <- inventory_raw %>% 
+#   filter(Code!="4V3c") %>%
+#   filter(Code != "16V1a") %>%
+#   filter(G. == "Y" & Thinned. != "8/26") %>%  # want ones that grew in but were not thinned
+#   select(Code, Spp, Plot, c(paste0("Cond..",1:8))) %>% 
+#   mutate(shortcode = if_else(nchar(Code)==4,substr(Code,1,3),substr(Code,1,4)))  %>% 
+#   mutate(Plot = as.character(Plot)) %>% 
+#   rowwise() %>% 
+#   mutate(condmin = min(Cond..1, Cond..2, Cond..3, Cond..4, Cond..5, Cond..6, Cond..7, Cond..8, na.rm = T)) %>% 
+#   mutate(mortality = as.numeric(condmin == 1 & Cond..8 %in% c(1, NA))) %>%
+#   left_join(lookup, by = "Plot") %>% 
+#   left_join(plot_CO2, by = "Plot") %>% 
+#   left_join(plot_SWC, by = "Plot")
+
 mort_df <- inventory_raw %>% 
   filter(Code!="4V3c") %>%
   filter(Code != "16V1a") %>%
   filter(G. == "Y" & Thinned. != "8/26") %>%  # want ones that grew in but were not thinned
-  select(Code, Spp, Plot, c(paste0("Cond..",1:8))) %>% 
-  mutate(Plot = as.character(Plot)) %>% 
-  rowwise() %>% 
-  mutate(condmin = min(Cond..1, Cond..2, Cond..3, Cond..4, Cond..5, Cond..6, Cond..7, Cond..8, na.rm = T)) %>% 
+  select(Code, Spp, Plot, c(paste0("Cond..",1:8)),c(paste0("Ht.mm..",1:8)), c(paste0("Dia.mm..",1:8))) %>% 
+  mutate(max_ht = 
+           pmax(Ht.mm..1, Ht.mm..2, Ht.mm..3, Ht.mm..4, Ht.mm..5, Ht.mm..6, Ht.mm..7, Ht.mm..8, na.rm=T)) %>%   
+  mutate(max_dia = pmax(Dia.mm..1, Dia.mm..2, Dia.mm..3, Dia.mm..4, Dia.mm..5, Dia.mm..6, Dia.mm..7, Dia.mm..8, na.rm=T)) %>% 
+  mutate(condmin = pmin(Cond..1, Cond..2, Cond..3, Cond..4, Cond..5, Cond..6, Cond..7, Cond..8, na.rm = T)) %>% 
   mutate(mortality = as.numeric(condmin == 1 & Cond..8 %in% c(1, NA))) %>%
+  select(Code, Spp, Plot, max_ht, max_dia, mortality) %>% 
+  left_join(select(rootmass_raw, Code, rootmass_g)) %>% 
+  mutate(shortcode = if_else(nchar(Code)==4,substr(Code,1,3),substr(Code,1,4)))  %>% 
+  mutate(Plot = as.character(Plot)) %>% 
   left_join(lookup, by = "Plot") %>% 
   left_join(plot_CO2, by = "Plot") %>% 
   left_join(plot_SWC, by = "Plot")
@@ -621,5 +606,113 @@ chisq.test(matrix(
 # X-squared = 3.6779, df = 1, p-value = 0.05514
 
 
+# # all combined
+# final_df <- biomass2 %>% 
+#   dplyr::select(Plot, Spp, Code, StemWet_g, totmass, Ht.mm..5, Ht.mm..8, CO2, meanSWC) %>% 
+#   left_join(LiCOR_df[,c("Code","Anet","gs", "WUE", "HHMMSS")], by = "Code") %>% 
+#   group_by(Plot, Spp) %>% 
+#   mutate(n = n()) %>% 
+#   left_join(lookup, by = "Plot") %>% 
+#   mutate(H2OTmt = substr(Tmt,2,2), CO2Tmt = substr(Tmt,1,1)) %>% 
+#   ungroup() %>% 
+#   mutate(time_scaled = rescale(HHMMSS)) 
+# 
+# final_df_mort <- biomass_mort2 %>% 
+#   dplyr::select(Plot, Spp, Code, StemWet_g, totmass, Ht.mm..5, Ht.mm..8, CO2, meanSWC, mortality) %>% 
+#   # mutate(Code = if_else(nchar(Code)==4,substr(Code,1,3),substr(Code,1,4))) %>% 
+#   left_join(LiCOR_df[,c("Code","Anet","gs", "WUE", "HHMMSS")], by = "Code") %>% 
+#   group_by(Plot, Spp) %>% 
+#   mutate(n = n()) %>% 
+#   left_join(lookup, by = "Plot") %>% 
+#   mutate(H2OTmt = substr(Tmt,2,2), CO2Tmt = substr(Tmt,1,1)) %>% 
+#   ungroup() 
+
+# final df with biomass(+rootmass), final ht, final dia, mort, resprout, Anet gs WUE
+# to "biomass", add inventory (Ht, Dia) and get max; derive totmass; add mortality (0/1) and resprout (0/1)
+
+# biomass2 <- biomass %>% # biomass data with full dataset and extra inventory columns
+#   left_join(inventory_thinned[,c("Code","Ht.mm..1", "Ht.mm..2", "Ht.mm..3", "Ht.mm..4", "Ht.mm..5", "Ht.mm..6", "Ht.mm..7", "Ht.mm..8")]) %>% 
+#   mutate(across(c(StemWet_g, LeafWet_g, LeafDry_g, rootmass_g, Ht.mm..1, Ht.mm..2, Ht.mm..3, Ht.mm..4, Ht.mm..5, Ht.mm..6, Ht.mm..7, Ht.mm..8), na_if, -Inf))  %>% 
+#   mutate(H2OTmt = substr(Tmt,2,2)) %>% 
+#   mutate(totmass = rootmass_g + StemWet_g + LeafWet_g) %>% 
+#   left_join(plot_CO2, by = "Plot") %>% 
+#   left_join(plot_SWC, by = "Plot") 
+
+biomass_raw %>% 
+  filter(Code %in% unlist(c(mort_df[mort_df$mortality==1,"Code"]))) %>% nrow()
+
+df_final <- biomass_raw %>% 
+  dplyr::select(Code, StemWet_g, LeafWet_g, LeafDry_g) %>% 
+#  filter(Code %in% unlist(c(mort_df$Code))) %>% 
+  mutate(longcode = Code) %>% 
+  mutate(Code = if_else(nchar(Code)==4,substr(Code,1,3),substr(Code,1,4))) %>%  # removes the a or b from the end of the seedling ID ("Code")
+  # group_by(Code, longcode) %>% 
+  # summarise_if(is.numeric, ~ max(.x, na.rm = TRUE)) %>% # group by shortened Code and collapse values in case of a/b confusion
+  # ungroup() %>% head() # need to summarize by code but keep longcode!
+  filter((!(is.na(StemWet_g)) | longcode %in% mort_df$Code)) %>% 
+  left_join(dplyr::select(rootmass_raw, Code, Plot, Spp, rootmass_g), join_by(longcode == Code))  %>% # SeedMass.g., Cond..7, 
+ # mutate(across(c(StemWet_g, LeafWet_g, LeafDry_g), na_if, -Inf)) %>% 
+  left_join(inventory_thinned[,c("Code","Ht.mm..1", "Ht.mm..2", "Ht.mm..3", "Ht.mm..4", "Ht.mm..5", "Ht.mm..6", "Ht.mm..7", "Ht.mm..8", 
+                                 "Dia.mm..1", "Dia.mm..2", "Dia.mm..3", "Dia.mm..4", "Dia.mm..5", "Dia.mm..6", "Dia.mm..7", "Dia.mm..8")]) %>% 
+  mutate(across(c(StemWet_g, LeafWet_g, LeafDry_g, rootmass_g, Ht.mm..1, Ht.mm..2, Ht.mm..3, Ht.mm..4, Ht.mm..5, Ht.mm..6, Ht.mm..7, Ht.mm..8, 
+                  Dia.mm..1, Dia.mm..2, Dia.mm..3, Dia.mm..4, Dia.mm..5, Dia.mm..6, Dia.mm..7, Dia.mm..8), na_if, -Inf))  %>% 
+  mutate(max_ht = 
+           pmax(Ht.mm..1, Ht.mm..2, Ht.mm..3, Ht.mm..4, Ht.mm..5, Ht.mm..6, Ht.mm..7, Ht.mm..8, na.rm=T)) %>%   
+  mutate(max_dia = pmax(Dia.mm..1, Dia.mm..2, Dia.mm..3, Dia.mm..4, Dia.mm..5, Dia.mm..6, Dia.mm..7, Dia.mm..8, na.rm=T)) %>%
+  select(Plot, Code, Spp, StemWet_g, LeafWet_g, LeafDry_g, longcode, max_ht, max_dia, rootmass_g) %>% 
+  left_join(select(mort_df, Code, max_ht, max_dia, mortality, rootmass_g, shortcode), join_by(longcode == Code, max_ht, max_dia, rootmass_g)) %>%
+  mutate(resprout = as.numeric(Code %in% resprout))
+
+lookup <- data.frame(as.character(c(1:16)), c("AW","ED","AD","EW",
+                                              "AW","ED","EW","AD",
+                                              "ED","AW","EW","AD",
+                                              "ED","AW","EW","AD"))
+names(lookup) <- c("Plot","Tmt")
+
+# biomass <- merge(lookup, biomass, by = 'Plot')
+df_final <- merge(lookup, df_final, by = 'Plot')
+
+df_final <- df_final %>% 
+  mutate(H2OTmt = substr(Tmt,2,2)) %>% 
+  mutate(totmass = rootmass_g + StemWet_g + LeafWet_g) %>% 
+  left_join(plot_CO2, by = "Plot") %>% 
+  left_join(plot_SWC, by = "Plot") 
+  
+df_final[which.max(df_final$max_dia),] # some outliers need adjusting
+#    Code        Date      value ht_mm dia cond
+# 776  2L1 Inv..8.Date 2023-11-20   156 389    5
+df_final[which(df_final$max_dia == 389),"max_dia"] <- 3.89 # it's a decimal error
+df_final[which.max(df_final$max_dia),]
+#      Code        Date      value ht_mm  dia cond
+# 934  3V3 Inv..6.Date 2023-08-26    96 54.9    5
+df_final[which(df_final$max_dia == 54.9),"max_dia"] <- 2.69 # mean of Dia.mm..5 and Dia.mm..7
+df_final[which.max(df_final$max_dia),]
+#     Code        Date      value ht_mm  dia cond
+# 1470  9L4 Inv..6.Date 2023-08-26  4.24 37.8    5
+df_final[which(df_final$max_dia == 37.8),"max_dia"] <- 4.24
+  
+df_final <- df_final %>% 
+  left_join(LiCOR_df[,c("Code","Anet","gs", "WUE", "HHMMSS")], by = "Code") %>% 
+  mutate(time_scaled = rescale(HHMMSS)) 
+
+names(df_final)
+# [1] "Plot"        "Tmt"         "Code"        "Spp"         "StemWet_g"   "LeafWet_g"   "LeafDry_g"   "longcode"   
+# [9] "max_ht"      "max_dia"     "rootmass_g"  "mortality"   "shortcode"   "resprout"    "H2OTmt"      "totmass"    
+# [17] "mDeltaTest"  "CO2"         "meanSWC"     "Anet"        "gs"          "WUE"         "HHMMSS"      "time_scaled"
 
 
+
+
+# df_final <- biomass %>% # biomass data with full dataset and extra inventory columns
+#   left_join(inventory_thinned[,c("Code","Ht.mm..1", "Ht.mm..2", "Ht.mm..3", "Ht.mm..4", "Ht.mm..5", "Ht.mm..6", "Ht.mm..7", "Ht.mm..8", 
+#                                  "Dia.mm..1", "Dia.mm..2", "Dia.mm..3", "Dia.mm..4", "Dia.mm..5", "Dia.mm..6", "Dia.mm..7", "Dia.mm..8")]) %>% 
+#   mutate(across(c(StemWet_g, LeafWet_g, LeafDry_g, rootmass_g, Ht.mm..1, Ht.mm..2, Ht.mm..3, Ht.mm..4, Ht.mm..5, Ht.mm..6, Ht.mm..7, Ht.mm..8, 
+#                   Dia.mm..1, Dia.mm..2, Dia.mm..3, Dia.mm..4, Dia.mm..5, Dia.mm..6, Dia.mm..7, Dia.mm..8), na_if, -Inf))  %>% 
+#   mutate(max_ht = 
+#    pmax(Ht.mm..1, Ht.mm..2, Ht.mm..3, Ht.mm..4, Ht.mm..5, Ht.mm..6, Ht.mm..7, Ht.mm..8, na.rm=T)) %>%   
+#   mutate(max_dia = pmax(Dia.mm..1, Dia.mm..2, Dia.mm..3, Dia.mm..4, Dia.mm..5, Dia.mm..6, Dia.mm..7, Dia.mm..8, na.rm=T)) %>%
+#   
+#   mutate(H2OTmt = substr(Tmt,2,2)) %>% 
+#   mutate(totmass = rootmass_g + StemWet_g + LeafWet_g) %>% 
+#   left_join(plot_CO2, by = "Plot") %>% 
+#   left_join(plot_SWC, by = "Plot") 
