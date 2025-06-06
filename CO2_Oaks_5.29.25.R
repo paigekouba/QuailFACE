@@ -554,17 +554,6 @@ inv_all[which(!(inv_all$Code %in% firstfullherb$Code)),] %>% # how did dia chang
   scale_shape_manual(values = c(16,16,17,17)) +
   facet_grid(~ Spp) + theme_classic(base_size = 19)
 
-# resprouting behavior
-# get full list of resprouters
-resprout <- c("2V5", "8V2", "11V1", "11V6", "2V5", "2V6", "3V1", "3V5", "4V4", "7V6", "8V3", "10L3", "11V1","11V2","11V3","11V4","11V6", "13V2", "14V3", "14V5", "15V2", "16V3", "2V2", "2V5", "2V6", "3V1", "3V5", "4V3", "4V4", "7V5", "8V3", "10L3", "10V4", "11V1","11V2","11V3","11V4","11V6", "13V2", "14V1","14V3","14V4","14V5","14V6", "14L4", "15V2", "16V3", "2V2", "2V5", "2V6", "3V1", "3V5", "4V3", "4V4", "4V3c", "7V1","7V2","7V6", "8V2", "8V3", "10L3", "10V4", "11V1","11V2","11V3","11V4","11V6", "13V2", "14V1c","14V3","14V4","14V5","14V6", "14L4", "15V2", "16V3","1V3", "1V5", "2V5", "2V6", "3V1", "3V5", "7V1", "7V6", "7L3", "8V2", "8V3", "13V2", "14V1c", "14V3", "14V5", "14V6", "16V3")
-resprout <- unique(resprout)
-herb_list <- firstherb %>% 
-  mutate(Spp = substr(Code, nchar(Code)-1,nchar(Code)-1)) %>% 
-  left_join(biomass[,1:3], by = "Code") %>% 
-  mutate(resprout = Code %in% resprout) %>% 
-  mutate(H2OTmt = substr(Tmt,2,2)) %>% 
-  mutate(CO2Tmt = substr(Tmt,1,1))
-
 # # mortality data
 # mort_df <- inventory_raw %>% 
 #   filter(Code!="4V3c") %>%
@@ -599,12 +588,20 @@ mort_df <- inventory_raw %>%
   left_join(plot_SWC, by = "Plot")
 
 chisq.test(matrix(
-  c(sum(mort_df$mortality == 1 & (mort_df$Tmt == "AD" | mort_df$Tmt == "AW")), 
-    sum(mort_df$mortality == 1 & (mort_df$Tmt == "ED" | mort_df$Tmt == "EW")),
-    sum(mort_df$mortality == 0 & (mort_df$Tmt == "AD" | mort_df$Tmt == "AW")), 
-    sum(mort_df$mortality == 0 & (mort_df$Tmt == "ED" | mort_df$Tmt == "EW"))),   byrow = TRUE, nrow = 2))
+  c(sum(mort_df$mortality == 1 & (mort_df$Tmt == "AD" | mort_df$Tmt == "AW")),  # died, aCO2
+    sum(mort_df$mortality == 1 & (mort_df$Tmt == "ED" | mort_df$Tmt == "EW")),  # died, eCO2
+    sum(mort_df$mortality == 0 & (mort_df$Tmt == "AD" | mort_df$Tmt == "AW")),  # live, aCO2
+    sum(mort_df$mortality == 0 & (mort_df$Tmt == "ED" | mort_df$Tmt == "EW"))), # live, eCO2 
+  byrow = TRUE, nrow = 2))
 # X-squared = 3.6779, df = 1, p-value = 0.05514
-
+# elevated CO2 plants had significantly lower mortality
+chisq.test(matrix(
+  c(sum(mort_df$mortality == 1 & (mort_df$Tmt == "AD" | mort_df$Tmt == "ED")),  # died, dry
+    sum(mort_df$mortality == 1 & (mort_df$Tmt == "AW" | mort_df$Tmt == "EW")),  # died, wet
+    sum(mort_df$mortality == 0 & (mort_df$Tmt == "AD" | mort_df$Tmt == "ED")),  # live, dry
+    sum(mort_df$mortality == 0 & (mort_df$Tmt == "AW" | mort_df$Tmt == "EW"))), # live, wet  
+  byrow = TRUE, nrow = 2))
+# watering treatment had no effect on mortality
 
 # # all combined
 # final_df <- biomass2 %>% 
@@ -716,3 +713,15 @@ names(df_final)
 #   mutate(totmass = rootmass_g + StemWet_g + LeafWet_g) %>% 
 #   left_join(plot_CO2, by = "Plot") %>% 
 #   left_join(plot_SWC, by = "Plot") 
+
+# resprouting behavior
+# get full list of resprouters
+resprout <- c("2V5", "8V2", "11V1", "11V6", "2V5", "2V6", "3V1", "3V5", "4V4", "7V6", "8V3", "10L3", "11V1","11V2","11V3","11V4","11V6", "13V2", "14V3", "14V5", "15V2", "16V3", "2V2", "2V5", "2V6", "3V1", "3V5", "4V3", "4V4", "7V5", "8V3", "10L3", "10V4", "11V1","11V2","11V3","11V4","11V6", "13V2", "14V1","14V3","14V4","14V5","14V6", "14L4", "15V2", "16V3", "2V2", "2V5", "2V6", "3V1", "3V5", "4V3", "4V4", "4V3c", "7V1","7V2","7V6", "8V2", "8V3", "10L3", "10V4", "11V1","11V2","11V3","11V4","11V6", "13V2", "14V1c","14V3","14V4","14V5","14V6", "14L4", "15V2", "16V3","1V3", "1V5", "2V5", "2V6", "3V1", "3V5", "7V1", "7V6", "7L3", "8V2", "8V3", "13V2", "14V1c", "14V3", "14V5", "14V6", "16V3")
+resprout <- unique(resprout)
+herb_list <- firstherb %>% 
+  mutate(Spp = substr(Code, nchar(Code)-1,nchar(Code)-1)) %>% 
+  # left_join(biomass[,1:3], by = "Code") %>% 
+  left_join(select(df_final,Plot, Tmt, Code, CO2, meanSWC, rootmass_g), by = "Code") %>% 
+  mutate(resprout = Code %in% resprout) %>% 
+  mutate(H2OTmt = substr(Tmt,2,2)) %>% 
+  mutate(CO2Tmt = substr(Tmt,1,1))

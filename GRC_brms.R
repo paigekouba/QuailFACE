@@ -147,7 +147,7 @@ oaks_fit_red2 %>%
 
 
 # this one keeps the totmass = NA rows
-imp1 <- df_final %>% 
+imp_all <- df_final %>% 
   select(Plot, Tmt, H2OTmt, Spp, max_ht, max_dia, rootmass_g, totmass, CO2, meanSWC, Anet, gs) %>% 
   mice(m = 5, print = FALSE) # impute using all data, then center
 
