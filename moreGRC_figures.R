@@ -1229,3 +1229,90 @@ resprout.psem <- psem(
 summary(resprout.psem)
 plot(resprout.psem)
 summary(glm(resprout ~ CO2, family = "binomial", filter(df_final_z, herbivory==1)))
+
+
+# here I will make a figure for change with CO2, combining watering groups
+
+## z-score change with CO2
+# same # variable_order <- c("Anet", "gs", "WUE", "tot.mass", "max.ht", "max.dia")
+CO2main_nequals <- df_final %>% 
+  filter(! Code %in% firstfullherb$Code) %>% 
+  filter(Spp=="L") %>% 
+  mutate(CO2Tmt = substr(Tmt, 1,1)) %>% 
+  select(Tmt, CO2Tmt, totmass, max_ht, max_dia, Anet, gs, WUE) %>% 
+  rename(tot.mass = totmass) %>% 
+  rename(max.ht = max_ht) %>% 
+  rename(max.dia = max_dia) %>% 
+  group_by(CO2Tmt) %>% 
+  summarise_if(is.numeric, ~ sum(!is.na(.x))) %>% 
+  t() %>% data.frame()
+
+CO2main_nequals <- CO2main_nequals[-1,]
+CO2main_nequals[,3] <- rownames(CO2main_nequals)
+colnames(CO2main_nequals) <- c("aCO2","eCO2", "variable")
+
+CO2main_boot <- df_final %>% 
+  filter(Spp=="L") %>% 
+  select(Tmt, totmass, max_ht, max_dia, Anet, gs, WUE) %>%
+  rename(tot.mass = totmass) %>% 
+  rename(max.ht = max_ht) %>% 
+  rename(max.dia = max_dia)
+
+# I want to standardize all the responses as z scores
+# then find the ∆z with CO2
+
+zscore <- function(x){
+  (x - mean(x, na.rm = T))/sd(x, na.rm = T)
+}
+
+CO2main_boot <- CO2main_boot %>% mutate_if(is.numeric, list(z = zscore)) 
+
+# start with the mean of ∆z with CO2
+# zmean <- data.frame("ED1" = c(1:6), "EW1" = c(1:6)) # initialize results df
+zmeanM <- data.frame("E1" = c(1:6)) # initialize results df
+for(i in c(2:7)){zmeanM[(i-1),1] <-          # this is saying each of the 6 variables gets 1 row, and this is defining the first column in the results df
+  # the top part is now to get the mean ∆z, with CO2, for ALL plants
+  mean(
+    do.call(c,lapply(1:1000, function(boot){ # instead of ED - AD, we want all E minus all A
+      a <- sample(unlist(CO2main_boot[CO2main_boot$Tmt%in%c("ED","EW") ,i+6])[!is.na(unlist(CO2main_boot[CO2main_boot$Tmt%in%c("ED","EW"),i+6]))], replace = T)
+      b <- sample(unlist(CO2main_boot[CO2main_boot$Tmt%in%c("AD","AW"),i+6])[!is.na(unlist(CO2main_boot[CO2main_boot$Tmt%in%c("AD","AW"),i+6]))], replace = T)
+      mean(a)-mean(b) # now this is the mean of eCO2 plants - mean of aCO2 plants
+    })))
+ }
+
+# then mean - sd
+zminM <- data.frame("E1" = c(1:6)) # initialize results df
+for(i in c(2:7)){ x <- do.call(c,lapply(1:1000, function(boot){
+  a <- sample(unlist(CO2main_boot[CO2main_boot$Tmt%in%c("ED","EW"),i+6])[!is.na(unlist(CO2main_boot[CO2main_boot$Tmt%in%c("ED","EW"),i+6]))], replace = T)
+  b <- sample(unlist(CO2main_boot[CO2main_boot$Tmt%in%c("AD","AW"),i+6])[!is.na(unlist(CO2main_boot[CO2main_boot$Tmt%in%c("AD","AW"),i+6]))], replace = T)
+  mean(a)-mean(b)
+})) 
+zminM[(i-1),1] <- mean(x) - sd(x)
+}
+
+# then mean + sd
+zmaxM <- data.frame("E1" = c(1:6)) # initialize results df
+for(i in c(2:7)){ x <- do.call(c,lapply(1:1000, function(boot){
+  a <- sample(unlist(CO2main_boot[CO2main_boot$Tmt%in%c("ED","EW"),i+6])[!is.na(unlist(CO2main_boot[CO2main_boot$Tmt%in%c("ED","EW"),i+6]))], replace = T)
+  b <- sample(unlist(CO2main_boot[CO2main_boot$Tmt%in%c("AD","AW"),i+6])[!is.na(unlist(CO2main_boot[CO2main_boot$Tmt%in%c("AD","AW"),i+6]))], replace = T)
+  mean(a)-mean(b)
+}))
+zmaxM[(i-1),1] <- mean(x) + sd(x)
+}
+
+z_boot_CO2main <- cbind(rbind(zmeanM, zminM, zmaxM), 
+                     data.frame("variable" = rep(c("tot.mass", "max.ht", "max.dia", "Anet", "gs", "WUE"),3), 
+                                "y" = rep(c("y","ymin","ymax"), each=6))) %>% 
+  rename(eCO2=E1) %>% 
+  pivot_longer(cols=c("eCO2"), names_to="Treatment", values_to="value") %>% 
+  select(variable, y, Treatment, value) %>% 
+  pivot_wider(names_from = "y", values_from = "value") %>% 
+  ggplot() +
+  geom_abline(color= "darkgray", linetype="dashed", slope = 0, intercept= 0) +
+  geom_pointrange(aes(x=factor(variable, level=variable_order), y=y, ymin=ymin, ymax=ymax), size=1, linewidth=1, shape = 16, color= "black", position=position_dodge(width=0.2)) +
+  ylim(-1, 1.6) +
+  geom_text(data = CO2main_nequals, aes(x = variable, y = -.75, label = paste0("n = ",aCO2)), color="darkgray", size = 5) +
+  geom_text(data = CO2main_nequals, aes(x = variable, y = -.95, label = paste0("n = ",eCO2)), color="black", size = 5) +
+  ggtitle("Quercus wislizeni (live oak): CO2 main effects") +
+  ylab("change with CO2") + xlab("Plant Response") +
+  theme_classic(base_size = 20)
