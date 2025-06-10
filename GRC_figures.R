@@ -247,7 +247,7 @@ z_bootL_CO2 <- cbind(rbind(zmean, zmin, zmax),
   ylim(-1, 1.6) +
   geom_text(data = fig2_nequals, aes(x = variable, y = -.75, label = paste0("n = ",Dry)), color="red", size = 5) +
   geom_text(data = fig2_nequals, aes(x = variable, y = -.95, label = paste0("n = ",Wet)), color="blue", size = 5) +
-  ggtitle("Quercus wislizeni (live oak)") +
+  ggtitle("Quercus wislizeni (live oak): CO2 x H2O") +
   ylab("change with CO2") + xlab("Plant Response") +
   theme_classic(base_size = 20) 
 
